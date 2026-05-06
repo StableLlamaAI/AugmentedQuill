@@ -1547,6 +1547,128 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/projects/{project_name}/scenes': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get Scenes
+     * @description List all scenes for the project, with staleness flags on prose links.
+     */
+    get: operations['get_scenes_api_v1_projects__project_name__scenes_get'];
+    put?: never;
+    /**
+     * Create New Scene
+     * @description Create a new scene.
+     */
+    post: operations['create_new_scene_api_v1_projects__project_name__scenes_post'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/projects/{project_name}/scenes/{scene_id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get Single Scene
+     * @description Fetch a single scene by ID.
+     */
+    get: operations['get_single_scene_api_v1_projects__project_name__scenes__scene_id__get'];
+    /**
+     * Update Existing Scene
+     * @description Update an existing scene (partial – only provided fields are changed).
+     */
+    put: operations['update_existing_scene_api_v1_projects__project_name__scenes__scene_id__put'];
+    post?: never;
+    /**
+     * Delete Existing Scene
+     * @description Delete a scene and remove it from all order constraints.
+     */
+    delete: operations['delete_existing_scene_api_v1_projects__project_name__scenes__scene_id__delete'];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/projects/{project_name}/scenes/{scene_id}/refresh-hash': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Refresh Prose Hash
+     * @description Recompute and persist the content hash for a prose link.
+     *
+     *     The frontend calls this after the user repositions a scene/beat marker so
+     *     that the hash is up-to-date and the stale flag is cleared.
+     */
+    post: operations['refresh_prose_hash_api_v1_projects__project_name__scenes__scene_id__refresh_hash_post'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/projects/{project_name}/scenes/{scene_id}/link-prose': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Link Scene Prose
+     * @description Assign a prose-text range to a scene.
+     *
+     *     Validates that the new range does not create a hole in any existing linked
+     *     scene.  Overlapping scenes are adjusted (their range trimmed or unlinked).
+     *     Returns all scenes that were modified.
+     */
+    post: operations['link_scene_prose_api_v1_projects__project_name__scenes__scene_id__link_prose_post'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/projects/{project_name}/scenes/{scene_id}/prose-content': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    /**
+     * Update Scene Prose Content
+     * @description Replace the text at a scene's linked prose offsets.
+     *
+     *     Writes the new text to disk, updates ``end_offset`` and ``content_hash``,
+     *     and returns the refreshed scene.
+     */
+    patch: operations['update_scene_prose_content_api_v1_projects__project_name__scenes__scene_id__prose_content_patch'];
+    trace?: never;
+  };
   '/api/v1/health': {
     parameters: {
       query?: never;
@@ -2386,6 +2508,37 @@ export interface components {
       project_language?: string | null;
     };
     /**
+     * RefreshProseHashRequest
+     * @description Body for the prose-link hash refresh endpoint.
+     */
+    RefreshProseHashRequest: {
+      /** Scope Type */
+      scope_type: string;
+      /** Chapter Id */
+      chapter_id?: string | null;
+      /** Book Id */
+      book_id?: string | null;
+      /**
+       * Start Offset
+       * @default 0
+       */
+      start_offset: number;
+      /** End Offset */
+      end_offset?: number | null;
+      /**
+       * Content Hash
+       * @default
+       */
+      content_hash: string;
+      /**
+       * Is Stale
+       * @default false
+       */
+      is_stale: boolean;
+      /** Beat Id */
+      beat_id?: string | null;
+    };
+    /**
      * ReplaceAllRequest
      * @description Request to replace all occurrences of a search query.
      */
@@ -2522,6 +2675,247 @@ export interface components {
        * @description Zero-based index of the match within this section+field
        */
       match_index: number;
+    };
+    /**
+     * Scene
+     * @description A narrative scene used for structural story planning.
+     *
+     *     Active characters, passive characters, location, and time are stored as
+     *     sourcebook entry IDs so the frontend can look them up by reference.
+     *
+     *     ``order_before`` / ``order_after`` store IDs of other scenes that must
+     *     chronologically precede or follow this one respectively – these form the
+     *     temporal constraint graph rendered on the pinboard.
+     *
+     *     ``pinboard_x`` / ``pinboard_y`` store the card's free-form position on the
+     *     pinboard canvas, in logical (unscaled) units.
+     */
+    Scene: {
+      /** Id */
+      id: string;
+      /**
+       * Summary
+       * @default
+       */
+      summary: string;
+      /**
+       * Beats
+       * @default []
+       */
+      beats: components['schemas']['SceneBeat'][];
+      /**
+       * Active Characters
+       * @default []
+       */
+      active_characters: string[];
+      /**
+       * Passive Characters
+       * @default []
+       */
+      passive_characters: string[];
+      /** Location */
+      location?: string | null;
+      /** Time */
+      time?: string | null;
+      /** Color Tag */
+      color_tag?: string | null;
+      prose_link?: components['schemas']['SceneProseLink'] | null;
+      /**
+       * Order Before
+       * @default []
+       */
+      order_before: string[];
+      /**
+       * Order After
+       * @default []
+       */
+      order_after: string[];
+      /**
+       * Pinboard X
+       * @default 100
+       */
+      pinboard_x: number;
+      /**
+       * Pinboard Y
+       * @default 100
+       */
+      pinboard_y: number;
+      /**
+       * Status
+       * @default active
+       */
+      status: string;
+    };
+    /**
+     * SceneBeat
+     * @description A single beat within a scene – a discrete micro-action or plot step.
+     */
+    SceneBeat: {
+      /** Id */
+      id: string;
+      /** Text */
+      text: string;
+      prose_link?: components['schemas']['SceneProseLink'] | null;
+    };
+    /**
+     * SceneCreateRequest
+     * @description Payload for creating a new scene.
+     */
+    SceneCreateRequest: {
+      /**
+       * Summary
+       * @default
+       */
+      summary: string;
+      /**
+       * Beats
+       * @default []
+       */
+      beats: components['schemas']['SceneBeat'][];
+      /**
+       * Active Characters
+       * @default []
+       */
+      active_characters: string[];
+      /**
+       * Passive Characters
+       * @default []
+       */
+      passive_characters: string[];
+      /** Location */
+      location?: string | null;
+      /** Time */
+      time?: string | null;
+      /** Color Tag */
+      color_tag?: string | null;
+      prose_link?: components['schemas']['SceneProseLink'] | null;
+      /**
+       * Order Before
+       * @default []
+       */
+      order_before: string[];
+      /**
+       * Order After
+       * @default []
+       */
+      order_after: string[];
+      /**
+       * Pinboard X
+       * @default 100
+       */
+      pinboard_x: number;
+      /**
+       * Pinboard Y
+       * @default 100
+       */
+      pinboard_y: number;
+      /**
+       * Status
+       * @default active
+       */
+      status: string;
+    };
+    /**
+     * SceneLinkProseRequest
+     * @description Payload for assigning a prose-text range to a scene.
+     *
+     *     The offsets are UTF-8 character positions within the referenced content
+     *     file.  Validation against existing scene links happens in the service.
+     */
+    SceneLinkProseRequest: {
+      /**
+       * Scope Type
+       * @default story
+       */
+      scope_type: string;
+      /** Chapter Id */
+      chapter_id?: string | null;
+      /** Book Id */
+      book_id?: string | null;
+      /** Start Offset */
+      start_offset: number;
+      /** End Offset */
+      end_offset: number;
+    };
+    /**
+     * SceneProseLink
+     * @description A link between a scene (or beat) and a specific text range in the prose.
+     *
+     *     ``scope_type`` distinguishes between:
+     *     - ``'story'`` – the main story content file (short-story projects)
+     *     - ``'chapter'`` – a specific chapter file (novel / series projects)
+     *
+     *     ``start_offset`` and ``end_offset`` are UTF-8 character offsets within the
+     *     content of the referenced file.  ``end_offset`` being ``None`` means the
+     *     scene/beat runs to the end of the file from ``start_offset``.
+     *
+     *     ``content_hash`` is the first 16 hex characters of the SHA-256 digest of
+     *     the file content at the time the link was last saved.  The frontend
+     *     compares this against the current content hash to detect external changes.
+     */
+    SceneProseLink: {
+      /** Scope Type */
+      scope_type: string;
+      /** Chapter Id */
+      chapter_id?: string | null;
+      /** Book Id */
+      book_id?: string | null;
+      /**
+       * Start Offset
+       * @default 0
+       */
+      start_offset: number;
+      /** End Offset */
+      end_offset?: number | null;
+      /**
+       * Content Hash
+       * @default
+       */
+      content_hash: string;
+      /**
+       * Is Stale
+       * @default false
+       */
+      is_stale: boolean;
+    };
+    /**
+     * SceneUpdateProseContentRequest
+     * @description Payload for replacing the prose text at a scene's linked offsets.
+     */
+    SceneUpdateProseContentRequest: {
+      /** Text */
+      text: string;
+    };
+    /**
+     * SceneUpdateRequest
+     * @description Payload for updating an existing scene (full replacement).
+     */
+    SceneUpdateRequest: {
+      /** Summary */
+      summary?: string | null;
+      /** Beats */
+      beats?: components['schemas']['SceneBeat'][] | null;
+      /** Active Characters */
+      active_characters?: string[] | null;
+      /** Passive Characters */
+      passive_characters?: string[] | null;
+      /** Location */
+      location?: string | null;
+      /** Time */
+      time?: string | null;
+      /** Color Tag */
+      color_tag?: string | null;
+      prose_link?: components['schemas']['SceneProseLink'] | null;
+      /** Order Before */
+      order_before?: string[] | null;
+      /** Order After */
+      order_after?: string[] | null;
+      /** Pinboard X */
+      pinboard_x?: number | null;
+      /** Pinboard Y */
+      pinboard_y?: number | null;
+      /** Status */
+      status?: string | null;
     };
     /**
      * SearchMatch
@@ -2863,6 +3257,8 @@ export interface components {
       llm_prefs?: components['schemas']['StoryLLMPrefs'] | null;
       /** Chapters */
       chapters?: components['schemas']['StoryChapterSummary'][] | null;
+      /** Scenes */
+      scenes?: components['schemas']['Scene'][] | null;
     };
     /**
      * StorySourcebookEntry
@@ -5507,6 +5903,286 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ReplaceResponse'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  get_scenes_api_v1_projects__project_name__scenes_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Directory name of the project */
+        project_name: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Scene'][];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  create_new_scene_api_v1_projects__project_name__scenes_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Directory name of the project */
+        project_name: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SceneCreateRequest'];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Scene'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  get_single_scene_api_v1_projects__project_name__scenes__scene_id__get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        scene_id: string;
+        /** @description Directory name of the project */
+        project_name: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Scene'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  update_existing_scene_api_v1_projects__project_name__scenes__scene_id__put: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        scene_id: string;
+        /** @description Directory name of the project */
+        project_name: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SceneUpdateRequest'];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Scene'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  delete_existing_scene_api_v1_projects__project_name__scenes__scene_id__delete: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        scene_id: string;
+        /** @description Directory name of the project */
+        project_name: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  refresh_prose_hash_api_v1_projects__project_name__scenes__scene_id__refresh_hash_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        scene_id: string;
+        /** @description Directory name of the project */
+        project_name: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['RefreshProseHashRequest'];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SceneProseLink'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  link_scene_prose_api_v1_projects__project_name__scenes__scene_id__link_prose_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        scene_id: string;
+        /** @description Directory name of the project */
+        project_name: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SceneLinkProseRequest'];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Scene'][];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  update_scene_prose_content_api_v1_projects__project_name__scenes__scene_id__prose_content_patch: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        scene_id: string;
+        /** @description Directory name of the project */
+        project_name: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SceneUpdateProseContentRequest'];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Scene'];
         };
       };
       /** @description Validation Error */

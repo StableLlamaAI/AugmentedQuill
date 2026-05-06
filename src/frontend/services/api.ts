@@ -20,6 +20,7 @@ import { createSourcebookApi } from './apiClients/sourcebook';
 import { debugApi } from './apiClients/debug';
 import { createCheckpointsApi } from './apiClients/checkpoints';
 import { createSearchApi } from './apiClients/search';
+import { createScenesApi } from './apiClients/scenes';
 import { useStoryStore } from '../stores/storyStore';
 
 type ProjectApiClients = {
@@ -31,6 +32,7 @@ type ProjectApiClients = {
   sourcebook: ReturnType<typeof createSourcebookApi>;
   checkpoints: ReturnType<typeof createCheckpointsApi>;
   search: ReturnType<typeof createSearchApi>;
+  scenes: ReturnType<typeof createScenesApi>;
 };
 
 const projectApiCache = new Map<string, ProjectApiClients>();
@@ -63,6 +65,7 @@ function forProject(projectName: string): ProjectApiClients {
     sourcebook: createSourcebookApi(projectName),
     checkpoints: createCheckpointsApi(projectName),
     search: createSearchApi(projectName),
+    scenes: createScenesApi(projectName),
   };
   projectApiCache.set(projectName, scoped);
   return scoped;
@@ -241,5 +244,24 @@ export const api = {
     replaceSingle: (
       ...args: Parameters<ProjectApiClients['search']['replaceSingle']>
     ) => currentProjectApi().search.replaceSingle(...args),
+  },
+  scenes: {
+    list: (...args: Parameters<ProjectApiClients['scenes']['list']>) =>
+      currentProjectApi().scenes.list(...args),
+    create: (...args: Parameters<ProjectApiClients['scenes']['create']>) =>
+      currentProjectApi().scenes.create(...args),
+    get: (...args: Parameters<ProjectApiClients['scenes']['get']>) =>
+      currentProjectApi().scenes.get(...args),
+    update: (...args: Parameters<ProjectApiClients['scenes']['update']>) =>
+      currentProjectApi().scenes.update(...args),
+    delete: (...args: Parameters<ProjectApiClients['scenes']['delete']>) =>
+      currentProjectApi().scenes.delete(...args),
+    refreshHash: (...args: Parameters<ProjectApiClients['scenes']['refreshHash']>) =>
+      currentProjectApi().scenes.refreshHash(...args),
+    linkProse: (...args: Parameters<ProjectApiClients['scenes']['linkProse']>) =>
+      currentProjectApi().scenes.linkProse(...args),
+    updateProseContent: (
+      ...args: Parameters<ProjectApiClients['scenes']['updateProseContent']>
+    ) => currentProjectApi().scenes.updateProseContent(...args),
   },
 };

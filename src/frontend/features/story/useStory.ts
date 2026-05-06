@@ -15,6 +15,7 @@ import {
   Chapter,
   Book,
   Conflict,
+  Scene,
   WritingUnit,
   SourcebookEntry,
 } from '../../types';
@@ -535,6 +536,15 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
               currentChapterId: null,
             };
           }
+
+          // Load scenes in parallel with (or after) the story shape is known.
+          // Scenes are stored on the project but not embedded in the main
+          // story response, so we must fetch them explicitly.
+          const scenes = await projectApi.scenes.list().catch((e: unknown): Scene[] => {
+            console.error('Failed to load scenes', e);
+            return [];
+          });
+          newStory = { ...newStory, scenes };
 
           latestStoryRef.current = newStory;
           startTransition((): void => {

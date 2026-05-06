@@ -15,7 +15,7 @@
 import { useCallback, useRef } from 'react';
 import { create, StoreApi } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
-import type { Chapter, StoryState, SourcebookEntry } from '../types';
+import type { Chapter, Scene, StoryState, SourcebookEntry } from '../types';
 import type { StoryHistoryEntry } from '../features/story/historyUtils';
 
 // ---------------------------------------------------------------------------
@@ -35,6 +35,7 @@ export const INITIAL_STORY: StoryState = {
   books: [],
   sourcebook: [],
   conflicts: [],
+  scenes: [],
   currentChapterId: null,
   lastUpdated: Date.now(),
 };
@@ -65,6 +66,8 @@ export interface StoryStoreState {
   incrementLoadChapterSignal: () => void;
   setIsChapterLoading: (loading: boolean) => void;
   patchSourcebookEntry: (entry: SourcebookEntry | null, entryId?: string) => boolean;
+  /** Upsert or remove a scene in the store without going through history. */
+  patchScene: (scene: Scene | null, sceneId?: string) => boolean;
 
   /** Atomically update story + history + baseline in a single state write. */
   pushHistoryState: (params: {
@@ -116,6 +119,7 @@ function buildInitialState(): Omit<
   | 'incrementLoadChapterSignal'
   | 'setIsChapterLoading'
   | 'patchSourcebookEntry'
+  | 'patchScene'
   | 'pushHistoryState'
   | 'jumpHistory'
   | 'setStreamingContent'
@@ -241,6 +245,27 @@ export const useStoryStore = create<StoryStoreState>()(
       }
       set((state: StoryStoreState) => ({
         story: { ...state.story, sourcebook: next },
+      }));
+      return true;
+    },
+
+    patchScene: (scene: Scene | null, sceneId?: string): boolean => {
+      const prev = get().story.scenes ?? [];
+      let next: Scene[];
+      if (scene === null) {
+        next = prev.filter((s: Scene): boolean => s.id !== sceneId);
+        if (next.length === prev.length) return false;
+      } else {
+        const idx = prev.findIndex((s: Scene): boolean => s.id === scene.id);
+        if (idx >= 0) {
+          next = [...prev];
+          next[idx] = scene;
+        } else {
+          next = [...prev, scene];
+        }
+      }
+      set((state: StoryStoreState) => ({
+        story: { ...state.story, scenes: next },
       }));
       return true;
     },
@@ -415,6 +440,19 @@ export function useStoryChaptersListMeta(): StoryState['chapters'] {
 /** Subscribe to the books list. */
 export function useStoryBooks(): StoryState['books'] {
   return useStoryStore((s: StoryStoreState) => s.story.books);
+}
+
+/** Subscribe to the scenes list. */
+const EMPTY_SCENES: Scene[] = [];
+export function useScenes(): Scene[] {
+  return useStoryStore((s: StoryStoreState): Scene[] => s.story.scenes ?? EMPTY_SCENES);
+}
+
+/** Subscribe to a single scene by ID. */
+export function useSceneById(id: string): Scene | undefined {
+  return useStoryStore((s: StoryStoreState): Scene | undefined =>
+    (s.story.scenes ?? EMPTY_SCENES).find((sc: Scene) => sc.id === id)
+  );
 }
 
 /** Subscribe to the sourcebook entries list. */

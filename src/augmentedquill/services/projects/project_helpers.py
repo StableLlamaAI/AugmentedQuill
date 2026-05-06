@@ -73,6 +73,15 @@ def normalize_story_for_frontend(story: dict) -> dict:
                             new_books.append(b_copy)
                     res["books"] = new_books
 
+    # Scenes: normalise from dict (on-disk format) to sorted list for frontend.
+    scenes_raw = res.get("scenes", {})
+    if isinstance(scenes_raw, dict):
+        scenes_list = [{"id": sid, **data} for sid, data in scenes_raw.items()]
+        scenes_list.sort(key=lambda s: (s.get("pinboard_y", 0), s.get("pinboard_x", 0)))
+        res["scenes"] = scenes_list
+    elif not isinstance(scenes_raw, list):
+        res["scenes"] = []
+
     # Conflict IDs are synthesized when missing so editing and reordering
     # remain stable in the frontend.
     def _handle_chapters(chapters: Any) -> Any:

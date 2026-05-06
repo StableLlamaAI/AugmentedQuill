@@ -3512,6 +3512,449 @@
         }
       }
     },
+    "/api/v1/projects/{project_name}/scenes": {
+      "get": {
+        "tags": ["Scenes"],
+        "summary": "Get Scenes",
+        "description": "List all scenes for the project, with staleness flags on prose links.",
+        "operationId": "get_scenes_api_v1_projects__project_name__scenes_get",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Scene"
+                  },
+                  "title": "Response Get Scenes Api V1 Projects  Project Name  Scenes Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["Scenes"],
+        "summary": "Create New Scene",
+        "description": "Create a new scene.",
+        "operationId": "create_new_scene_api_v1_projects__project_name__scenes_post",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SceneCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Scene"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_name}/scenes/{scene_id}": {
+      "get": {
+        "tags": ["Scenes"],
+        "summary": "Get Single Scene",
+        "description": "Fetch a single scene by ID.",
+        "operationId": "get_single_scene_api_v1_projects__project_name__scenes__scene_id__get",
+        "parameters": [
+          {
+            "name": "scene_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Scene Id"
+            }
+          },
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Scene"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["Scenes"],
+        "summary": "Update Existing Scene",
+        "description": "Update an existing scene (partial \u2013 only provided fields are changed).",
+        "operationId": "update_existing_scene_api_v1_projects__project_name__scenes__scene_id__put",
+        "parameters": [
+          {
+            "name": "scene_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Scene Id"
+            }
+          },
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SceneUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Scene"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["Scenes"],
+        "summary": "Delete Existing Scene",
+        "description": "Delete a scene and remove it from all order constraints.",
+        "operationId": "delete_existing_scene_api_v1_projects__project_name__scenes__scene_id__delete",
+        "parameters": [
+          {
+            "name": "scene_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Scene Id"
+            }
+          },
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_name}/scenes/{scene_id}/refresh-hash": {
+      "post": {
+        "tags": ["Scenes"],
+        "summary": "Refresh Prose Hash",
+        "description": "Recompute and persist the content hash for a prose link.\n\nThe frontend calls this after the user repositions a scene/beat marker so\nthat the hash is up-to-date and the stale flag is cleared.",
+        "operationId": "refresh_prose_hash_api_v1_projects__project_name__scenes__scene_id__refresh_hash_post",
+        "parameters": [
+          {
+            "name": "scene_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Scene Id"
+            }
+          },
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshProseHashRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SceneProseLink"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_name}/scenes/{scene_id}/link-prose": {
+      "post": {
+        "tags": ["Scenes"],
+        "summary": "Link Scene Prose",
+        "description": "Assign a prose-text range to a scene.\n\nValidates that the new range does not create a hole in any existing linked\nscene.  Overlapping scenes are adjusted (their range trimmed or unlinked).\nReturns all scenes that were modified.",
+        "operationId": "link_scene_prose_api_v1_projects__project_name__scenes__scene_id__link_prose_post",
+        "parameters": [
+          {
+            "name": "scene_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Scene Id"
+            }
+          },
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SceneLinkProseRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Scene"
+                  },
+                  "title": "Response Link Scene Prose Api V1 Projects  Project Name  Scenes  Scene Id  Link Prose Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_name}/scenes/{scene_id}/prose-content": {
+      "patch": {
+        "tags": ["Scenes"],
+        "summary": "Update Scene Prose Content",
+        "description": "Replace the text at a scene's linked prose offsets.\n\nWrites the new text to disk, updates ``end_offset`` and ``content_hash``,\nand returns the refreshed scene.",
+        "operationId": "update_scene_prose_content_api_v1_projects__project_name__scenes__scene_id__prose_content_patch",
+        "parameters": [
+          {
+            "name": "scene_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Scene Id"
+            }
+          },
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SceneUpdateProseContentRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Scene"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/health": {
       "get": {
         "summary": "<Lambda>",
@@ -5709,6 +6152,77 @@
         "title": "PromptsResponse",
         "description": "Response for ``GET /api/v1/prompts``."
       },
+      "RefreshProseHashRequest": {
+        "properties": {
+          "scope_type": {
+            "type": "string",
+            "title": "Scope Type"
+          },
+          "chapter_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chapter Id"
+          },
+          "book_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Book Id"
+          },
+          "start_offset": {
+            "type": "integer",
+            "title": "Start Offset",
+            "default": 0
+          },
+          "end_offset": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Offset"
+          },
+          "content_hash": {
+            "type": "string",
+            "title": "Content Hash",
+            "default": ""
+          },
+          "is_stale": {
+            "type": "boolean",
+            "title": "Is Stale",
+            "default": false
+          },
+          "beat_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Beat Id"
+          }
+        },
+        "type": "object",
+        "required": ["scope_type"],
+        "title": "RefreshProseHashRequest",
+        "description": "Body for the prose-link hash refresh endpoint."
+      },
       "ReplaceAllRequest": {
         "properties": {
           "query": {
@@ -5903,6 +6417,536 @@
         ],
         "title": "ReplaceSingleRequest",
         "description": "Request to replace one specific match (identified by its ordinal index)."
+      },
+      "Scene": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary",
+            "default": ""
+          },
+          "beats": {
+            "items": {
+              "$ref": "#/components/schemas/SceneBeat"
+            },
+            "type": "array",
+            "title": "Beats",
+            "default": []
+          },
+          "active_characters": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Active Characters",
+            "default": []
+          },
+          "passive_characters": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Passive Characters",
+            "default": []
+          },
+          "location": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location"
+          },
+          "time": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Time"
+          },
+          "color_tag": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Color Tag"
+          },
+          "prose_link": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SceneProseLink"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "order_before": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Order Before",
+            "default": []
+          },
+          "order_after": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Order After",
+            "default": []
+          },
+          "pinboard_x": {
+            "type": "number",
+            "title": "Pinboard X",
+            "default": 100.0
+          },
+          "pinboard_y": {
+            "type": "number",
+            "title": "Pinboard Y",
+            "default": 100.0
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "default": "active"
+          }
+        },
+        "type": "object",
+        "required": ["id"],
+        "title": "Scene",
+        "description": "A narrative scene used for structural story planning.\n\nActive characters, passive characters, location, and time are stored as\nsourcebook entry IDs so the frontend can look them up by reference.\n\n``order_before`` / ``order_after`` store IDs of other scenes that must\nchronologically precede or follow this one respectively \u2013 these form the\ntemporal constraint graph rendered on the pinboard.\n\n``pinboard_x`` / ``pinboard_y`` store the card's free-form position on the\npinboard canvas, in logical (unscaled) units."
+      },
+      "SceneBeat": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "prose_link": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SceneProseLink"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": ["text"],
+        "title": "SceneBeat",
+        "description": "A single beat within a scene \u2013 a discrete micro-action or plot step."
+      },
+      "SceneCreateRequest": {
+        "properties": {
+          "summary": {
+            "type": "string",
+            "title": "Summary",
+            "default": ""
+          },
+          "beats": {
+            "items": {
+              "$ref": "#/components/schemas/SceneBeat"
+            },
+            "type": "array",
+            "title": "Beats",
+            "default": []
+          },
+          "active_characters": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Active Characters",
+            "default": []
+          },
+          "passive_characters": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Passive Characters",
+            "default": []
+          },
+          "location": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location"
+          },
+          "time": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Time"
+          },
+          "color_tag": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Color Tag"
+          },
+          "prose_link": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SceneProseLink"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "order_before": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Order Before",
+            "default": []
+          },
+          "order_after": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Order After",
+            "default": []
+          },
+          "pinboard_x": {
+            "type": "number",
+            "title": "Pinboard X",
+            "default": 100.0
+          },
+          "pinboard_y": {
+            "type": "number",
+            "title": "Pinboard Y",
+            "default": 100.0
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "default": "active"
+          }
+        },
+        "type": "object",
+        "title": "SceneCreateRequest",
+        "description": "Payload for creating a new scene."
+      },
+      "SceneLinkProseRequest": {
+        "properties": {
+          "scope_type": {
+            "type": "string",
+            "title": "Scope Type",
+            "default": "story"
+          },
+          "chapter_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chapter Id"
+          },
+          "book_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Book Id"
+          },
+          "start_offset": {
+            "type": "integer",
+            "title": "Start Offset"
+          },
+          "end_offset": {
+            "type": "integer",
+            "title": "End Offset"
+          }
+        },
+        "type": "object",
+        "required": ["start_offset", "end_offset"],
+        "title": "SceneLinkProseRequest",
+        "description": "Payload for assigning a prose-text range to a scene.\n\nThe offsets are UTF-8 character positions within the referenced content\nfile.  Validation against existing scene links happens in the service."
+      },
+      "SceneProseLink": {
+        "properties": {
+          "scope_type": {
+            "type": "string",
+            "title": "Scope Type"
+          },
+          "chapter_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chapter Id"
+          },
+          "book_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Book Id"
+          },
+          "start_offset": {
+            "type": "integer",
+            "title": "Start Offset",
+            "default": 0
+          },
+          "end_offset": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Offset"
+          },
+          "content_hash": {
+            "type": "string",
+            "title": "Content Hash",
+            "default": ""
+          },
+          "is_stale": {
+            "type": "boolean",
+            "title": "Is Stale",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": ["scope_type"],
+        "title": "SceneProseLink",
+        "description": "A link between a scene (or beat) and a specific text range in the prose.\n\n``scope_type`` distinguishes between:\n- ``'story'`` \u2013 the main story content file (short-story projects)\n- ``'chapter'`` \u2013 a specific chapter file (novel / series projects)\n\n``start_offset`` and ``end_offset`` are UTF-8 character offsets within the\ncontent of the referenced file.  ``end_offset`` being ``None`` means the\nscene/beat runs to the end of the file from ``start_offset``.\n\n``content_hash`` is the first 16 hex characters of the SHA-256 digest of\nthe file content at the time the link was last saved.  The frontend\ncompares this against the current content hash to detect external changes."
+      },
+      "SceneUpdateProseContentRequest": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "title": "Text"
+          }
+        },
+        "type": "object",
+        "required": ["text"],
+        "title": "SceneUpdateProseContentRequest",
+        "description": "Payload for replacing the prose text at a scene's linked offsets."
+      },
+      "SceneUpdateRequest": {
+        "properties": {
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "beats": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/SceneBeat"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Beats"
+          },
+          "active_characters": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Characters"
+          },
+          "passive_characters": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Passive Characters"
+          },
+          "location": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location"
+          },
+          "time": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Time"
+          },
+          "color_tag": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Color Tag"
+          },
+          "prose_link": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SceneProseLink"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "order_before": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Order Before"
+          },
+          "order_after": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Order After"
+          },
+          "pinboard_x": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pinboard X"
+          },
+          "pinboard_y": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pinboard Y"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "title": "SceneUpdateRequest",
+        "description": "Payload for updating an existing scene (full replacement)."
       },
       "SearchMatch": {
         "properties": {
@@ -6748,6 +7792,20 @@
               }
             ],
             "title": "Chapters"
+          },
+          "scenes": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/Scene"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scenes"
           }
         },
         "type": "object",

@@ -94,4 +94,47 @@ export interface StoryState extends Story {
   currentChapterId: string | null;
   lastUpdated?: number;
   conflicts?: Conflict[];
+  scenes?: Scene[];
+}
+
+// ---------------------------------------------------------------------------
+// Scenes
+// ---------------------------------------------------------------------------
+
+export type SceneStatus = 'active' | 'inactive' | 'draft';
+export type SceneScopeType = 'story' | 'chapter';
+
+/** A link between a scene/beat and a character-offset range in a prose file. */
+export interface SceneProseLink {
+  scope_type: SceneScopeType;
+  chapter_id?: string | null;
+  book_id?: string | null;
+  start_offset: number;
+  end_offset?: number | null;
+  content_hash: string;
+  /** Computed at load time – true when content_hash no longer matches the file. */
+  is_stale?: boolean;
+}
+
+export interface SceneBeat {
+  id: string;
+  text: string;
+  prose_link?: SceneProseLink | null;
+}
+
+export interface Scene {
+  id: string;
+  summary: string;
+  beats: SceneBeat[];
+  active_characters: string[];
+  passive_characters: string[];
+  location?: string | null;
+  time?: string | null;
+  color_tag?: string | null;
+  prose_link?: SceneProseLink | null;
+  order_before: string[];
+  order_after: string[];
+  pinboard_x: number;
+  pinboard_y: number;
+  status: SceneStatus;
 }

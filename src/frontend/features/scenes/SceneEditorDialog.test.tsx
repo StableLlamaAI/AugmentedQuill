@@ -1,0 +1,520 @@
+// Copyright (C) 2026 StableLlama
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+/**
+ * Tests for SceneEditorDialog.
+ *
+ * Covers: rendering, form initialisation from props, save flow (including prose
+ * content save only when dirty), delete confirmation two-step, onClose after
+ * save, and state reset when the scene prop changes.
+ */
+
+// @vitest-environment jsdom
+
+import React from 'react';
+import { render, screen, fireEvent, cleanup, act } from '@testing-library/react';
+import { I18nextProvider } from 'react-i18next';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
+import i18n from '../app/i18n';
+import { SceneEditorDialog } from './SceneEditorDialog';
+import type { Scene, SceneProseLink } from '../../types';
+
+// ---------------------------------------------------------------------------
+// Store mock — SceneEditorDialog reads useScenes() for ordering display
+// ---------------------------------------------------------------------------
+
+vi.mock('../../stores/storyStore', () => ({
+  useScenes: vi.fn(() => [] as Scene[]),
+  useStoryStore: vi.fn(() => vi.fn()),
+}));
+
+// ThemeContext mock
+vi.mock('../layout/ThemeContext', () => ({
+  useThemeClasses: vi.fn(() => ({
+    bg: '',
+    text: '',
+    border: '',
+    muted: '',
+    input: '',
+  })),
+}));
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+const wrap = (ui: React.ReactElement): ReturnType<typeof render> =>
+  render(<I18nextProvider i18n={i18n}>{ui}</I18nextProvider>);
+
+function makeScene(overrides: Partial<Scene> = {}): Scene {
+  return {
+    id: 'scene-1',
+    summary: 'Test scene',
+    beats: [],
+    prose_link: null,
+    active_characters: [],
+    passive_characters: [],
+    location: null,
+    time: null,
+    color_tag: null,
+    status: 'active',
+    pinboard_x: 0,
+    pinboard_y: 0,
+    order_before: [],
+    order_after: [],
+    ...overrides,
+  };
+}
+
+const NOOP_SAVE = vi.fn(async () => undefined);
+const NOOP_DELETE = vi.fn(async () => undefined);
+const NOOP_CLOSE = vi.fn();
+
+afterEach(() => {
+  cleanup();
+  vi.clearAllMocks();
+});
+
+// ---------------------------------------------------------------------------
+// Rendering
+// ---------------------------------------------------------------------------
+
+describe('SceneEditorDialog rendering', () => {
+  it('does not render when isOpen is false', () => {
+    wrap(
+      <SceneEditorDialog
+        scene={makeScene()}
+        isOpen={false}
+        onClose={NOOP_CLOSE}
+        onSave={NOOP_SAVE}
+        onDelete={NOOP_DELETE}
+      />
+    );
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('renders the dialog when isOpen is true', () => {
+    wrap(
+      <SceneEditorDialog
+        scene={makeScene()}
+        isOpen
+        onClose={NOOP_CLOSE}
+        onSave={NOOP_SAVE}
+        onDelete={NOOP_DELETE}
+      />
+    );
+    expect(screen.getByRole('dialog')).toBeTruthy();
+  });
+
+  it('shows the scene summary in the textarea', () => {
+    wrap(
+      <SceneEditorDialog
+        scene={makeScene({ summary: 'Opening act' })}
+        isOpen
+        onClose={NOOP_CLOSE}
+        onSave={NOOP_SAVE}
+        onDelete={NOOP_DELETE}
+      />
+    );
+    const textarea = screen.getByDisplayValue('Opening act');
+    expect(textarea).toBeTruthy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Save flow
+// ---------------------------------------------------------------------------
+
+describe('SceneEditorDialog save flow', () => {
+  it('calls onSave with updated values and then onClose', async () => {
+    const onSave = vi.fn(async () => undefined);
+    const onClose = vi.fn();
+
+    wrap(
+      <SceneEditorDialog
+        scene={makeScene({ summary: 'Original' })}
+        isOpen
+        onClose={onClose}
+        onSave={onSave}
+        onDelete={NOOP_DELETE}
+      />
+    );
+
+    // Change the summary
+    const textarea = screen.getByDisplayValue('Original');
+    fireEvent.change(textarea, { target: { value: 'Updated summary' } });
+
+    const saveBtn = screen.getByRole('button', { name: /Save/i });
+    await act(async () => {
+      fireEvent.click(saveBtn);
+    });
+
+    expect(onSave).toHaveBeenCalledOnce();
+    const arg = onSave.mock.calls[0][0] as Partial<Scene>;
+    expect(arg.summary).toBe('Updated summary');
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it('does NOT call onSaveProseContent when prose text is unchanged', async () => {
+    const onSaveProseContent = vi.fn(async () => undefined);
+    const proseLink: SceneProseLink = {
+      scope_type: 'story',
+      start_offset: 0,
+      end_offset: 5,
+      content_hash: 'abc',
+      chapter_id: null,
+      book_id: null,
+      is_stale: false,
+    };
+    const getLinkedProseText = vi.fn(() => 'hello');
+
+    wrap(
+      <SceneEditorDialog
+        scene={makeScene({ prose_link: proseLink })}
+        isOpen
+        onClose={NOOP_CLOSE}
+        onSave={NOOP_SAVE}
+        onDelete={NOOP_DELETE}
+        getLinkedProseText={getLinkedProseText}
+        onSaveProseContent={onSaveProseContent}
+      />
+    );
+
+    const saveBtn = screen.getByRole('button', { name: /Save/i });
+    await act(async () => {
+      fireEvent.click(saveBtn);
+    });
+
+    expect(onSaveProseContent).not.toHaveBeenCalled();
+  });
+
+  it('calls onSaveProseContent BEFORE onSave when prose text was edited', async () => {
+    const callOrder: string[] = [];
+    const onSaveProseContent = vi.fn(async () => {
+      callOrder.push('prose');
+    });
+    const onSave = vi.fn(async () => {
+      callOrder.push('save');
+    });
+    const proseLink: SceneProseLink = {
+      scope_type: 'story',
+      start_offset: 0,
+      end_offset: 5,
+      content_hash: 'abc',
+      chapter_id: null,
+      book_id: null,
+      is_stale: false,
+    };
+    const getLinkedProseText = vi.fn(() => 'hello');
+
+    wrap(
+      <SceneEditorDialog
+        scene={makeScene({ prose_link: proseLink })}
+        isOpen
+        onClose={NOOP_CLOSE}
+        onSave={onSave}
+        onDelete={NOOP_DELETE}
+        getLinkedProseText={getLinkedProseText}
+        onSaveProseContent={onSaveProseContent}
+      />
+    );
+
+    // Find and edit the prose textarea (it shows the linked text)
+    const proseTextarea = screen.getByDisplayValue('hello');
+    fireEvent.change(proseTextarea, { target: { value: 'modified prose' } });
+
+    const saveBtn = screen.getByRole('button', { name: /Save/i });
+    await act(async () => {
+      fireEvent.click(saveBtn);
+    });
+
+    expect(onSaveProseContent).toHaveBeenCalledWith('modified prose');
+    expect(onSave).toHaveBeenCalledOnce();
+    expect(callOrder).toEqual(['prose', 'save']);
+  });
+
+  it('does not call onSaveProseContent when there is no prose link', async () => {
+    const onSaveProseContent = vi.fn(async () => undefined);
+
+    wrap(
+      <SceneEditorDialog
+        scene={makeScene({ prose_link: null })}
+        isOpen
+        onClose={NOOP_CLOSE}
+        onSave={NOOP_SAVE}
+        onDelete={NOOP_DELETE}
+        onSaveProseContent={onSaveProseContent}
+      />
+    );
+
+    const saveBtn = screen.getByRole('button', { name: /Save/i });
+    await act(async () => {
+      fireEvent.click(saveBtn);
+    });
+
+    expect(onSaveProseContent).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Delete confirmation
+// ---------------------------------------------------------------------------
+
+describe('SceneEditorDialog delete flow', () => {
+  it('requires a confirmation click before calling onDelete', async () => {
+    const onDelete = vi.fn(async () => undefined);
+    const onClose = vi.fn();
+
+    wrap(
+      <SceneEditorDialog
+        scene={makeScene()}
+        isOpen
+        onClose={onClose}
+        onSave={NOOP_SAVE}
+        onDelete={onDelete}
+      />
+    );
+
+    // First click: enters confirm state
+    const deleteBtn = screen.getByRole('button', { name: /Delete Scene/i });
+    fireEvent.click(deleteBtn);
+
+    // onDelete not yet called
+    expect(onDelete).not.toHaveBeenCalled();
+
+    // Confirm button appears — same label "Delete Scene", now inside the confirm row
+    // getAllByRole returns: [confirm-delete, footer-cancel, footer-save, header-close]
+    // After confirmDelete=true there is ONE 'Delete Scene' button (the actual confirm)
+    const confirmBtn = screen.getByRole('button', { name: /Delete Scene/i });
+    await act(async () => {
+      fireEvent.click(confirmBtn);
+    });
+
+    expect(onDelete).toHaveBeenCalledOnce();
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it('cancels delete when the cancel button is clicked', () => {
+    const onDelete = vi.fn(async () => undefined);
+
+    wrap(
+      <SceneEditorDialog
+        scene={makeScene()}
+        isOpen
+        onClose={NOOP_CLOSE}
+        onSave={NOOP_SAVE}
+        onDelete={onDelete}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Delete Scene/i }));
+    // After confirming, 'Cancel' appears in the confirm row AND in the footer.
+    // getAllByRole returns them in DOM order; the confirm-row cancel comes first.
+    const [confirmCancelBtn] = screen.getAllByRole('button', { name: /^Cancel$/i });
+    fireEvent.click(confirmCancelBtn);
+
+    expect(onDelete).not.toHaveBeenCalled();
+    // Delete Scene button must be back (confirm state exited)
+    expect(screen.getByRole('button', { name: /Delete Scene/i })).toBeTruthy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// State reset
+// ---------------------------------------------------------------------------
+
+describe('SceneEditorDialog state reset', () => {
+  it('resets form to the new scene when the scene prop changes', () => {
+    const sceneA = makeScene({ id: 'a', summary: 'Scene A' });
+    const sceneB = makeScene({ id: 'b', summary: 'Scene B' });
+
+    const { rerender } = wrap(
+      <SceneEditorDialog
+        scene={sceneA}
+        isOpen
+        onClose={NOOP_CLOSE}
+        onSave={NOOP_SAVE}
+        onDelete={NOOP_DELETE}
+      />
+    );
+
+    expect(screen.getByDisplayValue('Scene A')).toBeTruthy();
+
+    rerender(
+      <I18nextProvider i18n={i18n}>
+        <SceneEditorDialog
+          scene={sceneB}
+          isOpen
+          onClose={NOOP_CLOSE}
+          onSave={NOOP_SAVE}
+          onDelete={NOOP_DELETE}
+        />
+      </I18nextProvider>
+    );
+
+    expect(screen.getByDisplayValue('Scene B')).toBeTruthy();
+    expect(screen.queryByDisplayValue('Scene A')).toBeNull();
+  });
+
+  it('resets proseDirty flag when dialog re-opens for new scene', async () => {
+    const onSaveProseContent = vi.fn(async () => undefined);
+    const proseLink: SceneProseLink = {
+      scope_type: 'story',
+      start_offset: 0,
+      end_offset: 5,
+      content_hash: 'abc',
+      chapter_id: null,
+      book_id: null,
+      is_stale: false,
+    };
+    const getLinkedProseText = vi.fn(() => 'hello');
+
+    const { rerender } = wrap(
+      <SceneEditorDialog
+        scene={makeScene({ id: 'a', prose_link: proseLink })}
+        isOpen
+        onClose={NOOP_CLOSE}
+        onSave={NOOP_SAVE}
+        onDelete={NOOP_DELETE}
+        getLinkedProseText={getLinkedProseText}
+        onSaveProseContent={onSaveProseContent}
+      />
+    );
+
+    // Edit prose → makes it dirty
+    fireEvent.change(screen.getByDisplayValue('hello'), {
+      target: { value: 'edited' },
+    });
+
+    // Re-open with a different scene (same isOpen=true but scene changed)
+    rerender(
+      <I18nextProvider i18n={i18n}>
+        <SceneEditorDialog
+          scene={makeScene({ id: 'b', prose_link: proseLink })}
+          isOpen
+          onClose={NOOP_CLOSE}
+          onSave={NOOP_SAVE}
+          onDelete={NOOP_DELETE}
+          getLinkedProseText={getLinkedProseText}
+          onSaveProseContent={onSaveProseContent}
+        />
+      </I18nextProvider>
+    );
+
+    // Save with the new scene — prose should NOT be dirty
+    const saveBtn = screen.getByRole('button', { name: /Save/i });
+    await act(async () => {
+      fireEvent.click(saveBtn);
+    });
+
+    expect(onSaveProseContent).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Character parsing
+// ---------------------------------------------------------------------------
+
+describe('SceneEditorDialog character parsing', () => {
+  it('splits comma-separated characters into an array on save', async () => {
+    const onSave = vi.fn(async () => undefined);
+
+    wrap(
+      <SceneEditorDialog
+        scene={makeScene()}
+        isOpen
+        onClose={NOOP_CLOSE}
+        onSave={onSave}
+        onDelete={NOOP_DELETE}
+      />
+    );
+
+    const activeInput = screen.getByPlaceholderText(/Alice, Bob/i);
+    fireEvent.change(activeInput, { target: { value: 'Alice, Bob, Charlie' } });
+
+    const saveBtn = screen.getByRole('button', { name: /Save/i });
+    await act(async () => {
+      fireEvent.click(saveBtn);
+    });
+
+    const arg = onSave.mock.calls[0][0] as Partial<Scene>;
+    expect(arg.active_characters).toEqual(['Alice', 'Bob', 'Charlie']);
+  });
+
+  it('produces an empty array when the character field is blank', async () => {
+    const onSave = vi.fn(async () => undefined);
+
+    wrap(
+      <SceneEditorDialog
+        scene={makeScene({ active_characters: ['Old'] })}
+        isOpen
+        onClose={NOOP_CLOSE}
+        onSave={onSave}
+        onDelete={NOOP_DELETE}
+      />
+    );
+
+    const activeInput = screen.getByDisplayValue('Old') as HTMLInputElement;
+    fireEvent.change(activeInput, { target: { value: '' } });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Save/i }));
+    });
+
+    const arg = onSave.mock.calls[0][0] as Partial<Scene>;
+    expect(arg.active_characters).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Beat management
+// ---------------------------------------------------------------------------
+
+describe('SceneEditorDialog beat management', () => {
+  it('adds a beat when the Add Beat button is clicked', () => {
+    wrap(
+      <SceneEditorDialog
+        scene={makeScene({ beats: [] })}
+        isOpen
+        onClose={NOOP_CLOSE}
+        onSave={NOOP_SAVE}
+        onDelete={NOOP_DELETE}
+      />
+    );
+
+    const addBeatBtn = screen.getByRole('button', { name: /Add Beat/i });
+    fireEvent.click(addBeatBtn);
+
+    // A new beat textarea should appear
+    const beatInputs = screen.getAllByPlaceholderText(/Beat text/i);
+    expect(beatInputs.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('includes beats in the onSave payload', async () => {
+    const onSave = vi.fn(async () => undefined);
+
+    wrap(
+      <SceneEditorDialog
+        scene={makeScene({
+          beats: [{ id: 'b1', text: 'Initial beat', prose_link: null }],
+        })}
+        isOpen
+        onClose={NOOP_CLOSE}
+        onSave={onSave}
+        onDelete={NOOP_DELETE}
+      />
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Save/i }));
+    });
+
+    const arg = onSave.mock.calls[0][0] as Partial<Scene>;
+    expect(arg.beats).toHaveLength(1);
+    expect(arg.beats![0].text).toBe('Initial beat');
+  });
+});

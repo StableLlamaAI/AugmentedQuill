@@ -312,6 +312,8 @@ export interface CodeMirrorEditorProps {
    * modes each get the right contrast level.
    */
   selectionBg?: string;
+  /** Called when a drag starts from inside the editor. Use to set custom dataTransfer data. */
+  onDragStart?: (event: DragEvent, view: EditorView) => void;
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -340,6 +342,7 @@ export const CodeMirrorEditor = React.forwardRef<
       spellCheck = false,
       onOpenSearch,
       selectionBg,
+      onDragStart,
     }: CodeMirrorEditorProps,
     ref: React.ForwardedRef<EditorView | null>
   ) => {
@@ -362,9 +365,11 @@ export const CodeMirrorEditor = React.forwardRef<
     const onChangeRef = useRef(onChange);
     const onSelectionChangeRef = useRef(onSelectionChange);
     const onOpenSearchRef = useRef(onOpenSearch);
+    const onDragStartRef = useRef(onDragStart);
     onChangeRef.current = onChange;
     onSelectionChangeRef.current = onSelectionChange;
     onOpenSearchRef.current = onOpenSearch;
+    onDragStartRef.current = onDragStart;
 
     // Track the last value emitted by our own onChange so we can distinguish
     // externally-driven value changes from the echo of our own edits.
@@ -718,7 +723,26 @@ export const CodeMirrorEditor = React.forwardRef<
       lastEmittedRef.current = value;
     }, [value]);
 
-    return <div ref={containerRef} className={className} style={style} />;
+    // Intercept dragstart as it bubbles up from CM's contentDOM.
+    // By the time the event reaches this wrapper div, CM6's own dragstart
+    // handler on contentDOM has already run and set
+    // `effectAllowed = "copyMove"`.  We can override that here because we
+    // are still within the same dragstart event dispatch cycle.
+    const handleContainerDragStart = (e: React.DragEvent): void => {
+      const view = viewRef.current;
+      if (view) {
+        onDragStartRef.current?.(e.nativeEvent, view);
+      }
+    };
+
+    return (
+      <div
+        ref={containerRef}
+        className={className}
+        style={style}
+        onDragStart={handleContainerDragStart}
+      />
+    );
   }
 );
 

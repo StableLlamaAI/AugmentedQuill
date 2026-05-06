@@ -1,0 +1,118 @@
+// Copyright (C) 2026 StableLlama
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+/**
+ * HTTP client for the scenes endpoints. Keeps transport concerns isolated from UI logic.
+ */
+
+import type { Scene, SceneProseLink } from '../../types';
+import {
+  fetchJson,
+  postJson,
+  putJson,
+  patchJson,
+  deleteJson,
+  projectEndpoint,
+} from './shared';
+
+// ---------------------------------------------------------------------------
+// Payload types
+// ---------------------------------------------------------------------------
+
+export interface SceneCreatePayload {
+  summary?: string;
+  beats?: Array<{ id: string; text: string; prose_link?: SceneProseLink | null }>;
+  active_characters?: string[];
+  passive_characters?: string[];
+  location?: string | null;
+  time?: string | null;
+  color_tag?: string | null;
+  prose_link?: SceneProseLink | null;
+  order_before?: string[];
+  order_after?: string[];
+  pinboard_x?: number;
+  pinboard_y?: number;
+  status?: string;
+}
+
+export type SceneUpdatePayload = Partial<SceneCreatePayload>;
+
+export interface RefreshHashPayload {
+  beat_id?: string | null;
+  prose_link: SceneProseLink;
+}
+
+export interface LinkProsePayload {
+  scope_type: string;
+  chapter_id?: string | null;
+  book_id?: string | null;
+  start_offset: number;
+  end_offset: number;
+}
+
+// ---------------------------------------------------------------------------
+// API interface
+// ---------------------------------------------------------------------------
+
+export interface ScenesApi {
+  list: () => Promise<Scene[]>;
+  create: (payload: SceneCreatePayload) => Promise<Scene>;
+  get: (sceneId: string) => Promise<Scene>;
+  update: (sceneId: string, payload: SceneUpdatePayload) => Promise<Scene>;
+  delete: (sceneId: string) => Promise<void>;
+  refreshHash: (
+    sceneId: string,
+    payload: RefreshHashPayload
+  ) => Promise<SceneProseLink>;
+  linkProse: (sceneId: string, payload: LinkProsePayload) => Promise<Scene[]>;
+  updateProseContent: (sceneId: string, text: string) => Promise<Scene>;
+}
+
+export const createScenesApi = (projectName: string): ScenesApi => {
+  const base = projectEndpoint(projectName, '/scenes');
+
+  return {
+    list: (): Promise<Scene[]> =>
+      fetchJson<Scene[]>(base, undefined, 'Failed to load scenes'),
+
+    create: (payload: SceneCreatePayload): Promise<Scene> =>
+      postJson<Scene>(base, payload, 'Failed to create scene'),
+
+    get: (sceneId: string): Promise<Scene> =>
+      fetchJson<Scene>(`${base}/${sceneId}`, undefined, 'Failed to load scene'),
+
+    update: (sceneId: string, payload: SceneUpdatePayload): Promise<Scene> =>
+      putJson<Scene>(`${base}/${sceneId}`, payload, 'Failed to update scene'),
+
+    delete: (sceneId: string): Promise<void> =>
+      deleteJson<void>(`${base}/${sceneId}`, 'Failed to delete scene'),
+
+    refreshHash: (
+      sceneId: string,
+      payload: RefreshHashPayload
+    ): Promise<SceneProseLink> =>
+      postJson<SceneProseLink>(
+        `${base}/${sceneId}/refresh-hash`,
+        payload,
+        'Failed to refresh hash'
+      ),
+
+    linkProse: (sceneId: string, payload: LinkProsePayload): Promise<Scene[]> =>
+      postJson<Scene[]>(
+        `${base}/${sceneId}/link-prose`,
+        payload,
+        'Failed to link prose'
+      ),
+
+    updateProseContent: (sceneId: string, text: string): Promise<Scene> =>
+      patchJson<Scene>(
+        `${base}/${sceneId}/prose-content`,
+        { text },
+        'Failed to update prose content'
+      ),
+  };
+};

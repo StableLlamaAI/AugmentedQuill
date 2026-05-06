@@ -97,6 +97,13 @@ export interface EditorHandle {
   format: (type: string) => void;
   openImageManager?: () => void;
   jumpToPosition: (start: number, end: number) => void;
+  getEditorView: () => EditorView | null;
+  /**
+   * Register a callback that fires on every cursor/selection change in the
+   * editor.  Pass null to unsubscribe.  Only one external subscriber is
+   * supported at a time (last caller wins).
+   */
+  setOnCursorChange: (cb: ((anchor: number, head: number) => void) | null) => void;
 }
 
 /* eslint-disable complexity */
@@ -123,6 +130,10 @@ export const Editor = React.memo(
       // CodeMirror EditorView — persists across all view modes
       const editorViewRef = useRef<EditorView | null>(null);
       const paperDivRef = useRef<HTMLDivElement>(null);
+      // External cursor-change subscriber (e.g. ScenesPanelContainer)
+      const externalCursorCallbackRef = useRef<
+        ((anchor: number, head: number) => void) | null
+      >(null);
       const showInlineTitle = true;
       const { getRanges } = useSearchHighlight();
       const chapterSearchHighlightRanges = getRanges(
@@ -510,6 +521,37 @@ export const Editor = React.memo(
         return (): void => window.removeEventListener('keydown', onKeyDown, true);
       }, [maybeHandleSuggestionHotkey]);
 
+      // Provide prose-drag data so scene cards can receive dropped prose
+      // selections.  onDragStart is called from CodeMirrorEditor's container
+      // div as the dragstart event bubbles up from CM's contentDOM.  By that
+      // point CM6's own handler has already run and set
+      // effectAllowed = "copyMove"; we override it to "all" so that drop
+      // targets can use any dropEffect (including "link").
+      const handleCmDragStart = useCallback(
+        (e: DragEvent, view: EditorView): void => {
+          const sel = view.state.selection.main;
+          if (sel.empty) return;
+          const text = view.state.doc.sliceString(sel.from, sel.to);
+          const payload = JSON.stringify({
+            scopeType: chapter.scope,
+            chapterId: chapter.scope === 'chapter' ? chapter.id : undefined,
+            bookId: (chapter as { book_id?: string }).book_id,
+            startOffset: sel.from,
+            endOffset: sel.to,
+            text,
+          });
+          if (e.dataTransfer) {
+            e.dataTransfer.setData('text/plain', text);
+            e.dataTransfer.setData('application/aq-prose-selection', payload);
+            // Must be set AFTER CM6's own handler (which sets "copyMove") so
+            // that our override wins.  The container-div React handler fires
+            // after CM6's contentDOM handler due to event bubbling order.
+            e.dataTransfer.effectAllowed = 'all';
+          }
+        },
+        [chapter]
+      );
+
       const format = (type: string): void => {
         const view = editorViewRef.current;
         if (!view) return;
@@ -607,6 +649,12 @@ export const Editor = React.memo(
             scrollIntoView: true,
           });
           view.focus();
+        },
+        getEditorView: (): EditorView | null => editorViewRef.current,
+        setOnCursorChange: (
+          cb: ((anchor: number, head: number) => void) | null
+        ): void => {
+          externalCursorCallbackRef.current = cb;
         },
       }));
 
@@ -828,6 +876,7 @@ export const Editor = React.memo(
                       language={language}
                       spellCheck={spellCheck}
                       onOpenSearch={onOpenSearch}
+                      onDragStart={handleCmDragStart}
                       onChange={(val: string, isUndoRedo?: boolean): void => {
                         setLocalContent(val);
                         localContentRef.current = val;
@@ -852,7 +901,10 @@ export const Editor = React.memo(
                           onChange(chapter.id, { content: val }, isUndoRedo);
                         }, DEBOUNCE_MS);
                       }}
-                      onSelectionChange={scheduleCheckContext}
+                      onSelectionChange={(anchor: number, head: number): void => {
+                        scheduleCheckContext();
+                        externalCursorCallbackRef.current?.(anchor, head);
+                      }}
                       viewMode={
                         viewMode === 'wysiwyg'
                           ? 'visual'

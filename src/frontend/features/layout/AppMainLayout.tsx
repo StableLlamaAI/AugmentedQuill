@@ -28,6 +28,7 @@ import { useStoryLanguage } from '../../stores/storyStore';
 
 import { useWorkspaceMode } from '../../stores/uiStore';
 import { EditorToolbar } from '../editor/EditorToolbar';
+import { ScenesPanelContainer } from '../scenes/ScenesPanelContainer';
 
 type AppMainLayoutProps = {
   sidebarControls: MainSidebarControls;
@@ -243,8 +244,11 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = React.memo(
         >
           {workspaceMode === 'split' ? (
             <>
-              <div className="w-1/3 border-r dark:border-brand-gray-800 h-full flex items-center justify-center">
-                <span className="text-brand-gray-500">Scenes View (Placeholder)</span>
+              <div className="w-1/3 border-r dark:border-brand-gray-800 h-full overflow-hidden">
+                <ScenesPanelContainer
+                  editorRef={editorRef}
+                  currentChapter={currentChapter}
+                />
               </div>
               <div className="flex-1 flex flex-col min-w-0 h-full relative">
                 <EditorToolbar
@@ -312,8 +316,8 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = React.memo(
               </div>
             </>
           ) : workspaceMode === 'scenes' ? (
-            <div className="flex-1 h-full flex items-center justify-center">
-              <span className="text-brand-gray-500">Scenes View (Placeholder)</span>
+            <div className="flex-1 h-full overflow-hidden">
+              <ScenesPanelContainer />
             </div>
           ) : (
             <div className="flex-1 flex flex-col min-w-0 h-full relative">
