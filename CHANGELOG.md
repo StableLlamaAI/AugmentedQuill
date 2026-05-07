@@ -1,5 +1,38 @@
 # Changelog
 
+## [0.9.2] - 2026-05-07
+
+### Added
+
+- Added undo support for writing-model interactions with a new LLM undo tool
+- Added improved story-content tools: `read_story_content` now supports reading from the end of a story
+- Added a `get_project_overview` default view that shows project notes more clearly
+
+### Changed
+
+- Improved LLM tool integration: `call_writing_llm` now accepts sourcebook entry context, is documented as stateless, and no longer exposes filenames to tools
+- Refreshed chat context automatically when the user changes entries that an LLM function call previously looked up
+- Improved toolbar responsiveness and undo/redo button styling
+- Optimized startup experience and main editor auto-scroll behavior
+- Improved Gemma 4 handling when the model is not thinking
+
+### Fixed
+
+- Fixed streaming content error messaging and WRITING stream failure handling
+- Fixed diff view and mutation-tag display for multi-modification chat flows
+- Fixed LLM replacement behavior and update chapter/story metadata handling
+- Fixed stopping chat/LLM generation, including preserving edited text when stopping CHAPTER AI
+- Fixed provider API key UI disabling, and removed gating that blocked the Debug button
+
+### Maintenance
+
+- Removed deprecated LLM tools and unneeded internal content payloads
+- Cleaned up code, addressed lint warnings, and increased allowed zip package size
+
+## [0.9.1] - 2026-04-27
+
+- fix the build system
+
 ## [0.9.0] - 2026-04-27
 
 ### Added
