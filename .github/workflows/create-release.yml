@@ -61,6 +61,7 @@ jobs:
           pip install -e .
           pip install pyinstaller uvicorn
       - name: Set frontend package version
+        shell: bash
         run: |
           VERSION="${{ env.RELEASE_VERSION }}"
           VERSION_CLEAN="${VERSION#v}"
@@ -159,6 +160,7 @@ jobs:
           pip install -e .
           pip install pyinstaller uvicorn
       - name: Set frontend package version
+        shell: bash
         run: |
           VERSION="${{ env.RELEASE_VERSION }}"
           VERSION_CLEAN="${VERSION#v}"
