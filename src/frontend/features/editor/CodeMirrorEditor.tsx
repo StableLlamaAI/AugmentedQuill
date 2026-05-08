@@ -22,8 +22,17 @@ import {
   ViewUpdate,
   DecorationSet,
   drawSelection,
+  WidgetType,
 } from '@codemirror/view';
-import { EditorState, Compartment, Prec, Range, Transaction } from '@codemirror/state';
+import {
+  EditorState,
+  Compartment,
+  Prec,
+  Range,
+  Transaction,
+  StateEffect,
+  StateField,
+} from '@codemirror/state';
 import type { Extension } from '@codemirror/state';
 import { history, historyKeymap, defaultKeymap } from '@codemirror/commands';
 import { markdown } from '@codemirror/lang-markdown';
@@ -38,6 +47,196 @@ import { buildClipboardExtension } from './clipboardExtension';
 import { buildDiffPlugin, externalValueSyncAnnotation } from './codeMirrorDiffPlugin';
 import { buildWhitespacePlugin } from './codeMirrorWhitespacePlugin';
 import { buildEnterExtension, buildTabExtension } from './codeMirrorKeymap';
+
+// ─── Prose-link highlight StateEffect / StateField ───────────────────────────
+// Exported so that EditorHandle.setProseHighlight can dispatch it directly on
+// the EditorView without going through a React prop.
+
+export interface ProseHighlightRange {
+  /** Owning scene identifier – used to route boundary-drag callbacks. */
+  sceneId: string;
+  from: number;
+  to: number;
+}
+
+/** Callback type for prose-link boundary drag events. */
+export type ProseBoundaryCallback = (
+  sceneId: string,
+  edge: 'start' | 'end',
+  offset: number
+) => void;
+
+export const setProseHighlightEffect = StateEffect.define<ProseHighlightRange[]>();
+
+export const proseHighlightField = StateField.define<ProseHighlightRange[]>({
+  create: () => [],
+  update(value: ProseHighlightRange[], tr: Transaction) {
+    for (const e of tr.effects) {
+      if (e.is(setProseHighlightEffect)) return e.value;
+    }
+    return value;
+  },
+});
+
+// ─── Prose-link boundary drag handles ────────────────────────────────────────
+
+/**
+ * Inline widget rendered at the start and end of each prose-link highlight.
+ * Dragging the widget updates the linked range live for visual feedback and
+ * fires the boundary-change callback on mouse-up to persist the change.
+ */
+class ProseHandleWidget extends WidgetType {
+  constructor(
+    private readonly sceneId: string,
+    private readonly edge: 'start' | 'end',
+    private readonly offset: number,
+    private readonly callbackRef: React.MutableRefObject<ProseBoundaryCallback | null>,
+    private readonly view: EditorView
+  ) {
+    super();
+  }
+
+  eq(other: ProseHandleWidget): boolean {
+    return (
+      this.sceneId === other.sceneId &&
+      this.edge === other.edge &&
+      this.offset === other.offset
+    );
+  }
+
+  toDOM(): HTMLElement {
+    const el = document.createElement('span');
+    el.className = `cm-prose-handle cm-prose-handle-${this.edge}`;
+    el.setAttribute('aria-hidden', 'true');
+    el.setAttribute('contenteditable', 'false');
+    el.textContent = this.edge === 'start' ? '[' : ']';
+    el.title =
+      this.edge === 'start' ? 'Drag to move scene start' : 'Drag to move scene end';
+    const { view, sceneId, edge, callbackRef } = this;
+    el.addEventListener('mousedown', (downEv: MouseEvent): void => {
+      downEv.preventDefault();
+      downEv.stopPropagation();
+      let currentOffset = this.offset;
+      const onMove = (moveEv: MouseEvent): void => {
+        const pos = view.posAtCoords({ x: moveEv.clientX, y: moveEv.clientY }, false);
+        if (pos == null) return;
+        currentOffset = pos;
+        const current = view.state.field(proseHighlightField);
+        const draggedEntry = current.find(
+          (r: ProseHighlightRange): boolean => r.sceneId === sceneId
+        );
+        if (!draggedEntry) return;
+        const draggedFrom = edge === 'start' ? pos : draggedEntry.from;
+        const draggedTo = edge === 'end' ? pos : draggedEntry.to;
+        const updated = current.map((r: ProseHighlightRange): ProseHighlightRange => {
+          if (r.sceneId === sceneId) {
+            return edge === 'start' ? { ...r, from: pos } : { ...r, to: pos };
+          }
+          // When the new dragged range is valid, push any range that it now overlaps
+          // so no two scenes share the same text during live preview.
+          if (draggedFrom >= draggedTo) return r;
+          if (r.to <= draggedFrom || r.from >= draggedTo) return r;
+          if (edge === 'end') {
+            // Right boundary moved right: push the other scene's start.
+            return draggedTo < r.to ? { ...r, from: draggedTo } : r;
+          } else {
+            // Left boundary moved left: push the other scene's end.
+            return r.from < draggedFrom ? { ...r, to: draggedFrom } : r;
+          }
+        });
+        view.dispatch({ effects: setProseHighlightEffect.of(updated) });
+      };
+      const onUp = (): void => {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        callbackRef.current?.(sceneId, edge, currentOffset);
+      };
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+    return el;
+  }
+
+  ignoreEvent(): boolean {
+    return false;
+  }
+}
+
+/**
+ * Factory that builds a ViewPlugin rendering mark decorations plus draggable
+ * boundary widgets for all active prose-link highlights.  Accepts a stable
+ * MutableRefObject so the plugin can be constructed once at mount time while
+ * always reading the latest callback.
+ */
+function buildProseHighlightPlugin(
+  callbackRef: React.MutableRefObject<ProseBoundaryCallback | null>
+): Extension {
+  return ViewPlugin.fromClass(
+    class {
+      decorations: DecorationSet;
+      constructor(view: EditorView) {
+        this.decorations = this.build(view);
+      }
+      update(u: ViewUpdate): void {
+        if (
+          u.state.field(proseHighlightField) !==
+            u.startState.field(proseHighlightField) ||
+          u.docChanged
+        ) {
+          this.decorations = this.build(u.view);
+        }
+      }
+      build(view: EditorView): DecorationSet {
+        const ranges = view.state.field(proseHighlightField);
+        if (ranges.length === 0) return Decoration.none;
+        const docLen = view.state.doc.length;
+        const decos: Range<Decoration>[] = [];
+        const sorted = [...ranges].sort(
+          (a: ProseHighlightRange, b: ProseHighlightRange): number => a.from - b.from
+        );
+        for (const entry of sorted) {
+          const from = Math.max(0, Math.min(entry.from, docLen));
+          const to = Math.max(0, Math.min(entry.to, docLen));
+          if (from >= to) continue;
+          // side:-1 on the end widget and side:1 on the start widget ensure that
+          // when two scenes share a boundary position the end bracket ']' sorts
+          // before the start bracket '[', giving the correct visual '][' order.
+          decos.push(
+            Decoration.widget({
+              widget: new ProseHandleWidget(
+                entry.sceneId,
+                'end',
+                to,
+                callbackRef,
+                view
+              ),
+              side: -1,
+            }).range(to)
+          );
+          decos.push(
+            Decoration.mark({ class: 'cm-prose-link-highlight' }).range(from, to)
+          );
+          decos.push(
+            Decoration.widget({
+              widget: new ProseHandleWidget(
+                entry.sceneId,
+                'start',
+                from,
+                callbackRef,
+                view
+              ),
+              side: 1,
+            }).range(from)
+          );
+        }
+        return Decoration.set(decos, true);
+      }
+    },
+    {
+      decorations: (v: { decorations: DecorationSet }): DecorationSet => v.decorations,
+    }
+  );
+}
 
 // ─── Markdown syntax highlight style ────────────────────────────────────────
 // Maps Lezer markdown tokens to CSS properties so prose writers see inline
@@ -217,6 +416,37 @@ const baseTheme = EditorView.theme({
     backgroundColor: 'rgba(245, 158, 11, 0.25)',
     borderRadius: '2px',
   },
+  // Prose-link highlight: page colour with elevated saturation/brightness so the
+  // reader can immediately see which prose passage is linked to the selected card.
+  // A box-shadow bottom-line provides a secondary visual cue on all themes.
+  // The exact colour is overridden per-theme via proseHighlightBgCompartment.
+  '.cm-prose-link-highlight': {
+    backgroundColor: 'rgba(245, 158, 11, 0.40)',
+    borderRadius: '2px',
+    boxShadow: 'inset 0 -2px 0 rgba(180, 110, 0, 0.45)',
+  },
+  // Draggable boundary handles rendered at the start/end of each prose-link
+  // highlight.  The bracket characters [ / ] signal the drag affordance without
+  // interrupting reading flow and make it easy to distinguish start from end.
+  '.cm-prose-handle': {
+    display: 'inline-block',
+    color: 'rgba(180, 100, 0, 0.90)',
+    fontSize: '1em',
+    fontWeight: 'bold',
+    fontStyle: 'normal',
+    fontFamily: 'monospace',
+    lineHeight: '1',
+    verticalAlign: '0.06em',
+    cursor: 'ew-resize',
+    userSelect: 'none',
+    pointerEvents: 'all',
+  },
+  '.cm-prose-handle-start': {
+    marginRight: '1px',
+  },
+  '.cm-prose-handle-end': {
+    marginLeft: '1px',
+  },
   // Placeholder styling
   '.cm-placeholder': {
     color: 'inherit',
@@ -312,8 +542,22 @@ export interface CodeMirrorEditorProps {
    * modes each get the right contrast level.
    */
   selectionBg?: string;
+  /**
+   * Background colour for the prose-link highlight decoration (the tinted mark
+   * shown when a scene card with a linked range is selected on the Pinboard).
+   * Should be based on the page colour with higher saturation/contrast so the
+   * highlight feels like the page itself is "waking up" around the passage.
+   * Pass a theme-appropriate computed value from the Editor component.
+   */
+  proseHighlightBg?: string;
   /** Called when a drag starts from inside the editor. Use to set custom dataTransfer data. */
   onDragStart?: (event: DragEvent, view: EditorView) => void;
+  /**
+   * Called when the user drags a prose-link boundary handle to a new position.
+   * Fires on mouse-up with the scene id, which edge was moved, and the new
+   * character offset.  Use this to persist updated start_offset / end_offset.
+   */
+  onProseBoundaryChange?: ProseBoundaryCallback;
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -342,7 +586,9 @@ export const CodeMirrorEditor = React.forwardRef<
       spellCheck = false,
       onOpenSearch,
       selectionBg,
+      proseHighlightBg,
       onDragStart,
+      onProseBoundaryChange,
     }: CodeMirrorEditorProps,
     ref: React.ForwardedRef<EditorView | null>
   ) => {
@@ -366,10 +612,12 @@ export const CodeMirrorEditor = React.forwardRef<
     const onSelectionChangeRef = useRef(onSelectionChange);
     const onOpenSearchRef = useRef(onOpenSearch);
     const onDragStartRef = useRef(onDragStart);
+    const proseBoundaryCallbackRef = useRef<ProseBoundaryCallback | null>(null);
     onChangeRef.current = onChange;
     onSelectionChangeRef.current = onSelectionChange;
     onOpenSearchRef.current = onOpenSearch;
     onDragStartRef.current = onDragStart;
+    proseBoundaryCallbackRef.current = onProseBoundaryChange ?? null;
 
     // Track the last value emitted by our own onChange so we can distinguish
     // externally-driven value changes from the echo of our own edits.
@@ -385,6 +633,7 @@ export const CodeMirrorEditor = React.forwardRef<
     const attributesCompartment = useRef(new Compartment());
     const mdDecorationCompartment = useRef(new Compartment());
     const selectionBgCompartment = useRef(new Compartment());
+    const proseHighlightBgCompartment = useRef(new Compartment());
 
     // ── Extension builders ──────────────────────────────────────────────────
 
@@ -509,6 +758,20 @@ export const CodeMirrorEditor = React.forwardRef<
       });
     };
 
+    // Overrides the CSS variable --aq-prose-highlight-bg used by
+    // .cm-prose-link-highlight so the background matches the editor page colour
+    // with elevated saturation/contrast (computed by the parent Editor component).
+    const buildProseHighlightBgExtension = (bg: string | undefined): Extension => {
+      if (!bg) return [];
+      return EditorView.theme({
+        '.cm-prose-link-highlight': {
+          backgroundColor: `${bg} !important`,
+          // Keep the bottom-shadow underline consistent across theme overrides.
+          boxShadow: 'inset 0 -2px 0 rgba(180, 110, 0, 0.45) !important',
+        },
+      });
+    };
+
     // ── Mount / unmount ─────────────────────────────────────────────────────
     // ── Mount / unmount ─────────────────────────────────────────────────────
 
@@ -563,6 +826,12 @@ export const CodeMirrorEditor = React.forwardRef<
         placeholderCompartment.current.of(buildPlaceholderExtension(placeholder)),
         mdDecorationCompartment.current.of(buildMdDecorationExtension(viewMode)),
         selectionBgCompartment.current.of(buildSelectionBgExtension(selectionBg)),
+        proseHighlightBgCompartment.current.of(
+          buildProseHighlightBgExtension(proseHighlightBg)
+        ),
+        // Prose-link highlight: StateField persists the ranges, ViewPlugin renders them.
+        proseHighlightField,
+        buildProseHighlightPlugin(proseBoundaryCallbackRef),
         EditorView.updateListener.of((update: ViewUpdate): void => {
           if (update.docChanged) {
             const isExternalSync = update.transactions.some((tx: Transaction) =>
@@ -647,6 +916,14 @@ export const CodeMirrorEditor = React.forwardRef<
         ),
       });
     }, [selectionBg]);
+
+    useEffect((): void => {
+      viewRef.current?.dispatch({
+        effects: proseHighlightBgCompartment.current.reconfigure(
+          buildProseHighlightBgExtension(proseHighlightBg)
+        ),
+      });
+    }, [proseHighlightBg]);
 
     useEffect((): void => {
       viewRef.current?.dispatch({

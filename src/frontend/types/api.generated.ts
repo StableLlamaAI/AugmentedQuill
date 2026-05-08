@@ -2752,7 +2752,7 @@ export interface components {
      */
     SceneBeat: {
       /** Id */
-      id: string;
+      id?: string;
       /** Text */
       text: string;
       prose_link?: components['schemas']['SceneProseLink'] | null;

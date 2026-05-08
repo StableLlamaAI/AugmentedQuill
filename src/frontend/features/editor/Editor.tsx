@@ -31,7 +31,12 @@ import { useSearchHighlight } from '../search/SearchHighlightContext';
 import { useChatStore, ChatStoreState } from '../../stores/chatStore';
 import { useStoryStore } from '../../stores/storyStore';
 import type { StoryStoreState } from '../../stores/storyStore';
-import { CodeMirrorEditor } from './CodeMirrorEditor';
+import {
+  CodeMirrorEditor,
+  setProseHighlightEffect,
+  type ProseHighlightRange,
+  type ProseBoundaryCallback,
+} from './CodeMirrorEditor';
 import { EditorSuggestionPanel } from './EditorSuggestionPanel';
 import { EditorMobileToolbar } from './EditorMobileToolbar';
 import { EditorProvider } from './EditorContext';
@@ -104,6 +109,19 @@ export interface EditorHandle {
    * supported at a time (last caller wins).
    */
   setOnCursorChange: (cb: ((anchor: number, head: number) => void) | null) => void;
+  /**
+   * Apply background-highlight decorations to multiple prose ranges without
+   * moving the cursor or creating a text selection.  Scrolls to the first
+   * range.  Replaces any previously active highlights.
+   */
+  setProseHighlights: (entries: ProseHighlightRange[]) => void;
+  /** Remove all prose-link highlight decorations. */
+  clearProseHighlight: () => void;
+  /**
+   * Register a callback that fires when the user drags a prose-link boundary
+   * handle to a new position.  Pass null to unsubscribe.
+   */
+  setOnProseBoundaryChange: (cb: ProseBoundaryCallback | null) => void;
 }
 
 /* eslint-disable complexity */
@@ -134,6 +152,8 @@ export const Editor = React.memo(
       const externalCursorCallbackRef = useRef<
         ((anchor: number, head: number) => void) | null
       >(null);
+      // External prose-boundary-drag subscriber (e.g. ScenesPanelContainer)
+      const proseBoundaryCallbackRef = useRef<ProseBoundaryCallback | null>(null);
       const showInlineTitle = true;
       const { getRanges } = useSearchHighlight();
       const chapterSearchHighlightRanges = getRanges(
@@ -656,6 +676,22 @@ export const Editor = React.memo(
         ): void => {
           externalCursorCallbackRef.current = cb;
         },
+        setProseHighlights: (entries: ProseHighlightRange[]): void => {
+          const view = editorViewRef.current;
+          if (!view) return;
+          view.dispatch({ effects: setProseHighlightEffect.of(entries) });
+          if (entries.length > 0) {
+            view.dispatch({ effects: EditorView.scrollIntoView(entries[0].from) });
+          }
+        },
+        clearProseHighlight: (): void => {
+          editorViewRef.current?.dispatch({
+            effects: setProseHighlightEffect.of([]),
+          });
+        },
+        setOnProseBoundaryChange: (cb: ProseBoundaryCallback | null): void => {
+          proseBoundaryCallbackRef.current = cb;
+        },
       }));
 
       // Styles & Theme Logic
@@ -679,6 +715,24 @@ export const Editor = React.memo(
         // Light/Mixed mode: warm editor background — use a soft semi-transparent
         // highlight so selected text stays readable without being too vivid
         selectionBg = 'rgba(99,102,241,0.22)';
+      }
+
+      // Prose-link highlight: the page warm hue pushed to high saturation and
+      // consistently lower lightness so the highlighted passage stands out at
+      // every brightness level.  Both formulas use a fixed lightness delta from
+      // the page so the contrast is stable regardless of the slider position.
+      let proseHighlightBg: string;
+      if (settings.theme === 'dark') {
+        // Dark page: hsl(24, 10%, b%) where b = brightness*20 (10–20%).
+        // Highlight is always ~22 points brighter with rich saturation.
+        const b = settings.brightness * 20;
+        proseHighlightBg = `hsl(24, 65%, ${Math.min(b + 22, 44)}%)`;
+      } else {
+        // Light/Mixed page: hsl(38, 25%, brightness*100%).
+        // Highlight is always 28 points darker with rich saturation so it
+        // never blends into the background, even at low brightness settings.
+        const pageL = settings.brightness * 100;
+        proseHighlightBg = `hsl(38, 88%, ${Math.max(pageL - 28, 20)}%)`;
       }
 
       const isMonospace = viewMode === 'raw';
@@ -919,6 +973,14 @@ export const Editor = React.memo(
                       searchHighlightRanges={chapterSearchHighlightRanges}
                       enterBehavior="softbreak"
                       selectionBg={selectionBg}
+                      proseHighlightBg={proseHighlightBg}
+                      onProseBoundaryChange={(
+                        sceneId: string,
+                        edge: 'start' | 'end',
+                        offset: number
+                      ): void => {
+                        proseBoundaryCallbackRef.current?.(sceneId, edge, offset);
+                      }}
                       placeholder={
                         chapter.scope === 'story'
                           ? 'Start writing your story here...'

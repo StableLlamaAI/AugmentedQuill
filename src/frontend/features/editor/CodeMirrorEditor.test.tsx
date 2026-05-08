@@ -15,7 +15,7 @@
 // @vitest-environment jsdom
 
 import React from 'react';
-import { render, act, cleanup } from '@testing-library/react';
+import { render, act, cleanup, fireEvent } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { EditorView } from '@codemirror/view';
@@ -660,5 +660,183 @@ describe('CodeMirrorEditor', () => {
         expect(await softbreakKey('a  \n\n\nb', 4, 'Delete')).toBe('a  \n\nb');
       });
     });
+  });
+});
+
+// ─── Prose-link highlight + boundary handles ──────────────────────────────────
+
+import {
+  setProseHighlightEffect,
+  proseHighlightField,
+  type ProseHighlightRange,
+} from './CodeMirrorEditor';
+
+describe('prose-link highlight plugin', () => {
+  /**
+   * Render the editor, dispatch a setProseHighlightEffect, and return the
+   * container so tests can query the DOM for handle elements.
+   */
+  async function mountWithHighlights(
+    ranges: ProseHighlightRange[]
+  ): Promise<{ container: HTMLElement; view: EditorView }> {
+    const ref = React.createRef<EditorView | null>();
+    // 'Hello world' = 11 chars; ranges use [0,5) and [6,11)
+    const { container } = await act(async () =>
+      render(<CodeMirrorEditor ref={ref} value="Hello world" onChange={vi.fn()} />)
+    );
+    act(() => {
+      ref.current!.dispatch({ effects: setProseHighlightEffect.of(ranges) });
+    });
+    return { container, view: ref.current! };
+  }
+
+  it('renders a start handle with text "[" for a single prose range', async () => {
+    const { container } = await mountWithHighlights([
+      { sceneId: 's1', from: 0, to: 5 },
+    ]);
+    const startHandle = container.querySelector('.cm-prose-handle-start');
+    expect(startHandle).not.toBeNull();
+    expect(startHandle?.textContent).toBe('[');
+  });
+
+  it('renders an end handle with text "]" for a single prose range', async () => {
+    const { container } = await mountWithHighlights([
+      { sceneId: 's1', from: 0, to: 5 },
+    ]);
+    const endHandle = container.querySelector('.cm-prose-handle-end');
+    expect(endHandle).not.toBeNull();
+    expect(endHandle?.textContent).toBe(']');
+  });
+
+  it('renders two start handles and two end handles for two separate ranges', async () => {
+    const { container } = await mountWithHighlights([
+      { sceneId: 's1', from: 0, to: 5 },
+      { sceneId: 's2', from: 6, to: 11 },
+    ]);
+    expect(container.querySelectorAll('.cm-prose-handle-start')).toHaveLength(2);
+    expect(container.querySelectorAll('.cm-prose-handle-end')).toHaveLength(2);
+  });
+
+  it('renders both ranges when they have touching boundaries (end of A == start of B)', async () => {
+    // This is the critical regression case: end of scene-a is exactly the start
+    // of scene-b.  The Decoration.set sort=true flag prevents the ordering crash.
+    const { container } = await mountWithHighlights([
+      { sceneId: 'a', from: 0, to: 5 },
+      { sceneId: 'b', from: 5, to: 11 },
+    ]);
+    // Both mark decorations must be present — if the sort bug were present the
+    // whole DecorationSet would silently become empty and no handles render.
+    expect(container.querySelectorAll('.cm-prose-handle')).toHaveLength(4); // 2×start + 2×end
+    const marks = container.querySelectorAll('.cm-prose-link-highlight');
+    expect(marks.length).toBeGreaterThanOrEqual(1); // at least one highlighted span
+  });
+
+  it('orders handles as ][ (not []) when two scenes share a boundary position', async () => {
+    // The end widget uses side:-1 and the start widget uses side:1 so that at
+    // the same position the ']' sorts before '[', producing the correct ][ order.
+    const { container } = await mountWithHighlights([
+      { sceneId: 'a', from: 0, to: 5 },
+      { sceneId: 'b', from: 5, to: 11 },
+    ]);
+    const handles = container.querySelectorAll('.cm-prose-handle');
+    // In document order the sequence at the shared position must be ][
+    // i.e. the second handle overall is ']' and the third is '['.
+    expect(handles[1].textContent).toBe(']');
+    expect(handles[2].textContent).toBe('[');
+  });
+
+  it('live drag of end handle into adjacent range pushes that range start visually', async () => {
+    const { container, view } = await mountWithHighlights([
+      { sceneId: 'a', from: 0, to: 5 },
+      { sceneId: 'b', from: 5, to: 11 },
+    ]);
+    // Mock posAtCoords to return position 8 (inside scene b's range).
+    vi.spyOn(view, 'posAtCoords').mockReturnValue(8);
+
+    // The end handles are '.cm-prose-handle-end'; the first belongs to scene a
+    // (it has a lower from value, scenes are sorted by from in the plugin).
+    const endHandles = container.querySelectorAll('.cm-prose-handle-end');
+    const endHandleA = endHandles[0] as HTMLElement;
+
+    act(() => {
+      fireEvent.mouseDown(endHandleA, { bubbles: true });
+      fireEvent.mouseMove(document, { clientX: 100, clientY: 0 });
+    });
+
+    // Scene b's from must have been pushed to 8 to avoid overlap.
+    const highlights = view.state.field(proseHighlightField);
+    const bRange = highlights.find((r: ProseHighlightRange) => r.sceneId === 'b');
+    expect(bRange?.from).toBe(8);
+
+    act(() => {
+      fireEvent.mouseUp(document);
+    });
+    vi.restoreAllMocks();
+  });
+
+  it('live drag of start handle into adjacent range pushes that range end visually', async () => {
+    const { container, view } = await mountWithHighlights([
+      { sceneId: 'a', from: 0, to: 5 },
+      { sceneId: 'b', from: 5, to: 11 },
+    ]);
+    // Mock posAtCoords to return position 3 (inside scene a's range).
+    vi.spyOn(view, 'posAtCoords').mockReturnValue(3);
+
+    // The start handles; the second belongs to scene b.
+    const startHandles = container.querySelectorAll('.cm-prose-handle-start');
+    const startHandleB = startHandles[1] as HTMLElement;
+
+    act(() => {
+      fireEvent.mouseDown(startHandleB, { bubbles: true });
+      fireEvent.mouseMove(document, { clientX: 30, clientY: 0 });
+    });
+
+    // Scene a's to must have been pushed to 3 to avoid overlap.
+    const highlights = view.state.field(proseHighlightField);
+    const aRange = highlights.find((r: ProseHighlightRange) => r.sceneId === 'a');
+    expect(aRange?.to).toBe(3);
+
+    act(() => {
+      fireEvent.mouseUp(document);
+    });
+    vi.restoreAllMocks();
+  });
+
+  it('clearing highlights via empty array removes all handles', async () => {
+    const ref = React.createRef<EditorView | null>();
+    await act(async () => {
+      render(<CodeMirrorEditor ref={ref} value="Hello world" onChange={vi.fn()} />);
+    });
+    act(() => {
+      ref.current!.dispatch({
+        effects: setProseHighlightEffect.of([{ sceneId: 's1', from: 0, to: 5 }]),
+      });
+    });
+    act(() => {
+      ref.current!.dispatch({ effects: setProseHighlightEffect.of([]) });
+    });
+    const { container } = await act(async () =>
+      render(<CodeMirrorEditor ref={ref} value="Hello world" onChange={vi.fn()} />)
+    );
+    // After clearing there should be no handle elements.
+    // (We re-render to force a fresh query; the original container is the live one.)
+    expect(document.querySelectorAll('.cm-prose-handle').length).toBe(0);
+  });
+
+  it('skips a range whose from >= to (invalid range is not rendered)', async () => {
+    const { container } = await mountWithHighlights([
+      { sceneId: 's1', from: 5, to: 5 }, // zero-width — must be skipped
+      { sceneId: 's2', from: 0, to: 5 }, // valid
+    ]);
+    // Only the valid range renders handles.
+    expect(container.querySelectorAll('.cm-prose-handle')).toHaveLength(2);
+  });
+
+  it('clamps ranges that exceed document length without throwing', async () => {
+    // Range [0, 9999) on an 11-char doc — should clamp to [0, 11) silently.
+    const { container } = await mountWithHighlights([
+      { sceneId: 's1', from: 0, to: 9999 },
+    ]);
+    expect(container.querySelectorAll('.cm-prose-handle')).toHaveLength(2);
   });
 });

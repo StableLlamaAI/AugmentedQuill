@@ -10,7 +10,7 @@
  * Handles API calls, store updates, and renders the toolbar + active view.
  */
 
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Plus } from 'lucide-react';
 import type { EditorView } from '@codemirror/view';
@@ -49,11 +49,8 @@ export const ScenesPanelContainer: React.FC<ScenesPanelContainerProps> = ({
   const [editingSceneId, setEditingSceneId] = useState<string | null>(null);
 
   // ---- Scene selection + bidirectional prose-link sync ----
-  const { selectedSceneId, handleSelectScene } = useSceneProseSync(
-    scenes,
-    currentChapter,
-    editorRef
-  );
+  const { selectedSceneId, handleSelectScene, handleMultipleSelectScenes } =
+    useSceneProseSync(scenes, currentChapter, editorRef);
 
   const editingScene = editingSceneId
     ? (scenes.find((s: Scene) => s.id === editingSceneId) ?? null)
@@ -210,6 +207,87 @@ export const ScenesPanelContainer: React.FC<ScenesPanelContainerProps> = ({
     [patchScene, t]
   );
 
+  // ---- Prose-link boundary drag (update start/end offset) ----
+  const handleProseBoundaryChange = useCallback(
+    async (sceneId: string, edge: 'start' | 'end', offset: number): Promise<void> => {
+      const scene = scenes.find((s: Scene): boolean => s.id === sceneId);
+      if (!scene?.prose_link) return;
+      const link = scene.prose_link;
+      const startOffset = edge === 'start' ? offset : link.start_offset;
+      const endOffset = edge === 'end' ? offset : (link.end_offset ?? offset);
+      if (startOffset >= endOffset) return;
+
+      // Detect other scenes in the same scope/chapter whose range would overlap the
+      // new [startOffset, endOffset).  For each such scene, push the boundary facing
+      // the dragged edge so the two ranges share an edge instead of overlapping.
+      // This prevents the backend from interpreting the overlap as a conflict and
+      // deleting both prose links.
+      type Adjustment = {
+        id: string;
+        link: SceneProseLink;
+        newStart: number;
+        newEnd: number;
+      };
+      const toAdjust: Adjustment[] = [];
+      for (const other of scenes) {
+        if (other.id === sceneId || !other.prose_link) continue;
+        const ol = other.prose_link;
+        if (ol.scope_type !== link.scope_type) continue;
+        if (link.scope_type === 'chapter' && ol.chapter_id !== link.chapter_id)
+          continue;
+        const otherStart = ol.start_offset;
+        const otherEnd = ol.end_offset ?? otherStart;
+        // Skip when there is no overlap with the new range.
+        if (otherEnd <= startOffset || otherStart >= endOffset) continue;
+        // Push the face of `other` that is closest to the dragged edge.
+        const newOtherStart = edge === 'end' ? endOffset : otherStart;
+        const newOtherEnd = edge === 'start' ? startOffset : otherEnd;
+        if (newOtherStart < newOtherEnd) {
+          toAdjust.push({
+            id: other.id,
+            link: ol,
+            newStart: newOtherStart,
+            newEnd: newOtherEnd,
+          });
+        }
+      }
+
+      try {
+        // Adjust neighbours first so the backend does not see transient overlaps.
+        for (const adj of toAdjust) {
+          const modified = await api.scenes.linkProse(adj.id, {
+            scope_type: adj.link.scope_type,
+            chapter_id: adj.link.chapter_id ?? null,
+            book_id: adj.link.book_id ?? null,
+            start_offset: adj.newStart,
+            end_offset: adj.newEnd,
+          });
+          modified.forEach((s: Scene) => patchScene(s));
+        }
+        const modified = await api.scenes.linkProse(sceneId, {
+          scope_type: link.scope_type,
+          chapter_id: link.chapter_id ?? null,
+          book_id: link.book_id ?? null,
+          start_offset: startOffset,
+          end_offset: endOffset,
+        });
+        modified.forEach((s: Scene) => patchScene(s));
+      } catch (err) {
+        notifyError(t('Update prose link'), err);
+      }
+    },
+    [scenes, patchScene, t]
+  );
+
+  // Register the boundary-change handler on the editor handle so the callback
+  // is always current without re-running the mount effect.
+  useEffect((): (() => void) => {
+    editorRef?.current?.setOnProseBoundaryChange(handleProseBoundaryChange);
+    return (): void => {
+      editorRef?.current?.setOnProseBoundaryChange(null);
+    };
+  }, [editorRef, handleProseBoundaryChange]);
+
   // ---- Get linked prose text from editor content ----
   const getLinkedProseText = useCallback(
     (link: SceneProseLink): string | null => {
@@ -292,8 +370,9 @@ export const ScenesPanelContainer: React.FC<ScenesPanelContainerProps> = ({
         {viewMode === 'pinboard' && (
           <PinboardView
             scenes={scenes}
-            selectedSceneId={selectedSceneId}
+            primarySelectedSceneId={selectedSceneId}
             onSelectScene={handleSelectScene}
+            onSelectionChange={handleMultipleSelectScenes}
             onMoveScene={handleMoveScene}
             onEditScene={setEditingSceneId}
             onCreateConstraint={handleCreateConstraint}

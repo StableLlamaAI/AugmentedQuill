@@ -62,8 +62,9 @@ interface SceneCardProps {
   index: number;
   /** Called when the user finishes dragging to a new position. */
   onMove: (sceneId: string, x: number, y: number) => void;
-  /** Called on single click to select this card. */
-  onSelect: (sceneId: string) => void;
+  /** Called on single click to select this card. Receives the native event so
+   *  the caller can inspect ctrlKey / shiftKey for multi-selection logic. */
+  onSelect: (sceneId: string, e: MouseEvent) => void;
   /** Called on double-click to open the editor. */
   onEdit: (sceneId: string) => void;
   /** Called when Ctrl+drag starts – provides the source scene id. */
@@ -110,8 +111,30 @@ export const SceneCard: React.FC<SceneCardProps> = ({
     e.stopPropagation();
 
     if (e.ctrlKey || e.metaKey) {
-      // Ctrl+drag → constraint mode
+      // Ctrl+mousedown: signal potential constraint drag; if mouse doesn't move
+      // it becomes a multi-select toggle instead.
       onConstraintDragStart(scene.id);
+      const startX = e.clientX;
+      const startY = e.clientY;
+      const nativeStart = e.nativeEvent;
+      let ctrlMoved = false;
+
+      const onCtrlMove = (me: MouseEvent): void => {
+        if (Math.abs(me.clientX - startX) + Math.abs(me.clientY - startY) > 4)
+          ctrlMoved = true;
+      };
+      const onCtrlUp = (me: MouseEvent): void => {
+        document.removeEventListener('mousemove', onCtrlMove);
+        document.removeEventListener('mouseup', onCtrlUp);
+        if (!ctrlMoved) {
+          // Ctrl+click with no drag → multi-select toggle (pass the mousedown
+          // event so ctrlKey is visible to the selection handler).
+          onSelect(scene.id, nativeStart);
+        }
+        void me; // suppress unused-var lint
+      };
+      document.addEventListener('mousemove', onCtrlMove);
+      document.addEventListener('mouseup', onCtrlUp);
       return;
     }
 
@@ -147,7 +170,7 @@ export const SceneCard: React.FC<SceneCardProps> = ({
         const newY = Math.max(0, dragStart.current.cardY + dy);
         onMove(scene.id, newX, newY);
       } else if (!moved.current) {
-        onSelect(scene.id);
+        onSelect(scene.id, me);
       }
       dragStart.current = null;
     };

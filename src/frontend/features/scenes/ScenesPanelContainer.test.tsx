@@ -32,6 +32,7 @@ import { ScenesPanelContainer } from './ScenesPanelContainer';
 import type { Scene, SceneProseLink } from '../../types';
 import type { WritingUnit } from '../../types/domain';
 import type { EditorHandle } from '../editor/Editor';
+import type { ProseBoundaryCallback } from '../editor/CodeMirrorEditor';
 
 // ---------------------------------------------------------------------------
 // Hoisted mocks
@@ -50,8 +51,10 @@ const { patchSceneMock, useScenesMock, apiMock, captured } = vi.hoisted(() => {
     },
   };
   // Mutable holder — spy stubs close over this object; tests read from it.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const captured: { pinboard: any; dialog: any } = { pinboard: null, dialog: null };
+  const captured: { pinboard: unknown; dialog: unknown } = {
+    pinboard: null,
+    dialog: null,
+  };
   return { patchSceneMock, useScenesMock, apiMock, captured };
 });
 
@@ -90,6 +93,7 @@ vi.mock('./useSceneProseSync', () => ({
   useSceneProseSync: vi.fn(() => ({
     selectedSceneId: null,
     handleSelectScene: vi.fn(),
+    handleMultipleSelectScenes: vi.fn(),
   })),
 }));
 
@@ -189,10 +193,55 @@ function makeEditorRef(docText: string = 'Hello world, some prose here.'): {
   const ref: React.RefObject<EditorHandle | null> = {
     current: {
       setOnCursorChange: vi.fn(),
+      setProseHighlights: vi.fn(),
+      clearProseHighlight: vi.fn(),
+      setOnProseBoundaryChange: vi.fn(),
       getEditorView: vi.fn(() => view),
     },
   };
   return { ref, view, dispatch, doc };
+}
+
+/**
+ * Like makeEditorRef, but the setOnProseBoundaryChange spy actually captures
+ * the callback registered by the container's useEffect so tests can invoke it
+ * directly after rendering.
+ */
+function makeEditorRefWithBoundary(docText: string = 'Hello world'): {
+  ref: React.RefObject<EditorHandle | null>;
+  getBoundaryCallback: () =>
+    | ((sceneId: string, edge: 'start' | 'end', offset: number) => Promise<void>)
+    | null;
+  dispatch: ReturnType<typeof vi.fn>;
+} {
+  const dispatch = vi.fn();
+  const doc = {
+    length: docText.length,
+    sliceString: vi.fn((from: number, to: number) => docText.slice(from, to)),
+  };
+  const view = { state: { doc }, dispatch };
+  let capturedCb:
+    | ((sceneId: string, edge: 'start' | 'end', offset: number) => void)
+    | null = null;
+  const ref: React.RefObject<EditorHandle | null> = {
+    current: {
+      setOnCursorChange: vi.fn(),
+      setProseHighlights: vi.fn(),
+      clearProseHighlight: vi.fn(),
+      setOnProseBoundaryChange: vi.fn((cb: ProseBoundaryCallback | null) => {
+        capturedCb = cb;
+      }),
+      getEditorView: vi.fn(() => view),
+    },
+  };
+  return {
+    ref,
+    dispatch,
+    getBoundaryCallback: () =>
+      capturedCb as
+        | ((sceneId: string, edge: 'start' | 'end', offset: number) => Promise<void>)
+        | null,
+  };
 }
 
 const STORY_UNIT: WritingUnit = { id: 'story', scope: 'story', title: 'Story' };
@@ -521,6 +570,9 @@ describe('handleSaveProseContent', () => {
     const nullViewRef: React.RefObject<EditorHandle | null> = {
       current: {
         setOnCursorChange: vi.fn(),
+        setProseHighlights: vi.fn(),
+        clearProseHighlight: vi.fn(),
+        setOnProseBoundaryChange: vi.fn(),
         getEditorView: vi.fn(() => null),
       },
     };
@@ -631,6 +683,9 @@ describe('getLinkedProseText', () => {
     const nullViewRef: React.RefObject<EditorHandle | null> = {
       current: {
         setOnCursorChange: vi.fn(),
+        setProseHighlights: vi.fn(),
+        clearProseHighlight: vi.fn(),
+        setOnProseBoundaryChange: vi.fn(),
         getEditorView: vi.fn(() => null),
       },
     };
@@ -651,5 +706,410 @@ describe('getLinkedProseText', () => {
     await renderAndOpenDialog([scene]);
 
     expect(dlg().getLinkedProseText).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// handleProseBoundaryChange (registered via editorRef.setOnProseBoundaryChange)
+// ---------------------------------------------------------------------------
+
+describe('handleProseBoundaryChange', () => {
+  /**
+   * Render the container, wait for effects to flush so the useEffect that calls
+   * setOnProseBoundaryChange has run, then return the captured callback.
+   */
+  async function renderWithBoundary(
+    scenes: Scene[],
+    props: Partial<React.ComponentProps<typeof ScenesPanelContainer>> = {}
+  ): Promise<
+    (sceneId: string, edge: 'start' | 'end', offset: number) => Promise<void>
+  > {
+    useScenesMock.mockReturnValue(scenes);
+    await act(async () => {
+      wrap(<ScenesPanelContainer {...props} />);
+    });
+    const cb = (props.editorRef?.current as EditorHandle | null)
+      ?.setOnProseBoundaryChange as ReturnType<typeof vi.fn> | undefined;
+    if (!cb) throw new Error('editorRef not provided');
+    // The last call argument is the registered handler
+    const registered = cb.mock.calls[cb.mock.calls.length - 1]?.[0] as
+      | ((sceneId: string, edge: 'start' | 'end', offset: number) => Promise<void>)
+      | null;
+    if (!registered)
+      throw new Error('setOnProseBoundaryChange was not called with a handler');
+    return registered;
+  }
+
+  it('calls linkProse with updated end_offset when the end handle is dragged', async () => {
+    const proseLink = makeProseLink({ start_offset: 0, end_offset: 50 });
+    const scene = makeScene({ id: 's1', prose_link: proseLink });
+    const result = makeScene({
+      id: 's1',
+      prose_link: { ...proseLink, end_offset: 70 },
+    });
+    apiMock.scenes.linkProse.mockResolvedValueOnce([result]);
+    useScenesMock.mockReturnValue([scene]);
+    const { ref } = makeEditorRefWithBoundary();
+
+    const cb = await renderWithBoundary([scene], { editorRef: ref });
+
+    await act(async () => {
+      await cb('s1', 'end', 70);
+    });
+
+    expect(apiMock.scenes.linkProse).toHaveBeenCalledWith('s1', {
+      scope_type: 'story',
+      chapter_id: null,
+      book_id: null,
+      start_offset: 0,
+      end_offset: 70,
+    });
+    expect(patchSceneMock).toHaveBeenCalledWith(result);
+  });
+
+  it('calls linkProse with updated start_offset when the start handle is dragged', async () => {
+    const proseLink = makeProseLink({ start_offset: 10, end_offset: 50 });
+    const scene = makeScene({ id: 's1', prose_link: proseLink });
+    const result = makeScene({
+      id: 's1',
+      prose_link: { ...proseLink, start_offset: 20 },
+    });
+    apiMock.scenes.linkProse.mockResolvedValueOnce([result]);
+    useScenesMock.mockReturnValue([scene]);
+    const { ref } = makeEditorRefWithBoundary();
+
+    const cb = await renderWithBoundary([scene], { editorRef: ref });
+
+    await act(async () => {
+      await cb('s1', 'start', 20);
+    });
+
+    expect(apiMock.scenes.linkProse).toHaveBeenCalledWith('s1', {
+      scope_type: 'story',
+      chapter_id: null,
+      book_id: null,
+      start_offset: 20,
+      end_offset: 50,
+    });
+    expect(patchSceneMock).toHaveBeenCalledWith(result);
+  });
+
+  it('does nothing when the scene is not found', async () => {
+    useScenesMock.mockReturnValue([]);
+    const { ref } = makeEditorRefWithBoundary();
+
+    const cb = await renderWithBoundary([], { editorRef: ref });
+
+    await act(async () => {
+      await cb('ghost', 'end', 30);
+    });
+
+    expect(apiMock.scenes.linkProse).not.toHaveBeenCalled();
+    expect(patchSceneMock).not.toHaveBeenCalled();
+  });
+
+  it('does nothing when the scene has no prose_link', async () => {
+    const scene = makeScene({ id: 's1', prose_link: null });
+    useScenesMock.mockReturnValue([scene]);
+    const { ref } = makeEditorRefWithBoundary();
+
+    const cb = await renderWithBoundary([scene], { editorRef: ref });
+
+    await act(async () => {
+      await cb('s1', 'end', 30);
+    });
+
+    expect(apiMock.scenes.linkProse).not.toHaveBeenCalled();
+  });
+
+  it('does nothing when dragging end before the current start (invalid range)', async () => {
+    const proseLink = makeProseLink({ start_offset: 40, end_offset: 80 });
+    const scene = makeScene({ id: 's1', prose_link: proseLink });
+    useScenesMock.mockReturnValue([scene]);
+    const { ref } = makeEditorRefWithBoundary();
+
+    const cb = await renderWithBoundary([scene], { editorRef: ref });
+
+    await act(async () => {
+      await cb('s1', 'end', 30); // 30 < start_offset=40 → invalid
+    });
+
+    expect(apiMock.scenes.linkProse).not.toHaveBeenCalled();
+  });
+
+  it('does nothing when dragging start past the current end (invalid range)', async () => {
+    const proseLink = makeProseLink({ start_offset: 10, end_offset: 50 });
+    const scene = makeScene({ id: 's1', prose_link: proseLink });
+    useScenesMock.mockReturnValue([scene]);
+    const { ref } = makeEditorRefWithBoundary();
+
+    const cb = await renderWithBoundary([scene], { editorRef: ref });
+
+    await act(async () => {
+      await cb('s1', 'start', 60); // 60 > end_offset=50 → invalid
+    });
+
+    expect(apiMock.scenes.linkProse).not.toHaveBeenCalled();
+  });
+
+  it('patches all scenes returned by linkProse (server may touch multiple scenes)', async () => {
+    const proseLink = makeProseLink({ start_offset: 0, end_offset: 50 });
+    const scene = makeScene({ id: 's1', prose_link: proseLink });
+    const r1 = makeScene({ id: 's1', prose_link: { ...proseLink, end_offset: 60 } });
+    const r2 = makeScene({ id: 'other' });
+    apiMock.scenes.linkProse.mockResolvedValueOnce([r1, r2]);
+    useScenesMock.mockReturnValue([scene]);
+    const { ref } = makeEditorRefWithBoundary();
+
+    const cb = await renderWithBoundary([scene], { editorRef: ref });
+
+    await act(async () => {
+      await cb('s1', 'end', 60);
+    });
+
+    expect(patchSceneMock).toHaveBeenCalledWith(r1);
+    expect(patchSceneMock).toHaveBeenCalledWith(r2);
+  });
+
+  it('calls notifyError and does not patch store on API failure', async () => {
+    const { notifyError } = await import('../../services/errorNotifier');
+    const proseLink = makeProseLink({ start_offset: 0, end_offset: 50 });
+    const scene = makeScene({ id: 's1', prose_link: proseLink });
+    apiMock.scenes.linkProse.mockRejectedValueOnce(new Error('network'));
+    useScenesMock.mockReturnValue([scene]);
+    const { ref } = makeEditorRefWithBoundary();
+
+    const cb = await renderWithBoundary([scene], { editorRef: ref });
+
+    await act(async () => {
+      await cb('s1', 'end', 30);
+    });
+
+    expect(patchSceneMock).not.toHaveBeenCalled();
+    expect(notifyError).toHaveBeenCalled();
+  });
+
+  // ---- Overlap prevention ----
+
+  it('pushes adjacent scene start when dragging end handle into its range', async () => {
+    // Scene A: [0, 50), Scene B: [50, 100)
+    // Drag A's end to 70 → A becomes [0, 70), B should be pushed to [70, 100).
+    const linkA = makeProseLink({ start_offset: 0, end_offset: 50 });
+    const linkB = makeProseLink({ start_offset: 50, end_offset: 100 });
+    const sceneA = makeScene({ id: 'a', prose_link: linkA });
+    const sceneB = makeScene({ id: 'b', prose_link: linkB });
+    const updatedA = makeScene({ id: 'a', prose_link: { ...linkA, end_offset: 70 } });
+    const updatedB = makeScene({ id: 'b', prose_link: { ...linkB, start_offset: 70 } });
+    // First call adjusts B, second call updates A
+    apiMock.scenes.linkProse
+      .mockResolvedValueOnce([updatedB])
+      .mockResolvedValueOnce([updatedA]);
+    useScenesMock.mockReturnValue([sceneA, sceneB]);
+    const { ref } = makeEditorRefWithBoundary();
+
+    const cb = await renderWithBoundary([sceneA, sceneB], { editorRef: ref });
+
+    await act(async () => {
+      await cb('a', 'end', 70);
+    });
+
+    // B's start is pushed to 70 first
+    expect(apiMock.scenes.linkProse).toHaveBeenNthCalledWith(1, 'b', {
+      scope_type: 'story',
+      chapter_id: null,
+      book_id: null,
+      start_offset: 70,
+      end_offset: 100,
+    });
+    // Then A is updated
+    expect(apiMock.scenes.linkProse).toHaveBeenNthCalledWith(2, 'a', {
+      scope_type: 'story',
+      chapter_id: null,
+      book_id: null,
+      start_offset: 0,
+      end_offset: 70,
+    });
+    expect(patchSceneMock).toHaveBeenCalledWith(updatedB);
+    expect(patchSceneMock).toHaveBeenCalledWith(updatedA);
+  });
+
+  it('pushes adjacent scene end when dragging start handle into its range', async () => {
+    // Scene A: [50, 100), Scene B: [0, 50)
+    // Drag A's start to 30 → A becomes [30, 100), B should be pushed to [0, 30).
+    const linkA = makeProseLink({ start_offset: 50, end_offset: 100 });
+    const linkB = makeProseLink({ start_offset: 0, end_offset: 50 });
+    const sceneA = makeScene({ id: 'a', prose_link: linkA });
+    const sceneB = makeScene({ id: 'b', prose_link: linkB });
+    const updatedA = makeScene({ id: 'a', prose_link: { ...linkA, start_offset: 30 } });
+    const updatedB = makeScene({ id: 'b', prose_link: { ...linkB, end_offset: 30 } });
+    apiMock.scenes.linkProse
+      .mockResolvedValueOnce([updatedB])
+      .mockResolvedValueOnce([updatedA]);
+    useScenesMock.mockReturnValue([sceneA, sceneB]);
+    const { ref } = makeEditorRefWithBoundary();
+
+    const cb = await renderWithBoundary([sceneA, sceneB], { editorRef: ref });
+
+    await act(async () => {
+      await cb('a', 'start', 30);
+    });
+
+    expect(apiMock.scenes.linkProse).toHaveBeenNthCalledWith(1, 'b', {
+      scope_type: 'story',
+      chapter_id: null,
+      book_id: null,
+      start_offset: 0,
+      end_offset: 30,
+    });
+    expect(apiMock.scenes.linkProse).toHaveBeenNthCalledWith(2, 'a', {
+      scope_type: 'story',
+      chapter_id: null,
+      book_id: null,
+      start_offset: 30,
+      end_offset: 100,
+    });
+  });
+
+  it('does not adjust a scene in a different scope when overlap is detected', async () => {
+    // Scene A is story-scoped, Scene B is chapter-scoped — they should not interfere.
+    const linkA = makeProseLink({
+      scope_type: 'story',
+      start_offset: 0,
+      end_offset: 50,
+    });
+    const linkB = makeProseLink({
+      scope_type: 'chapter',
+      chapter_id: 'ch1',
+      start_offset: 30,
+      end_offset: 80,
+    });
+    const sceneA = makeScene({ id: 'a', prose_link: linkA });
+    const sceneB = makeScene({ id: 'b', prose_link: linkB });
+    const updatedA = makeScene({ id: 'a', prose_link: { ...linkA, end_offset: 60 } });
+    apiMock.scenes.linkProse.mockResolvedValueOnce([updatedA]);
+    useScenesMock.mockReturnValue([sceneA, sceneB]);
+    const { ref } = makeEditorRefWithBoundary();
+
+    const cb = await renderWithBoundary([sceneA, sceneB], { editorRef: ref });
+
+    await act(async () => {
+      await cb('a', 'end', 60);
+    });
+
+    // Only one linkProse call — for scene A; scene B is untouched because it's a different scope.
+    expect(apiMock.scenes.linkProse).toHaveBeenCalledTimes(1);
+    expect(apiMock.scenes.linkProse).toHaveBeenCalledWith('a', expect.anything());
+  });
+
+  it('does not adjust a chapter scene that belongs to a different chapter', async () => {
+    const linkA = makeProseLink({
+      scope_type: 'chapter',
+      chapter_id: 'ch1',
+      start_offset: 0,
+      end_offset: 50,
+    });
+    const linkB = makeProseLink({
+      scope_type: 'chapter',
+      chapter_id: 'ch2', // different chapter
+      start_offset: 30,
+      end_offset: 80,
+    });
+    const sceneA = makeScene({ id: 'a', prose_link: linkA });
+    const sceneB = makeScene({ id: 'b', prose_link: linkB });
+    const updatedA = makeScene({ id: 'a', prose_link: { ...linkA, end_offset: 60 } });
+    apiMock.scenes.linkProse.mockResolvedValueOnce([updatedA]);
+    useScenesMock.mockReturnValue([sceneA, sceneB]);
+    const { ref } = makeEditorRefWithBoundary();
+
+    const cb = await renderWithBoundary([sceneA, sceneB], { editorRef: ref });
+
+    await act(async () => {
+      await cb('a', 'end', 60);
+    });
+
+    expect(apiMock.scenes.linkProse).toHaveBeenCalledTimes(1);
+  });
+
+  it('skips overlap adjustment when dragging to exactly the adjacent scene boundary (touching, not overlapping)', async () => {
+    // Scene A: [0, 50), Scene B: [50, 100)
+    // Drag A's end to exactly 50 — they now share a boundary but do not overlap.
+    // The condition `otherStart (50) >= endOffset (50)` is TRUE so no adjustment.
+    const linkA = makeProseLink({ start_offset: 0, end_offset: 40 });
+    const linkB = makeProseLink({ start_offset: 50, end_offset: 100 });
+    const sceneA = makeScene({ id: 'a', prose_link: linkA });
+    const sceneB = makeScene({ id: 'b', prose_link: linkB });
+    const updatedA = makeScene({ id: 'a', prose_link: { ...linkA, end_offset: 50 } });
+    apiMock.scenes.linkProse.mockResolvedValueOnce([updatedA]);
+    useScenesMock.mockReturnValue([sceneA, sceneB]);
+    const { ref } = makeEditorRefWithBoundary();
+
+    const cb = await renderWithBoundary([sceneA, sceneB], { editorRef: ref });
+
+    await act(async () => {
+      await cb('a', 'end', 50);
+    });
+
+    // Only one linkProse call — for A only; B is NOT adjusted because touching ≠ overlapping.
+    expect(apiMock.scenes.linkProse).toHaveBeenCalledTimes(1);
+    expect(apiMock.scenes.linkProse).toHaveBeenCalledWith('a', {
+      scope_type: 'story',
+      chapter_id: null,
+      book_id: null,
+      start_offset: 0,
+      end_offset: 50,
+    });
+  });
+
+  it('skips overlap adjustment when dragging start to exactly the adjacent scene end (touching)', async () => {
+    // Scene A: [50, 100), Scene B: [0, 50)
+    // Drag A's start to 50 — touching B's end, not overlapping.
+    const linkA = makeProseLink({ start_offset: 60, end_offset: 100 });
+    const linkB = makeProseLink({ start_offset: 0, end_offset: 50 });
+    const sceneA = makeScene({ id: 'a', prose_link: linkA });
+    const sceneB = makeScene({ id: 'b', prose_link: linkB });
+    const updatedA = makeScene({ id: 'a', prose_link: { ...linkA, start_offset: 50 } });
+    apiMock.scenes.linkProse.mockResolvedValueOnce([updatedA]);
+    useScenesMock.mockReturnValue([sceneA, sceneB]);
+    const { ref } = makeEditorRefWithBoundary();
+
+    const cb = await renderWithBoundary([sceneA, sceneB], { editorRef: ref });
+
+    await act(async () => {
+      await cb('a', 'start', 50);
+    });
+
+    // Only one call — for A; B end at 50 == A's new start → touching, not overlapping.
+    expect(apiMock.scenes.linkProse).toHaveBeenCalledTimes(1);
+    expect(apiMock.scenes.linkProse).toHaveBeenCalledWith(
+      'a',
+      expect.objectContaining({
+        start_offset: 50,
+        end_offset: 100,
+      })
+    );
+  });
+
+  it('skips overlap adjustment when the engulfed scene would shrink to zero width', async () => {
+    // Scene A: [0, 100), Scene B: [10, 20) — B would be engulfed entirely if A's end=100 is moved
+    // to 80. B's new start would be 80 which is > B's end (20) → no adjustment for B.
+    const linkA = makeProseLink({ start_offset: 0, end_offset: 40 });
+    const linkB = makeProseLink({ start_offset: 10, end_offset: 20 });
+    const sceneA = makeScene({ id: 'a', prose_link: linkA });
+    const sceneB = makeScene({ id: 'b', prose_link: linkB });
+    const updatedA = makeScene({ id: 'a', prose_link: { ...linkA, end_offset: 80 } });
+    apiMock.scenes.linkProse.mockResolvedValueOnce([updatedA]);
+    useScenesMock.mockReturnValue([sceneA, sceneB]);
+    const { ref } = makeEditorRefWithBoundary();
+
+    const cb = await renderWithBoundary([sceneA, sceneB], { editorRef: ref });
+
+    await act(async () => {
+      await cb('a', 'end', 80);
+    });
+
+    // B.end=20 < 80 (new end), so B.newStart=80 >= B.newEnd=20 → skip.
+    // Only the main linkProse for A is called.
+    expect(apiMock.scenes.linkProse).toHaveBeenCalledTimes(1);
+    expect(apiMock.scenes.linkProse).toHaveBeenCalledWith('a', expect.anything());
   });
 });
