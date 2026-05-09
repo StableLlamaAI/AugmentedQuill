@@ -61,6 +61,9 @@ const { patchSceneMock, useScenesMock, apiMock, captured } = vi.hoisted(() => {
 vi.mock('../../stores/storyStore', () => ({
   useScenes: () => useScenesMock(),
   useStoryStore: () => patchSceneMock,
+  useStoryMeta: () => ({ projectType: 'novel' }),
+  useStoryChaptersListMeta: () => [],
+  useStoryBooks: () => [],
 }));
 
 vi.mock('../layout/ThemeContext', () => ({
@@ -79,6 +82,10 @@ vi.mock('./PinboardView', () => ({
     captured.pinboard = props;
     return null;
   },
+}));
+
+vi.mock('./NarrativeView', () => ({
+  NarrativeView: () => null,
 }));
 
 vi.mock('./SceneEditorDialog', () => ({

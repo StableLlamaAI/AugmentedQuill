@@ -6,8 +6,14 @@
 // (at your option) any later version.
 
 /**
- * Draggable scene card for the Pinboard view.
- * Supports free positioning, color tags, and Alt+drag to create causal links between scenes.
+ * Scene card component shared by the Pinboard and Narrative views.
+ *
+ * In 'pinboard' mode (default) the card is absolutely positioned on the
+ * infinite canvas and supports drag-to-move and Alt+drag cause creation.
+ *
+ * In 'narrative' mode the card uses flow layout (full-width, minimal height)
+ * and only supports click-to-select, double-click-to-edit, and prose drop.
+ * Drag-to-move and cause-drag are disabled; those props become optional.
  */
 
 import React, { useEffect, useRef } from 'react';
@@ -57,32 +63,45 @@ const DEFAULT_CARD = {
   border: 'border-brand-gray-200 dark:border-brand-gray-700',
 };
 
+/** Layout and interaction variant. */
+export type SceneCardVariant = 'pinboard' | 'narrative';
+
 interface SceneCardProps {
   scene: Scene;
   index: number;
+  /**
+   * 'pinboard' (default): absolutely positioned on the canvas with drag-to-move
+   * and Alt+drag cause creation.
+   * 'narrative': flow layout, full-width, click/dblclick/drop only.
+   */
+  variant?: SceneCardVariant;
   /** Called every frame while dragging to report the cumulative delta (in canvas
-   *  pixels) so that the parent can update live positions and SVG arrows. */
-  onDragMove: (sceneId: string, dx: number, dy: number) => void;
-  /** Called when the drag ends, with the final cumulative delta. */
-  onDragEnd: (sceneId: string, dx: number, dy: number) => void;
+   *  pixels) so that the parent can update live positions and SVG arrows.
+   *  Required in pinboard mode; unused in narrative mode. */
+  onDragMove?: (sceneId: string, dx: number, dy: number) => void;
+  /** Called when the drag ends, with the final cumulative delta.
+   *  Required in pinboard mode; unused in narrative mode. */
+  onDragEnd?: (sceneId: string, dx: number, dy: number) => void;
   /** Called on single click to select this card. Receives the native event so
    *  the caller can inspect ctrlKey / shiftKey for multi-selection logic. */
   onSelect: (sceneId: string, e: MouseEvent) => void;
   /** Called on double-click to open the editor. */
   onEdit: (sceneId: string) => void;
   /** Called when Alt+drag starts, providing the source scene id and the
-   *  starting canvas-space coordinates so the ghost arrow can be placed. */
-  onCauseDragStart: (
+   *  starting canvas-space coordinates so the ghost arrow can be placed.
+   *  Required in pinboard mode; unused in narrative mode. */
+  onCauseDragStart?: (
     sceneId: string,
     startCanvasX: number,
     startCanvasY: number
   ) => void;
-  /** Called when Alt+drag enters this card – provides the target scene id. */
-  onCauseDrop: (targetSceneId: string) => void;
-  /** Called when Alt+drag leaves this card without releasing. */
-  onCauseLeave: () => void;
-  /** Whether this card is the target of an ongoing cause drag. */
-  isCauseTarget: boolean;
+  /** Called when Alt+drag enters this card – provides the target scene id.
+   *  Pinboard only. */
+  onCauseDrop?: (targetSceneId: string) => void;
+  /** Called when Alt+drag leaves this card without releasing. Pinboard only. */
+  onCauseLeave?: () => void;
+  /** Whether this card is the target of an ongoing cause drag. Pinboard only. */
+  isCauseTarget?: boolean;
   /** Whether this card is currently selected. */
   isSelected: boolean;
   /** Whether this card is the single active card (shows cause/effect arrows). */
@@ -93,17 +112,19 @@ interface SceneCardProps {
   isEffect: boolean;
   /** Called when prose text is dropped onto this card. */
   onDropProse?: (sceneId: string, data: ProseDropData) => void;
-  /** Override display position (canvas px) during live drag. Falls back to scene.pinboard_x/y. */
+  /** Override display position (canvas px) during live drag. Pinboard only. */
   displayX?: number;
   displayY?: number;
   /** Called whenever the card's rendered height changes (used by CauseArrows for
-   *  accurate border-intersection math). */
+   *  accurate border-intersection math). Pinboard only. */
   onLayout?: (sceneId: string, height: number) => void;
 }
 
+/* eslint-disable complexity */
 export const SceneCard: React.FC<SceneCardProps> = ({
   scene,
   index,
+  variant = 'pinboard',
   onDragMove,
   onDragEnd,
   onSelect,
@@ -111,7 +132,7 @@ export const SceneCard: React.FC<SceneCardProps> = ({
   onCauseDragStart,
   onCauseDrop,
   onCauseLeave,
-  isCauseTarget,
+  isCauseTarget = false,
   isSelected,
   isActive,
   isCause,
@@ -123,6 +144,8 @@ export const SceneCard: React.FC<SceneCardProps> = ({
 }: SceneCardProps) => {
   const { t } = useTranslation();
   const { isLight } = useTheme();
+
+  const isNarrative = variant === 'narrative';
 
   const colorKey = scene.color_tag ?? '';
   const colorClasses = COLOR_TAG_CLASSES[colorKey] ?? DEFAULT_CARD;
@@ -149,41 +172,55 @@ export const SceneCard: React.FC<SceneCardProps> = ({
   } | null>(null);
   const moved = useRef(false);
 
-  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>): void => {
-    if (e.button !== 0) return;
-    e.stopPropagation();
+  const startNarrativeClickTracking = (e: React.MouseEvent<HTMLDivElement>): void => {
+    let hasMoved = false;
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const nativeEvt = e.nativeEvent;
+    const onMoveCk = (me: MouseEvent): void => {
+      if (Math.abs(me.clientX - startX) + Math.abs(me.clientY - startY) > 4)
+        hasMoved = true;
+    };
+    const onUpCk = (me: MouseEvent): void => {
+      document.removeEventListener('mousemove', onMoveCk);
+      document.removeEventListener('mouseup', onUpCk);
+      if (!hasMoved) onSelect(scene.id, me ?? nativeEvt);
+    };
+    document.addEventListener('mousemove', onMoveCk);
+    document.addEventListener('mouseup', onUpCk);
+  };
 
-    if (e.altKey) {
-      // Alt+mousedown: begin cause drag. Compute canvas-space start position
-      // from the card's stored position (the zoom/pan are accounted for by the
-      // parent when converting mouse coords to canvas coords).
-      const startCanvasX = scene.pinboard_x + 96; // card horizontal centre
-      const startCanvasY = scene.pinboard_y + 45; // card vertical centre (approx for ~90px card)
-      onCauseDragStart(scene.id, startCanvasX, startCanvasY);
+  const startAltCauseDragTracking = (e: React.MouseEvent<HTMLDivElement>): void => {
+    // Alt+mousedown: begin cause drag. Compute canvas-space start position
+    // from the card's stored position (the zoom/pan are accounted for by the
+    // parent when converting mouse coords to canvas coords).
+    const startCanvasX = scene.pinboard_x + 96; // card horizontal centre
+    const startCanvasY = scene.pinboard_y + 45; // card vertical centre (approx for ~90px card)
+    onCauseDragStart?.(scene.id, startCanvasX, startCanvasY);
 
-      const startX = e.clientX;
-      const startY = e.clientY;
-      const nativeStart = e.nativeEvent;
-      let altMoved = false;
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const nativeStart = e.nativeEvent;
+    let altMoved = false;
 
-      const onAltMove = (me: MouseEvent): void => {
-        if (Math.abs(me.clientX - startX) + Math.abs(me.clientY - startY) > 4)
-          altMoved = true;
-      };
-      const onAltUp = (me: MouseEvent): void => {
-        document.removeEventListener('mousemove', onAltMove);
-        document.removeEventListener('mouseup', onAltUp);
-        if (!altMoved) {
-          // Alt+click with no drag → activate the scene (plain select).
-          onSelect(scene.id, nativeStart);
-        }
-        void me;
-      };
-      document.addEventListener('mousemove', onAltMove);
-      document.addEventListener('mouseup', onAltUp);
-      return;
-    }
+    const onAltMove = (me: MouseEvent): void => {
+      if (Math.abs(me.clientX - startX) + Math.abs(me.clientY - startY) > 4)
+        altMoved = true;
+    };
+    const onAltUp = (me: MouseEvent): void => {
+      document.removeEventListener('mousemove', onAltMove);
+      document.removeEventListener('mouseup', onAltUp);
+      if (!altMoved) {
+        // Alt+click with no drag -> activate the scene (plain select).
+        onSelect(scene.id, nativeStart);
+      }
+      void me;
+    };
+    document.addEventListener('mousemove', onAltMove);
+    document.addEventListener('mouseup', onAltUp);
+  };
 
+  const startCardDragTracking = (e: React.MouseEvent<HTMLDivElement>): void => {
     dragStart.current = {
       mouseX: e.clientX,
       mouseY: e.clientY,
@@ -199,7 +236,7 @@ export const SceneCard: React.FC<SceneCardProps> = ({
       if (Math.abs(dx) + Math.abs(dy) > 4) moved.current = true;
       if (moved.current) {
         // Report raw screen-pixel delta; parent divides by zoom.
-        onDragMove(scene.id, dx, dy);
+        onDragMove?.(scene.id, dx, dy);
       }
     };
 
@@ -210,7 +247,7 @@ export const SceneCard: React.FC<SceneCardProps> = ({
       if (dragStart.current && moved.current) {
         const dx = me.clientX - dragStart.current.mouseX;
         const dy = me.clientY - dragStart.current.mouseY;
-        onDragEnd(scene.id, dx, dy);
+        onDragEnd?.(scene.id, dx, dy);
       } else if (!moved.current) {
         onSelect(scene.id, me);
       }
@@ -221,15 +258,33 @@ export const SceneCard: React.FC<SceneCardProps> = ({
     document.addEventListener('mouseup', onMouseUp);
   };
 
+  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>): void => {
+    if (e.button !== 0) return;
+    e.stopPropagation();
+
+    if (isNarrative) {
+      // Narrative: click detection only - no drag-to-move, no cause drag.
+      startNarrativeClickTracking(e);
+      return;
+    }
+
+    if (e.altKey) {
+      startAltCauseDragTracking(e);
+      return;
+    }
+
+    startCardDragTracking(e);
+  };
+
   const handleMouseEnter = (e: React.MouseEvent): void => {
-    if (e.buttons === 1 && e.altKey) {
-      onCauseDrop(scene.id);
+    if (!isNarrative && e.buttons === 1 && e.altKey) {
+      onCauseDrop?.(scene.id);
     }
   };
 
   const handleMouseLeave = (e: React.MouseEvent): void => {
-    if (e.buttons === 1 && e.altKey) {
-      onCauseLeave();
+    if (!isNarrative && e.buttons === 1 && e.altKey) {
+      onCauseLeave?.();
     }
   };
 
@@ -284,9 +339,15 @@ export const SceneCard: React.FC<SceneCardProps> = ({
       onMouseLeave={handleMouseLeave}
       onDragOver={handleDragOver}
       onDrop={handleDrop}
-      style={{ left: displayX ?? scene.pinboard_x, top: displayY ?? scene.pinboard_y }}
+      style={
+        isNarrative
+          ? undefined
+          : { left: displayX ?? scene.pinboard_x, top: displayY ?? scene.pinboard_y }
+      }
       className={[
-        'absolute w-48 min-h-16 rounded-lg border-2 shadow-md cursor-grab active:cursor-grabbing select-none',
+        isNarrative
+          ? 'relative w-full min-h-0 rounded-lg border-2 shadow-sm cursor-pointer select-none'
+          : 'absolute w-48 min-h-16 rounded-lg border-2 shadow-md cursor-grab active:cursor-grabbing select-none',
         'transition-shadow hover:shadow-lg',
         colorClasses.bg,
         isCauseTarget
@@ -366,3 +427,4 @@ export const SceneCard: React.FC<SceneCardProps> = ({
     </div>
   );
 };
+/* eslint-enable complexity */

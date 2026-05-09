@@ -492,6 +492,7 @@ export const en = {
     // Scenes
     Scenes: 'Scenes',
     Pinboard: 'Pinboard',
+    Narrative: 'Narrative',
     'Add Scene': 'Add Scene',
     'Delete Scene': 'Delete Scene',
     'Are you sure you want to delete this scene?':
@@ -538,5 +539,11 @@ export const en = {
     'Drag prose from the editor to link this scene':
       'Drag prose from the editor to link this scene',
     'Link Prose': 'Link Prose',
+    'Book: {{title}}': 'Book: {{title}}',
+    Book: 'Book',
+    'Chapter: {{title}}': 'Chapter: {{title}}',
+    'Not yet linked': 'Not yet linked',
+    'Scenes not yet linked to prose': 'Scenes not yet linked to prose',
+    'No scenes yet': 'No scenes yet',
   },
 };

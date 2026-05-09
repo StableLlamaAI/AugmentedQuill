@@ -50,6 +50,14 @@ type Arrow = {
 /** Position lookup – keyed by scene id, allowing live values during drag. */
 export type ScenePositions = Map<string, { x: number; y: number }>;
 
+/**
+ * Per-card layout from DOM measurement. Used in views where cards are in a
+ * flow layout (e.g. Narrative view) so their positions and widths differ from
+ * the fixed pinboard values.
+ */
+export type CardLayout = { x: number; y: number; w: number; h: number };
+export type CardLayoutMap = Map<string, CardLayout>;
+
 /** Ghost arrow state during an Alt+drag cause creation. */
 export interface GhostArrow {
   /** Source scene id */
@@ -73,6 +81,29 @@ interface CauseArrowsProps {
   activeSceneId: string | null;
   /** Optional ghost arrow to draw during an Alt+drag cause creation. */
   ghostArrow?: GhostArrow | null;
+  /**
+   * Optional DOM-measured card layouts (position + size). When provided for a
+   * card, overrides `livePositions` / `scene.pinboard_x/y` and `cardHeights`
+   * for that card. Used in Narrative view where cards fill the container width.
+   */
+  cardLayouts?: CardLayoutMap;
+  /** Optional per-arrow fixed X coordinate (keyed by `${fromId}->${toId}`). */
+  arrowLaneXByKey?: Map<string, number>;
+  /**
+   * When true, arrow endpoints use each card's vertical centre (y=midpoint)
+   * instead of border intersections. Intended for Narrative view only.
+   */
+  useVerticalCenterEndpoints?: boolean;
+  /**
+   * Narrative-only mode: endpoint on active scene stays on card border,
+   * while the connected scene endpoint uses vertical centre.
+   */
+  useVerticalCenterForConnectedOnly?: boolean;
+  /**
+   * When true, suppresses default (non-active) arrows. Useful for Narrative
+   * view where purple dotted arrows should not be shown.
+   */
+  hideDefaultArrows?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -141,6 +172,11 @@ export const CauseArrows: React.FC<CauseArrowsProps> = ({
   cardHeights,
   activeSceneId,
   ghostArrow,
+  cardLayouts,
+  arrowLaneXByKey,
+  useVerticalCenterEndpoints = false,
+  useVerticalCenterForConnectedOnly = false,
+  hideDefaultArrows = false,
 }: CauseArrowsProps) => {
   const { isLight } = useTheme();
   const defaultColor = isLight ? '#6366f1' : '#818cf8'; // indigo-500 / indigo-400
@@ -148,12 +184,19 @@ export const CauseArrows: React.FC<CauseArrowsProps> = ({
   const greenColor = '#22c55e'; // green-500
   const ghostColor = '#94a3b8'; // slate-400
 
-  /** Resolve live position for a scene (falls back to stored value). */
-  const pos = (s: Scene): { x: number; y: number } =>
-    livePositions.get(s.id) ?? { x: s.pinboard_x, y: s.pinboard_y };
+  /** Resolve position for a scene: DOM layout overrides live/stored values. */
+  const pos = (s: Scene): { x: number; y: number } => {
+    const layout = cardLayouts?.get(s.id);
+    if (layout) return { x: layout.x, y: layout.y };
+    return livePositions.get(s.id) ?? { x: s.pinboard_x, y: s.pinboard_y };
+  };
 
-  /** Resolve actual card height (falls back to default). */
-  const h = (id: string): number => cardHeights.get(id) ?? DEFAULT_CARD_HEIGHT;
+  /** Resolve actual card height: DOM layout overrides measured/default. */
+  const h = (id: string): number =>
+    cardLayouts?.get(id)?.h ?? cardHeights.get(id) ?? DEFAULT_CARD_HEIGHT;
+
+  /** Resolve actual card width: DOM layout overrides the pinboard constant. */
+  const cardW = (id: string): number => cardLayouts?.get(id)?.w ?? CARD_WIDTH;
 
   const byId = new Map<string, Scene>(scenes.map((s: Scene) => [s.id, s]));
   const arrows: Arrow[] = [];
@@ -165,14 +208,74 @@ export const CauseArrows: React.FC<CauseArrowsProps> = ({
     if (!from || !to) return null;
     const fp = pos(from);
     const tp = pos(to);
-    const tCX = tp.x + CARD_WIDTH / 2;
+    const key = `${fromId}->${toId}`;
+    const laneX = arrowLaneXByKey?.get(key);
+    if (
+      laneX !== undefined &&
+      (useVerticalCenterEndpoints || useVerticalCenterForConnectedOnly)
+    ) {
+      const fromY = fp.y + h(fromId) / 2;
+      const toY = tp.y + h(toId) / 2;
+      const down = toY >= fromY;
+
+      if (useVerticalCenterForConnectedOnly && activeSceneId) {
+        const fromIsActive = fromId === activeSceneId;
+        const toIsActive = toId === activeSceneId;
+
+        const src = fromIsActive
+          ? {
+              x: laneX,
+              y: down ? fp.y + h(fromId) : fp.y,
+              nx: 0,
+              ny: down ? 1 : -1,
+            }
+          : { x: laneX, y: fromY, nx: 0, ny: down ? 1 : -1 };
+
+        const tgt = toIsActive
+          ? {
+              x: laneX,
+              y: down ? tp.y : tp.y + h(toId),
+              nx: 0,
+              ny: down ? -1 : 1,
+            }
+          : { x: laneX, y: toY, nx: 0, ny: down ? -1 : 1 };
+
+        return {
+          key,
+          x1: src.x,
+          y1: src.y,
+          nx1: src.nx,
+          ny1: src.ny,
+          x2: tgt.x,
+          y2: tgt.y,
+          nx2: tgt.nx,
+          ny2: tgt.ny,
+          arrowColor: color,
+        };
+      }
+
+      return {
+        key,
+        x1: laneX,
+        y1: fromY,
+        nx1: 0,
+        ny1: down ? 1 : -1,
+        x2: laneX,
+        y2: toY,
+        nx2: 0,
+        ny2: down ? -1 : 1,
+        arrowColor: color,
+      };
+    }
+
+    const tCX = tp.x + cardW(toId) / 2;
     const tCY = tp.y + h(toId) / 2;
-    const fCX = fp.x + CARD_WIDTH / 2;
+    const fCX = fp.x + cardW(fromId) / 2;
     const fCY = fp.y + h(fromId) / 2;
-    const src = borderExit(fp.x, fp.y, CARD_WIDTH, h(fromId), tCX, tCY);
-    const tgt = borderExit(tp.x, tp.y, CARD_WIDTH, h(toId), fCX, fCY);
+    const src = borderExit(fp.x, fp.y, cardW(fromId), h(fromId), tCX, tCY);
+    const tgt = borderExit(tp.x, tp.y, cardW(toId), h(toId), fCX, fCY);
     return {
-      key: `${fromId}->${toId}`,
+      key,
       x1: src.x,
       y1: src.y,
       nx1: src.nx,
@@ -197,7 +300,7 @@ export const CauseArrows: React.FC<CauseArrowsProps> = ({
         if (a) arrows.push(a);
       }
     }
-  } else {
+  } else if (!hideDefaultArrows) {
     for (const scene of scenes) {
       for (const beforeId of scene.order_before) {
         const a = makeArrow(scene.id, beforeId, 'default');
@@ -214,7 +317,7 @@ export const CauseArrows: React.FC<CauseArrowsProps> = ({
       const exit = borderExit(
         sp.x,
         sp.y,
-        CARD_WIDTH,
+        cardW(ghostArrow.fromId),
         h(ghostArrow.fromId),
         ghostArrow.toX,
         ghostArrow.toY

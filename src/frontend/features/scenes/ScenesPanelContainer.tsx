@@ -20,20 +20,66 @@ import type { WritingUnit } from '../../types/domain';
 import { useScenes } from '../../stores/storyStore';
 import { useStoryStore } from '../../stores/storyStore';
 import type { StoryStoreState } from '../../stores/storyStore';
+import {
+  useStoryMeta,
+  useStoryChaptersListMeta,
+  useStoryBooks,
+} from '../../stores/storyStore';
 import { api } from '../../services/api';
 import { notifyError } from '../../services/errorNotifier';
 import { useThemeClasses } from '../layout/ThemeContext';
 import { PinboardView } from './PinboardView';
+import { NarrativeView } from './NarrativeView';
 import { SceneEditorDialog } from './SceneEditorDialog';
 import type { SceneUpdatePayload } from '../../services/apiClients/scenes';
 import type { ProseDropData } from './types';
 import { useSceneProseSync } from './useSceneProseSync';
 
-type ViewMode = 'pinboard';
+type ViewMode = 'pinboard' | 'narrative';
 
 interface ScenesPanelContainerProps {
   editorRef?: React.RefObject<EditorHandle | null>;
   currentChapter?: WritingUnit | null;
+}
+
+type BoundaryAdjustment = {
+  id: string;
+  link: SceneProseLink;
+  newStart: number;
+  newEnd: number;
+};
+
+function collectBoundaryAdjustments(
+  scenes: Scene[],
+  sceneId: string,
+  link: SceneProseLink,
+  edge: 'start' | 'end',
+  startOffset: number,
+  endOffset: number
+): BoundaryAdjustment[] {
+  const toAdjust: BoundaryAdjustment[] = [];
+  for (const other of scenes) {
+    if (other.id === sceneId || !other.prose_link) continue;
+    const ol = other.prose_link;
+    if (ol.scope_type !== link.scope_type) continue;
+    if (link.scope_type === 'chapter' && ol.chapter_id !== link.chapter_id) continue;
+
+    const otherStart = ol.start_offset;
+    const otherEnd = ol.end_offset ?? otherStart;
+    if (otherEnd <= startOffset || otherStart >= endOffset) continue;
+
+    const newOtherStart = edge === 'end' ? endOffset : otherStart;
+    const newOtherEnd = edge === 'start' ? startOffset : otherEnd;
+    if (newOtherStart < newOtherEnd) {
+      toAdjust.push({
+        id: other.id,
+        link: ol,
+        newStart: newOtherStart,
+        newEnd: newOtherEnd,
+      });
+    }
+  }
+  return toAdjust;
 }
 
 export const ScenesPanelContainer: React.FC<ScenesPanelContainerProps> = ({
@@ -44,8 +90,11 @@ export const ScenesPanelContainer: React.FC<ScenesPanelContainerProps> = ({
   const tc = useThemeClasses();
   const scenes = useScenes();
   const patchScene = useStoryStore((s: StoryStoreState) => s.patchScene);
+  const { projectType } = useStoryMeta();
+  const chapters = useStoryChaptersListMeta();
+  const books = useStoryBooks();
 
-  const [viewMode] = useState<ViewMode>('pinboard');
+  const [viewMode, setViewMode] = useState<ViewMode>('pinboard');
   const [editingSceneId, setEditingSceneId] = useState<string | null>(null);
 
   // ---- Scene selection + bidirectional prose-link sync ----
@@ -248,40 +297,14 @@ export const ScenesPanelContainer: React.FC<ScenesPanelContainerProps> = ({
       const endOffset = edge === 'end' ? offset : (link.end_offset ?? offset);
       if (startOffset >= endOffset) return;
 
-      // Detect other scenes in the same scope/chapter whose range would overlap the
-      // new [startOffset, endOffset).  For each such scene, push the boundary facing
-      // the dragged edge so the two ranges share an edge instead of overlapping.
-      // This prevents the backend from interpreting the overlap as a conflict and
-      // deleting both prose links.
-      type Adjustment = {
-        id: string;
-        link: SceneProseLink;
-        newStart: number;
-        newEnd: number;
-      };
-      const toAdjust: Adjustment[] = [];
-      for (const other of scenes) {
-        if (other.id === sceneId || !other.prose_link) continue;
-        const ol = other.prose_link;
-        if (ol.scope_type !== link.scope_type) continue;
-        if (link.scope_type === 'chapter' && ol.chapter_id !== link.chapter_id)
-          continue;
-        const otherStart = ol.start_offset;
-        const otherEnd = ol.end_offset ?? otherStart;
-        // Skip when there is no overlap with the new range.
-        if (otherEnd <= startOffset || otherStart >= endOffset) continue;
-        // Push the face of `other` that is closest to the dragged edge.
-        const newOtherStart = edge === 'end' ? endOffset : otherStart;
-        const newOtherEnd = edge === 'start' ? startOffset : otherEnd;
-        if (newOtherStart < newOtherEnd) {
-          toAdjust.push({
-            id: other.id,
-            link: ol,
-            newStart: newOtherStart,
-            newEnd: newOtherEnd,
-          });
-        }
-      }
+      const toAdjust = collectBoundaryAdjustments(
+        scenes,
+        sceneId,
+        link,
+        edge,
+        startOffset,
+        endOffset
+      );
 
       try {
         // Adjust neighbours first so the backend does not see transient overlaps.
@@ -370,10 +393,11 @@ export const ScenesPanelContainer: React.FC<ScenesPanelContainerProps> = ({
         className={`flex items-center justify-between px-3 py-1.5 border-b ${tc.border} flex-shrink-0`}
       >
         <div className="flex items-center gap-1">
-          {/* View mode buttons — currently only Pinboard */}
+          {/* View mode buttons */}
           <button
             type="button"
             aria-pressed={viewMode === 'pinboard'}
+            onClick={() => setViewMode('pinboard')}
             className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
               viewMode === 'pinboard'
                 ? 'bg-brand-500 text-white'
@@ -381,6 +405,18 @@ export const ScenesPanelContainer: React.FC<ScenesPanelContainerProps> = ({
             }`}
           >
             {t('Pinboard')}
+          </button>
+          <button
+            type="button"
+            aria-pressed={viewMode === 'narrative'}
+            onClick={() => setViewMode('narrative')}
+            className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+              viewMode === 'narrative'
+                ? 'bg-brand-500 text-white'
+                : `${tc.text} hover:bg-brand-gray-100 dark:hover:bg-brand-gray-800`
+            }`}
+          >
+            {t('Narrative')}
           </button>
         </div>
         <button
@@ -407,6 +443,19 @@ export const ScenesPanelContainer: React.FC<ScenesPanelContainerProps> = ({
             onMoveScene={handleMoveScene}
             onEditScene={setEditingSceneId}
             onCreateCause={handleCreateCause}
+            onDropProse={handleDropProse}
+          />
+        )}
+        {viewMode === 'narrative' && (
+          <NarrativeView
+            scenes={scenes}
+            projectType={projectType}
+            chapters={chapters}
+            books={books}
+            primarySelectedSceneId={selectedSceneId}
+            onSelectScene={handleSelectScene}
+            onSelectionChange={handleMultipleSelectScenes}
+            onEditScene={setEditingSceneId}
             onDropProse={handleDropProse}
           />
         )}

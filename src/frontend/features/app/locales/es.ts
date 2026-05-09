@@ -492,6 +492,7 @@ export const es = {
     // Scenes
     Scenes: 'Escenas',
     Pinboard: 'Tablero de notas',
+    Narrative: 'Narrativa',
     'Add Scene': 'Añadir escena',
     'Delete Scene': 'Eliminar escena',
     'Are you sure you want to delete this scene?':
@@ -538,5 +539,11 @@ export const es = {
     'Drag prose from the editor to link this scene':
       'Arrastrar prosa del editor para vincular esta escena',
     'Link Prose': 'Vincular prosa',
+    'Book: {{title}}': 'Libro: {{title}}',
+    Book: 'Libro',
+    'Chapter: {{title}}': 'Capítulo: {{title}}',
+    'Not yet linked': 'Aún no vinculado',
+    'Scenes not yet linked to prose': 'Escenas aún no vinculadas a la prosa',
+    'No scenes yet': 'Sin escenas aún',
   },
 };

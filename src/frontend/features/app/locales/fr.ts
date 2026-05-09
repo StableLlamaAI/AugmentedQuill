@@ -545,5 +545,11 @@ export const fr = {
     'Drag prose from the editor to link this scene':
       "Glisser la prose de l'éditeur pour lier cette scène",
     'Link Prose': 'Lier la prose',
+    'Book: {{title}}': 'Livre : {{title}}',
+    Book: 'Livre',
+    'Chapter: {{title}}': 'Chapitre : {{title}}',
+    'Not yet linked': 'Pas encore liée',
+    'Scenes not yet linked to prose': 'Scènes pas encore liées au texte',
+    'No scenes yet': 'Pas encore de scènes',
   },
 };
