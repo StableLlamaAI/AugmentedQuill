@@ -49,14 +49,6 @@ type BoundaryAdjustment = {
   newEnd: number;
 };
 
-function isSameProseScope(a: SceneProseLink, b: SceneProseLink): boolean {
-  return (
-    a.scope_type === b.scope_type &&
-    (a.chapter_id ?? null) === (b.chapter_id ?? null) &&
-    (a.book_id ?? null) === (b.book_id ?? null)
-  );
-}
-
 function collectBoundaryAdjustments(
   scenes: Scene[],
   sceneId: string,
@@ -307,7 +299,6 @@ export const ScenesPanelContainer: React.FC<ScenesPanelContainerProps> = ({
       const sourceScene = scenes.find((s: Scene) => s.id === sourceSceneId);
       const targetScene = scenes.find((s: Scene) => s.id === targetSceneId);
       if (!sourceScene?.prose_link || !targetScene?.prose_link) return;
-      if (!isSameProseScope(sourceScene.prose_link, targetScene.prose_link)) return;
       try {
         const reorderResult = await api.scenes.reorderProse({
           source_scene_id: sourceSceneId,

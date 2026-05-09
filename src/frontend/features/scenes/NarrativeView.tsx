@@ -73,17 +73,84 @@ function buildChapterOrderMap(
   books: Book[]
 ): Map<string, number> {
   const map = new Map<string, number>();
+  const normalizeId = (value: unknown): string | null => {
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      return trimmed.length > 0 ? trimmed : null;
+    }
+    if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+    return null;
+  };
+
   if (projectType === 'series' && books.length > 0) {
+    const assignedChapterIds = new Set<string>();
     let idx = 0;
+
+    const chaptersByBookId = new Map<string, Chapter[]>();
+    for (const chapter of chapters) {
+      const chapterBookId = normalizeId(chapter.book_id);
+      if (!chapterBookId) continue;
+      const current = chaptersByBookId.get(chapterBookId) ?? [];
+      current.push(chapter);
+      chaptersByBookId.set(chapterBookId, current);
+    }
+
     for (const book of books) {
+      const seenInBook = new Set<string>();
       for (const ch of book.chapters) {
-        map.set(ch.id, idx++);
+        const chapterId = normalizeId(ch.id);
+        if (
+          !chapterId ||
+          seenInBook.has(chapterId) ||
+          assignedChapterIds.has(chapterId)
+        ) {
+          continue;
+        }
+        map.set(chapterId, idx++);
+        seenInBook.add(chapterId);
+        assignedChapterIds.add(chapterId);
+      }
+
+      const bookId = normalizeId(book.id);
+      const chaptersForBook = bookId ? (chaptersByBookId.get(bookId) ?? []) : [];
+      for (const chapter of chaptersForBook) {
+        const chapterId = normalizeId(chapter.id);
+        if (
+          !chapterId ||
+          seenInBook.has(chapterId) ||
+          assignedChapterIds.has(chapterId)
+        ) {
+          continue;
+        }
+        map.set(chapterId, idx++);
+        seenInBook.add(chapterId);
+        assignedChapterIds.add(chapterId);
       }
     }
+
+    for (const chapter of chapters) {
+      const chapterId = normalizeId(chapter.id);
+      if (!chapterId || assignedChapterIds.has(chapterId)) continue;
+      map.set(chapterId, idx++);
+      assignedChapterIds.add(chapterId);
+    }
   } else {
-    chapters.forEach((ch: Chapter, i: number) => map.set(ch.id, i));
+    let idx = 0;
+    for (const ch of chapters) {
+      const chapterId = normalizeId(ch.id);
+      if (!chapterId || map.has(chapterId)) continue;
+      map.set(chapterId, idx++);
+    }
   }
+
   return map;
+}
+
+function normalizeChapterId(chapterId: unknown): string {
+  if (typeof chapterId === 'string') return chapterId;
+  if (typeof chapterId === 'number' && Number.isFinite(chapterId))
+    return String(chapterId);
+  return '';
 }
 
 /** Returns a [chapterIndex, startOffset] tuple for sorting.
@@ -95,7 +162,8 @@ function sceneSortKey(
   const link = scene.prose_link;
   if (!link) return [Infinity, Infinity];
   if (link.scope_type === 'story') return [-1, link.start_offset];
-  const chIdx = chapterOrderMap.get(link.chapter_id ?? '') ?? Infinity;
+  const chapterId = normalizeChapterId(link.chapter_id);
+  const chIdx = chapterOrderMap.get(chapterId) ?? Infinity;
   return [chIdx, link.start_offset];
 }
 

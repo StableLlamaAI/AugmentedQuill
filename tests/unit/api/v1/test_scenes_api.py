@@ -349,3 +349,59 @@ class ScenesApiTest(ApiTestCase):
             },
         )
         self.assertEqual(resp.status_code, 404)
+
+    def test_reorder_prose_moves_text_across_scopes(self) -> None:
+        pdir = self.projects_root / self.pname
+        pdir.joinpath("content.md").write_text("Alpha--Bravo", encoding="utf-8")
+        chapters_dir = pdir / "chapters"
+        chapters_dir.mkdir(parents=True, exist_ok=True)
+        (chapters_dir / "ch-1.md").write_text("Gamma==Delta", encoding="utf-8")
+
+        source = self._create(
+            summary="Source",
+            prose_link={
+                "scope_type": "story",
+                "start_offset": 0,
+                "end_offset": 5,
+                "content_hash": "",
+            },
+        )
+        target = self._create(
+            summary="Target",
+            prose_link={
+                "scope_type": "chapter",
+                "chapter_id": "ch-1",
+                "start_offset": 0,
+                "end_offset": 5,
+                "content_hash": "",
+            },
+        )
+
+        resp = self.client.post(
+            self._url("/reorder-prose"),
+            json={
+                "source_scene_id": source["id"],
+                "target_scene_id": target["id"],
+                "place_before": True,
+            },
+        )
+
+        self.assertEqual(resp.status_code, 200, resp.text)
+        payload = resp.json()
+        self.assertEqual(payload["scope_type"], "chapter")
+        self.assertEqual(payload["chapter_id"], "ch-1")
+        self.assertEqual(payload["rebuilt_text"], "AlphaGamma==Delta")
+
+        self.assertEqual(
+            pdir.joinpath("content.md").read_text(encoding="utf-8"), "--Bravo"
+        )
+        self.assertEqual(
+            (chapters_dir / "ch-1.md").read_text(encoding="utf-8"), "AlphaGamma==Delta"
+        )
+
+        source_after = self.client.get(self._url(f"/{source['id']}")).json()
+        target_after = self.client.get(self._url(f"/{target['id']}")).json()
+        self.assertEqual(source_after["prose_link"]["scope_type"], "chapter")
+        self.assertEqual(source_after["prose_link"]["chapter_id"], "ch-1")
+        self.assertEqual(source_after["prose_link"]["start_offset"], 0)
+        self.assertEqual(target_after["prose_link"]["start_offset"], 5)

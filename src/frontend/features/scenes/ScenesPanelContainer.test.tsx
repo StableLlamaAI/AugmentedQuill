@@ -1272,7 +1272,7 @@ describe('handleNarrativeReorder (drag-reorder user interaction)', () => {
     expect(apiMock.scenes.reorderProse).not.toHaveBeenCalled();
   });
 
-  it('[INVALID] no-op for different prose scopes', async () => {
+  it('[VALID] forwards reorder intent for different prose scopes', async () => {
     const sceneA = makeScene({
       id: 'a',
       prose_link: makeProseLink({ scope_type: 'story', chapter_id: null }),
@@ -1281,16 +1281,29 @@ describe('handleNarrativeReorder (drag-reorder user interaction)', () => {
       id: 'b',
       prose_link: makeProseLink({ scope_type: 'chapter', chapter_id: 'ch-1' }),
     });
+    apiMock.scenes.reorderProse.mockResolvedValueOnce({
+      scenes: [sceneA, sceneB],
+      scope_type: 'chapter',
+      chapter_id: 'ch-1',
+      book_id: null,
+      scope_start: 0,
+      scope_end: 10,
+      rebuilt_text: 'moved',
+    });
     await renderNarrative([sceneA, sceneB]);
 
     await act(async () => {
       await nv().onReorderScene?.('a', 'b', true);
     });
 
-    expect(apiMock.scenes.reorderProse).not.toHaveBeenCalled();
+    expect(apiMock.scenes.reorderProse).toHaveBeenCalledWith({
+      source_scene_id: 'a',
+      target_scene_id: 'b',
+      place_before: true,
+    });
   });
 
-  it('[INVALID] no-op for different chapters', async () => {
+  it('[VALID] forwards reorder intent for different chapters', async () => {
     const sceneA = makeScene({
       id: 'a',
       prose_link: makeProseLink({ scope_type: 'chapter', chapter_id: 'ch-1' }),
@@ -1299,13 +1312,26 @@ describe('handleNarrativeReorder (drag-reorder user interaction)', () => {
       id: 'b',
       prose_link: makeProseLink({ scope_type: 'chapter', chapter_id: 'ch-2' }),
     });
+    apiMock.scenes.reorderProse.mockResolvedValueOnce({
+      scenes: [sceneA, sceneB],
+      scope_type: 'chapter',
+      chapter_id: 'ch-2',
+      book_id: null,
+      scope_start: 0,
+      scope_end: 10,
+      rebuilt_text: 'moved',
+    });
     await renderNarrative([sceneA, sceneB]);
 
     await act(async () => {
       await nv().onReorderScene?.('a', 'b', true);
     });
 
-    expect(apiMock.scenes.reorderProse).not.toHaveBeenCalled();
+    expect(apiMock.scenes.reorderProse).toHaveBeenCalledWith({
+      source_scene_id: 'a',
+      target_scene_id: 'b',
+      place_before: true,
+    });
   });
 
   it('[ERROR] reports backend reorder failures without patching store', async () => {

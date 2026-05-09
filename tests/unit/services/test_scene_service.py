@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pytest
 
+from augmentedquill.core.config import load_story_config, save_story_config
 from augmentedquill.models.scene import (
     SceneCreateRequest,
     SceneLinkProseRequest,
@@ -677,38 +678,145 @@ class TestReorderSceneProse:
                 ),
             )
 
-    def test_rejects_different_scopes(self, project_dir: Path) -> None:
-        a = create_scene(
+    def test_moves_scene_text_across_scopes(self, project_dir: Path) -> None:
+        (project_dir / "content.md").write_text("Alpha--Bravo", encoding="utf-8")
+        chapters_dir = project_dir / "chapters"
+        chapters_dir.mkdir(parents=True, exist_ok=True)
+        (chapters_dir / "ch-1.md").write_text("Gamma==Delta", encoding="utf-8")
+
+        source = create_scene(
             project_dir,
             SceneCreateRequest(
-                summary="A",
+                summary="Source",
                 prose_link=SceneProseLink(
-                    scope_type="story", start_offset=0, end_offset=5
+                    scope_type="story",
+                    start_offset=0,
+                    end_offset=5,
+                    content_hash="",
                 ),
             ),
         )
-        b = create_scene(
+        target = create_scene(
             project_dir,
             SceneCreateRequest(
-                summary="B",
+                summary="Target",
                 prose_link=SceneProseLink(
                     scope_type="chapter",
                     chapter_id="ch-1",
                     start_offset=0,
                     end_offset=5,
+                    content_hash="",
                 ),
             ),
         )
 
-        with pytest.raises(ValueError, match="same prose scope"):
-            reorder_scene_prose(
-                project_dir,
-                SceneReorderProseRequest(
-                    source_scene_id=a["id"],
-                    target_scene_id=b["id"],
-                    place_before=True,
+        result = reorder_scene_prose(
+            project_dir,
+            SceneReorderProseRequest(
+                source_scene_id=source["id"],
+                target_scene_id=target["id"],
+                place_before=True,
+            ),
+        )
+
+        assert result["scope_type"] == "chapter"
+        assert result["chapter_id"] == "ch-1"
+        assert result["rebuilt_text"] == "AlphaGamma==Delta"
+
+        story_text = (project_dir / "content.md").read_text(encoding="utf-8")
+        chapter_text = (chapters_dir / "ch-1.md").read_text(encoding="utf-8")
+        assert story_text == "--Bravo"
+        assert chapter_text == "AlphaGamma==Delta"
+
+        source_after = get_scene(project_dir, source["id"])
+        target_after = get_scene(project_dir, target["id"])
+        assert source_after["prose_link"]["scope_type"] == "chapter"
+        assert source_after["prose_link"]["chapter_id"] == "ch-1"
+        assert source_after["prose_link"]["start_offset"] == 0
+        assert source_after["prose_link"]["end_offset"] == 5
+        assert target_after["prose_link"]["start_offset"] == 5
+        assert target_after["prose_link"]["end_offset"] == 10
+
+    def test_moves_from_series_chapter_with_filename_mapping(
+        self, project_dir: Path
+    ) -> None:
+        books_dir = project_dir / "books"
+        book_1 = "book-1"
+        book_2 = "book-2"
+        (books_dir / book_1 / "chapters").mkdir(parents=True, exist_ok=True)
+        (books_dir / book_2 / "chapters").mkdir(parents=True, exist_ok=True)
+        (books_dir / book_1 / "chapters" / "0001.txt").write_text(
+            "Alpha--Bravo", encoding="utf-8"
+        )
+        (books_dir / book_2 / "chapters" / "0001.txt").write_text(
+            "Gamma==Delta", encoding="utf-8"
+        )
+
+        story_path = project_dir / "story.json"
+        story = load_story_config(story_path) or {}
+        story["project_type"] = "series"
+        story["books"] = [
+            {
+                "id": book_1,
+                "title": "Book 1",
+                "chapters": [{"title": "Chapter 1", "filename": "0001.txt"}],
+            },
+            {
+                "id": book_2,
+                "title": "Book 2",
+                "chapters": [{"title": "Chapter 1", "filename": "0001.txt"}],
+            },
+        ]
+        save_story_config(story_path, story)
+
+        source = create_scene(
+            project_dir,
+            SceneCreateRequest(
+                summary="Source",
+                prose_link=SceneProseLink(
+                    scope_type="chapter",
+                    chapter_id="1",
+                    book_id=book_1,
+                    start_offset=0,
+                    end_offset=5,
+                    content_hash="",
                 ),
-            )
+            ),
+        )
+        target = create_scene(
+            project_dir,
+            SceneCreateRequest(
+                summary="Target",
+                prose_link=SceneProseLink(
+                    scope_type="chapter",
+                    chapter_id="2",
+                    book_id=book_2,
+                    start_offset=0,
+                    end_offset=5,
+                    content_hash="",
+                ),
+            ),
+        )
+
+        result = reorder_scene_prose(
+            project_dir,
+            SceneReorderProseRequest(
+                source_scene_id=source["id"],
+                target_scene_id=target["id"],
+                place_before=True,
+            ),
+        )
+
+        assert result["scope_type"] == "chapter"
+        assert result["book_id"] == book_2
+        assert result["rebuilt_text"] == "AlphaGamma==Delta"
+
+        assert (books_dir / book_1 / "chapters" / "0001.txt").read_text(
+            encoding="utf-8"
+        ) == "--Bravo"
+        assert (books_dir / book_2 / "chapters" / "0001.txt").read_text(
+            encoding="utf-8"
+        ) == "AlphaGamma==Delta"
 
 
 # ---------------------------------------------------------------------------

@@ -66,28 +66,159 @@ def _scene_content_path(project_dir: Path, link: dict[str, Any]) -> Path | None:
         return project_dir / "content.md"
 
     if scope == "chapter":
-        chapter_id = link.get("chapter_id") or ""
-        book_id = link.get("book_id") or ""
+        chapter_id = str(link.get("chapter_id") or "").strip()
+        book_id = str(link.get("book_id") or "").strip()
         if not chapter_id:
             return None
-        # Series: books/<book_id>/<chapter_id>
+
+        story = load_story_config(project_dir / "story.json") or {}
+
+        def _safe_int(text: str) -> int | None:
+            try:
+                return int(text)
+            except ValueError:
+                return None
+
+        def _chapter_filename_from_story() -> str | None:
+            numeric_id = _safe_int(chapter_id)
+
+            def _filename_or_inferred(
+                chapter: dict[str, Any], local_index: int
+            ) -> str | None:
+                filename = chapter.get("filename")
+                if isinstance(filename, str) and filename.strip():
+                    return filename.strip()
+                # Older project files may omit chapter filenames in metadata.
+                # Chapter files are persisted as zero-padded ordinals.
+                return f"{local_index + 1:04d}.txt"
+
+            if book_id:
+                books = story.get("books")
+                if not isinstance(books, list):
+                    return None
+
+                matched_book: dict[str, Any] | None = None
+                for book in books:
+                    if not isinstance(book, dict):
+                        continue
+                    bid = str(book.get("id") or book.get("folder") or "").strip()
+                    if bid == book_id:
+                        matched_book = book
+                        break
+                if matched_book is None:
+                    return None
+
+                chapters = matched_book.get("chapters")
+                if not isinstance(chapters, list):
+                    return None
+
+                for chapter_index, chapter in enumerate(chapters):
+                    if not isinstance(chapter, dict):
+                        continue
+                    cid = str(chapter.get("id") or "").strip()
+                    if cid and cid == chapter_id:
+                        return _filename_or_inferred(chapter, chapter_index)
+
+                if numeric_id is not None:
+                    local_index = numeric_id - 1
+                    if 0 <= local_index < len(chapters):
+                        chapter = chapters[local_index]
+                        if isinstance(chapter, dict):
+                            return _filename_or_inferred(chapter, local_index)
+
+                if numeric_id is not None:
+                    global_index = 0
+                    for book in books:
+                        if not isinstance(book, dict):
+                            continue
+                        bid = str(book.get("id") or book.get("folder") or "").strip()
+                        bchapters = book.get("chapters")
+                        if not isinstance(bchapters, list):
+                            continue
+                        for chapter_index, chapter in enumerate(bchapters):
+                            global_index += 1
+                            if global_index != numeric_id:
+                                continue
+                            if bid != book_id:
+                                return None
+                            if isinstance(chapter, dict):
+                                return _filename_or_inferred(chapter, chapter_index)
+                    return None
+
+                return None
+
+            chapters = story.get("chapters")
+            if not isinstance(chapters, list):
+                return None
+
+            for chapter_index, chapter in enumerate(chapters):
+                if not isinstance(chapter, dict):
+                    continue
+                cid = str(chapter.get("id") or "").strip()
+                if cid and cid == chapter_id:
+                    return _filename_or_inferred(chapter, chapter_index)
+
+            numeric_id = _safe_int(chapter_id)
+            if numeric_id is not None:
+                index = numeric_id - 1
+                if 0 <= index < len(chapters):
+                    chapter = chapters[index]
+                    if isinstance(chapter, dict):
+                        return _filename_or_inferred(chapter, index)
+            return None
+
+        chapter_filename = _chapter_filename_from_story()
+        chapter_numeric = _safe_int(chapter_id)
+        inferred_from_id = (
+            f"{chapter_numeric:04d}.txt" if chapter_numeric is not None else None
+        )
+
+        candidates: list[Path] = []
         if book_id:
-            p = project_dir / "books" / book_id / chapter_id
-            if not p.suffix:
-                p = p.with_suffix(".md")
-            return p
-        # Novel: chapters/<chapter_id> or <chapter_id> directly
-        for base in (project_dir / "chapters", project_dir):
-            p = base / chapter_id
-            if not p.suffix:
-                p = p.with_suffix(".md")
-            if p.exists():
-                return p
-        # Fall back to chapters subdirectory regardless
-        p = project_dir / "chapters" / chapter_id
-        if not p.suffix:
-            p = p.with_suffix(".md")
-        return p
+            if chapter_filename:
+                candidates.append(
+                    project_dir / "books" / book_id / "chapters" / chapter_filename
+                )
+            if inferred_from_id:
+                candidates.append(
+                    project_dir / "books" / book_id / "chapters" / inferred_from_id
+                )
+            candidates.append(project_dir / "books" / book_id / "chapters" / chapter_id)
+            candidates.append(project_dir / "books" / book_id / chapter_id)
+        else:
+            if chapter_filename:
+                candidates.append(project_dir / "chapters" / chapter_filename)
+            if inferred_from_id:
+                candidates.append(project_dir / "chapters" / inferred_from_id)
+            candidates.append(project_dir / "chapters" / chapter_id)
+            candidates.append(project_dir / chapter_id)
+
+        expanded: list[Path] = []
+        for candidate in candidates:
+            expanded.append(candidate)
+            if not candidate.suffix:
+                expanded.append(candidate.with_suffix(".md"))
+                expanded.append(candidate.with_suffix(".txt"))
+
+        for candidate in expanded:
+            if candidate.exists():
+                return candidate
+
+        if book_id:
+            chapter_dir = project_dir / "books" / book_id / "chapters"
+            if chapter_dir.exists():
+                chapter_files = sorted(
+                    path for path in chapter_dir.iterdir() if path.is_file()
+                )
+                if chapter_files:
+                    if chapter_numeric is not None:
+                        local_index = chapter_numeric - 1
+                        if 0 <= local_index < len(chapter_files):
+                            return chapter_files[local_index]
+                    if len(chapter_files) == 1:
+                        return chapter_files[0]
+
+        return expanded[0] if expanded else None
 
     return None
 
@@ -522,25 +653,29 @@ def reorder_scene_prose(
     target_link = target_data.get("prose_link")
     if not source_link or not target_link:
         raise ValueError("Both scenes must have prose links")
-    if not _same_prose_scope(source_link, target_link):
-        raise ValueError("Scenes must share the same prose scope")
+    same_scope = _same_prose_scope(source_link, target_link)
 
-    linked_in_scope: list[dict[str, Any]] = []
-    for scene_id, scene_data in scenes_dict.items():
-        link = scene_data.get("prose_link")
-        if not link or link.get("end_offset") is None:
-            continue
-        if not _same_prose_scope(link, source_link):
-            continue
-        linked_in_scope.append(
-            {
-                "scene_id": scene_id,
-                "scene_data": scene_data,
-                "link": link,
-                "start": link.get("start_offset", 0),
-                "end": link.get("end_offset"),
-            }
-        )
+    def _collect_linked_in_scope(scope_link: dict[str, Any]) -> list[dict[str, Any]]:
+        entries: list[dict[str, Any]] = []
+        for sid, sdata in scenes_dict.items():
+            link = sdata.get("prose_link")
+            if not link or link.get("end_offset") is None:
+                continue
+            if not _same_prose_scope(link, scope_link):
+                continue
+            entries.append(
+                {
+                    "scene_id": sid,
+                    "scene_data": sdata,
+                    "link": link,
+                    "start": link.get("start_offset", 0),
+                    "end": link.get("end_offset"),
+                }
+            )
+        entries.sort(key=lambda entry: entry["start"])
+        return entries
+
+    linked_in_scope = _collect_linked_in_scope(source_link)
 
     linked_in_scope.sort(key=lambda entry: entry["start"])
     source_index = next(
@@ -551,129 +686,287 @@ def reorder_scene_prose(
         ),
         -1,
     )
-    target_index = next(
-        (
-            index
-            for index, entry in enumerate(linked_in_scope)
-            if entry["scene_id"] == request.target_scene_id
-        ),
-        -1,
+    target_index = (
+        next(
+            (
+                index
+                for index, entry in enumerate(linked_in_scope)
+                if entry["scene_id"] == request.target_scene_id
+            ),
+            -1,
+        )
+        if same_scope
+        else -1
     )
     if source_index < 0:
         raise ValueError(
             f"Scene '{request.source_scene_id}' is not linked in the selected scope"
         )
-    if target_index < 0:
+    if same_scope:
+        if target_index < 0:
+            raise ValueError(
+                f"Scene '{request.target_scene_id}' is not linked in the selected scope"
+            )
+
+        insert_index = target_index + (0 if request.place_before else 1)
+        if source_index < insert_index:
+            insert_index -= 1
+        if insert_index == source_index:
+            return {
+                "scenes": [],
+                "scope_type": source_link.get("scope_type", "story"),
+                "chapter_id": source_link.get("chapter_id"),
+                "book_id": source_link.get("book_id"),
+                "scope_start": 0,
+                "scope_end": 0,
+                "rebuilt_text": "",
+            }
+
+        reordered = list(linked_in_scope)
+        moved = reordered.pop(source_index)
+        reordered.insert(insert_index, moved)
+
+        content_path = _scene_content_path(project_dir, source_link)
+        if content_path is None:
+            raise ValueError("Cannot resolve content path for the selected scope")
+        original_content = (
+            content_path.read_text(encoding="utf-8") if content_path.exists() else ""
+        )
+        if not content_path.exists():
+            raise ValueError("Cannot resolve content path for the selected scope")
+
+        scene_text_by_id: dict[str, str] = {}
+        for entry in linked_in_scope:
+            scene_text_by_id[entry["scene_id"]] = original_content[
+                entry["start"] : entry["end"]
+            ]
+
+        gaps_between: list[str] = []
+        for index in range(len(linked_in_scope) - 1):
+            left = linked_in_scope[index]
+            right = linked_in_scope[index + 1]
+            gaps_between.append(original_content[left["end"] : right["start"]])
+
+        scope_start = linked_in_scope[0]["start"]
+        scope_end = linked_in_scope[-1]["end"]
+        rebuilt_text_parts: list[str] = []
+        next_links: dict[str, dict[str, Any]] = {}
+        cursor = scope_start
+
+        for index, entry in enumerate(reordered):
+            if index > 0:
+                gap = gaps_between[index - 1] if index - 1 < len(gaps_between) else ""
+                rebuilt_text_parts.append(gap)
+                cursor += len(gap)
+
+            scene_text = scene_text_by_id[entry["scene_id"]]
+            start = cursor
+            end = start + len(scene_text)
+            rebuilt_text_parts.append(scene_text)
+            cursor = end
+            next_links[entry["scene_id"]] = {
+                **entry["link"],
+                "start_offset": start,
+                "end_offset": end,
+            }
+
+        rebuilt_scope_text = "".join(rebuilt_text_parts)
+        rebuilt_content = (
+            original_content[:scope_start]
+            + rebuilt_scope_text
+            + original_content[scope_end:]
+        )
+
+        _write_text_atomic(content_path, rebuilt_content)
+
+        updated_hash = _compute_file_hash(content_path)
+        modified_ids: list[str] = []
+        original_scene_data: dict[str, dict[str, Any]] = {}
+        try:
+            for entry in reordered:
+                scene_id = entry["scene_id"]
+                original_scene_data[scene_id] = scenes_dict[scene_id]
+                next_link = {
+                    **next_links[scene_id],
+                    "content_hash": updated_hash,
+                    "is_stale": False,
+                }
+                scenes_dict[scene_id] = {
+                    **scenes_dict[scene_id],
+                    "prose_link": next_link,
+                }
+                modified_ids.append(scene_id)
+
+            story["scenes"] = scenes_dict
+            save_story_config(story_path, story)
+        except Exception:
+            _write_text_atomic(content_path, original_content)
+            for scene_id, scene_data in original_scene_data.items():
+                scenes_dict[scene_id] = scene_data
+            story["scenes"] = scenes_dict
+            raise
+
+        result: list[dict[str, Any]] = []
+        for scene_id in modified_ids:
+            scene = _normalise_scene({"id": scene_id, **scenes_dict[scene_id]})
+            _attach_stale_flags([scene], project_dir)
+            result.append(scene)
+        return {
+            "scenes": result,
+            "scope_type": source_link.get("scope_type", "story"),
+            "chapter_id": source_link.get("chapter_id"),
+            "book_id": source_link.get("book_id"),
+            "scope_start": scope_start,
+            "scope_end": scope_end,
+            "rebuilt_text": rebuilt_scope_text,
+        }
+
+    if target_data.get("prose_link", {}).get("end_offset") is None:
         raise ValueError(
             f"Scene '{request.target_scene_id}' is not linked in the selected scope"
         )
 
-    insert_index = target_index + (0 if request.place_before else 1)
-    if source_index < insert_index:
-        insert_index -= 1
-    if insert_index == source_index:
-        return {
-            "scenes": [],
-            "scope_type": source_link.get("scope_type", "story"),
-            "chapter_id": source_link.get("chapter_id"),
-            "book_id": source_link.get("book_id"),
-            "scope_start": 0,
-            "scope_end": 0,
-            "rebuilt_text": "",
-        }
+    source_path = _scene_content_path(project_dir, source_link)
+    target_path = _scene_content_path(project_dir, target_link)
+    if source_path is None or not source_path.exists():
+        raise ValueError("Cannot resolve content path for source scope")
+    if target_path is None or not target_path.exists():
+        raise ValueError("Cannot resolve content path for target scope")
 
-    reordered = list(linked_in_scope)
-    moved = reordered.pop(source_index)
-    reordered.insert(insert_index, moved)
+    source_content = source_path.read_text(encoding="utf-8")
+    target_content = target_path.read_text(encoding="utf-8")
 
-    content_path = _scene_content_path(project_dir, source_link)
-    if content_path is None:
-        raise ValueError("Cannot resolve content path for the selected scope")
-    original_content = (
-        content_path.read_text(encoding="utf-8") if content_path.exists() else ""
+    source_start = int(source_link.get("start_offset", 0))
+    source_end = int(source_link.get("end_offset") or source_start)
+    moved_text = source_content[source_start:source_end]
+    moved_len = len(moved_text)
+
+    source_scope_entries = _collect_linked_in_scope(source_link)
+    target_scope_entries = _collect_linked_in_scope(target_link)
+    source_scope_ids = {entry["scene_id"] for entry in source_scope_entries}
+    target_scope_ids = {entry["scene_id"] for entry in target_scope_entries}
+
+    target_entry = next(
+        (
+            entry
+            for entry in target_scope_entries
+            if entry["scene_id"] == request.target_scene_id
+        ),
+        None,
     )
-    if not content_path.exists():
-        raise ValueError("Cannot resolve content path for the selected scope")
+    if target_entry is None:
+        raise ValueError(
+            f"Scene '{request.target_scene_id}' is not linked in the selected scope"
+        )
 
-    scene_text_by_id: dict[str, str] = {}
-    for entry in linked_in_scope:
-        scene_text_by_id[entry["scene_id"]] = original_content[
-            entry["start"] : entry["end"]
-        ]
+    insert_at = target_entry["start"] if request.place_before else target_entry["end"]
 
-    gaps_between: list[str] = []
-    for index in range(len(linked_in_scope) - 1):
-        left = linked_in_scope[index]
-        right = linked_in_scope[index + 1]
-        gaps_between.append(original_content[left["end"] : right["start"]])
-
-    scope_start = linked_in_scope[0]["start"]
-    scope_end = linked_in_scope[-1]["end"]
-    rebuilt_text_parts: list[str] = []
-    next_links: dict[str, dict[str, Any]] = {}
-    cursor = scope_start
-
-    for index, entry in enumerate(reordered):
-        if index > 0:
-            gap = gaps_between[index - 1] if index - 1 < len(gaps_between) else ""
-            rebuilt_text_parts.append(gap)
-            cursor += len(gap)
-
-        scene_text = scene_text_by_id[entry["scene_id"]]
-        start = cursor
-        end = start + len(scene_text)
-        rebuilt_text_parts.append(scene_text)
-        cursor = end
-        next_links[entry["scene_id"]] = {
-            **entry["link"],
-            "start_offset": start,
-            "end_offset": end,
-        }
-
-    rebuilt_scope_text = "".join(rebuilt_text_parts)
-    rebuilt_content = (
-        original_content[:scope_start]
-        + rebuilt_scope_text
-        + original_content[scope_end:]
+    rebuilt_source_content = source_content[:source_start] + source_content[source_end:]
+    rebuilt_target_content = (
+        target_content[:insert_at] + moved_text + target_content[insert_at:]
     )
 
-    _write_text_atomic(content_path, rebuilt_content)
-
-    updated_hash = _compute_file_hash(content_path)
-    modified_ids: list[str] = []
-    original_scene_data: dict[str, dict[str, Any]] = {}
+    _write_text_atomic(source_path, rebuilt_source_content)
+    wrote_target = False
     try:
-        for entry in reordered:
+        _write_text_atomic(target_path, rebuilt_target_content)
+        wrote_target = True
+
+        source_hash = _compute_file_hash(source_path)
+        target_hash = _compute_file_hash(target_path)
+
+        updated_ids: set[str] = set()
+        original_scene_data: dict[str, dict[str, Any]] = {}
+
+        for entry in source_scope_entries:
             scene_id = entry["scene_id"]
-            original_scene_data[scene_id] = scenes_dict[scene_id]
+            if scene_id == request.source_scene_id:
+                continue
+            original_scene_data.setdefault(scene_id, scenes_dict[scene_id])
+            start = entry["start"]
+            end = entry["end"]
+            if start >= source_end:
+                start -= moved_len
+                end -= moved_len
             next_link = {
-                **next_links[scene_id],
-                "content_hash": updated_hash,
+                **entry["link"],
+                "start_offset": start,
+                "end_offset": end,
+                "content_hash": source_hash,
                 "is_stale": False,
             }
             scenes_dict[scene_id] = {**scenes_dict[scene_id], "prose_link": next_link}
-            modified_ids.append(scene_id)
+            updated_ids.add(scene_id)
+
+        for entry in target_scope_entries:
+            scene_id = entry["scene_id"]
+            if scene_id == request.source_scene_id:
+                continue
+            original_scene_data.setdefault(scene_id, scenes_dict[scene_id])
+            start = entry["start"]
+            end = entry["end"]
+            if start >= insert_at:
+                start += moved_len
+                end += moved_len
+            next_link = {
+                **entry["link"],
+                "start_offset": start,
+                "end_offset": end,
+                "content_hash": target_hash,
+                "is_stale": False,
+            }
+            scenes_dict[scene_id] = {**scenes_dict[scene_id], "prose_link": next_link}
+            updated_ids.add(scene_id)
+
+        original_scene_data.setdefault(
+            request.source_scene_id, scenes_dict[request.source_scene_id]
+        )
+        moved_link = {
+            **source_link,
+            "scope_type": target_link.get("scope_type", "story"),
+            "chapter_id": target_link.get("chapter_id"),
+            "book_id": target_link.get("book_id"),
+            "start_offset": insert_at,
+            "end_offset": insert_at + moved_len,
+            "content_hash": target_hash,
+            "is_stale": False,
+        }
+        scenes_dict[request.source_scene_id] = {
+            **scenes_dict[request.source_scene_id],
+            "prose_link": moved_link,
+        }
+        updated_ids.add(request.source_scene_id)
 
         story["scenes"] = scenes_dict
         save_story_config(story_path, story)
     except Exception:
-        _write_text_atomic(content_path, original_content)
-        for scene_id, scene_data in original_scene_data.items():
-            scenes_dict[scene_id] = scene_data
+        if wrote_target:
+            _write_text_atomic(target_path, target_content)
+        _write_text_atomic(source_path, source_content)
         story["scenes"] = scenes_dict
         raise
 
     result: list[dict[str, Any]] = []
-    for scene_id in modified_ids:
+    ordered_ids = [
+        sid
+        for sid in scenes_dict.keys()
+        if sid in source_scope_ids
+        or sid in target_scope_ids
+        or sid == request.source_scene_id
+    ]
+    for scene_id in ordered_ids:
+        if scene_id not in scenes_dict:
+            continue
         scene = _normalise_scene({"id": scene_id, **scenes_dict[scene_id]})
         _attach_stale_flags([scene], project_dir)
         result.append(scene)
+
     return {
         "scenes": result,
-        "scope_type": source_link.get("scope_type", "story"),
-        "chapter_id": source_link.get("chapter_id"),
-        "book_id": source_link.get("book_id"),
-        "scope_start": scope_start,
-        "scope_end": scope_end,
-        "rebuilt_text": rebuilt_scope_text,
+        "scope_type": target_link.get("scope_type", "story"),
+        "chapter_id": target_link.get("chapter_id"),
+        "book_id": target_link.get("book_id"),
+        "scope_start": 0,
+        "scope_end": len(target_content),
+        "rebuilt_text": rebuilt_target_content,
     }

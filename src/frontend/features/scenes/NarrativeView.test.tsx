@@ -18,6 +18,7 @@ import { describe, it, expect, vi, beforeAll, afterEach } from 'vitest';
 import i18n from '../app/i18n';
 import { NarrativeView } from './NarrativeView';
 import type { Scene } from '../../types';
+import type { Book, Chapter } from '../../types/domain';
 
 const { selectionState } = vi.hoisted(() => ({
   selectionState: {
@@ -231,5 +232,169 @@ describe('NarrativeView drag reorder interactions', () => {
     await waitFor(() => {
       expect(onReorderScene).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe('NarrativeView series sorting and grouping', () => {
+  it('renders scenes in book/chapter order when books chapter metadata lacks chapter ids', () => {
+    const books: Book[] = [
+      {
+        id: 'book-1',
+        title: 'Book 1',
+        chapters: [
+          { title: 'Book 1 Chapter 1', summary: '', content: '' } as Chapter,
+          { title: 'Book 1 Chapter 2', summary: '', content: '' } as Chapter,
+        ],
+      },
+      {
+        id: 'book-2',
+        title: 'Book 2',
+        chapters: [{ title: 'Book 2 Chapter 1', summary: '', content: '' } as Chapter],
+      },
+    ];
+
+    const chapters: Chapter[] = [
+      {
+        id: '1',
+        title: 'Book 1 Chapter 1',
+        summary: '',
+        content: '',
+        book_id: 'book-1',
+      },
+      {
+        id: '2',
+        title: 'Book 1 Chapter 2',
+        summary: '',
+        content: '',
+        book_id: 'book-1',
+      },
+      {
+        id: '3',
+        title: 'Book 2 Chapter 1',
+        summary: '',
+        content: '',
+        book_id: 'book-2',
+      },
+    ];
+
+    const scenes: Scene[] = [
+      makeScene({
+        id: 'scene-b2-c1-a',
+        summary: 'B2C1-A',
+        prose_link: {
+          scope_type: 'chapter',
+          chapter_id: '3',
+          book_id: 'book-2',
+          start_offset: 0,
+          end_offset: 8,
+          content_hash: 'hash',
+          is_stale: false,
+        },
+      }),
+      makeScene({
+        id: 'scene-b1-c2-a',
+        summary: 'B1C2-A',
+        prose_link: {
+          scope_type: 'chapter',
+          chapter_id: '2',
+          book_id: 'book-1',
+          start_offset: 0,
+          end_offset: 8,
+          content_hash: 'hash',
+          is_stale: false,
+        },
+      }),
+      makeScene({
+        id: 'scene-b1-c1-a',
+        summary: 'B1C1-A',
+        prose_link: {
+          scope_type: 'chapter',
+          chapter_id: '1',
+          book_id: 'book-1',
+          start_offset: 0,
+          end_offset: 8,
+          content_hash: 'hash',
+          is_stale: false,
+        },
+      }),
+      makeScene({
+        id: 'scene-b2-c1-b',
+        summary: 'B2C1-B',
+        prose_link: {
+          scope_type: 'chapter',
+          chapter_id: '3',
+          book_id: 'book-2',
+          start_offset: 10,
+          end_offset: 18,
+          content_hash: 'hash',
+          is_stale: false,
+        },
+      }),
+      makeScene({
+        id: 'scene-b1-c1-b',
+        summary: 'B1C1-B',
+        prose_link: {
+          scope_type: 'chapter',
+          chapter_id: '1',
+          book_id: 'book-1',
+          start_offset: 10,
+          end_offset: 18,
+          content_hash: 'hash',
+          is_stale: false,
+        },
+      }),
+    ];
+
+    const { container } = render(
+      <I18nextProvider i18n={i18n}>
+        <NarrativeView
+          scenes={scenes}
+          projectType="series"
+          chapters={chapters}
+          books={books}
+          primarySelectedSceneId={null}
+          onSelectScene={vi.fn()}
+          onSelectionChange={vi.fn()}
+          onEditScene={vi.fn()}
+        />
+      </I18nextProvider>
+    );
+
+    const renderedSceneOrder = Array.from(
+      container.querySelectorAll('[data-scene-card]')
+    ).map((el: Element) => el.textContent?.trim());
+
+    expect(renderedSceneOrder).toEqual([
+      'B1C1-A',
+      'B1C1-B',
+      'B1C2-A',
+      'B2C1-A',
+      'B2C1-B',
+    ]);
+
+    const separators = Array.from(container.querySelectorAll('[aria-label]')).map(
+      (el: Element) => el.getAttribute('aria-label')
+    );
+    expect(separators).toContain('Book: Book 1');
+    expect(separators).toContain('Chapter: Book 1 Chapter 1');
+    expect(separators).toContain('Chapter: Book 1 Chapter 2');
+    expect(separators).toContain('Book: Book 2');
+    expect(separators).toContain('Chapter: Book 2 Chapter 1');
+
+    const sequence = separators.filter(
+      (label: string | null) =>
+        label === 'Book: Book 1' ||
+        label === 'Chapter: Book 1 Chapter 1' ||
+        label === 'Chapter: Book 1 Chapter 2' ||
+        label === 'Book: Book 2' ||
+        label === 'Chapter: Book 2 Chapter 1'
+    );
+    expect(sequence).toEqual([
+      'Book: Book 1',
+      'Chapter: Book 1 Chapter 1',
+      'Chapter: Book 1 Chapter 2',
+      'Book: Book 2',
+      'Chapter: Book 2 Chapter 1',
+    ]);
   });
 });
