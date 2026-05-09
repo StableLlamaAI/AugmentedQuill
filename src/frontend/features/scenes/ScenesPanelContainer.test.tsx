@@ -40,6 +40,7 @@ import type { ProseBoundaryCallback } from '../editor/CodeMirrorEditor';
 
 const {
   patchSceneMock,
+  recordHistoryEntryMock,
   useScenesMock,
   apiMock,
   captured,
@@ -47,6 +48,7 @@ const {
   useSceneProseSyncMock,
 } = vi.hoisted(() => {
   const patchSceneMock = vi.fn();
+  const recordHistoryEntryMock = vi.fn();
   const useScenesMock = vi.fn(() => [] as Scene[]);
   const apiMock = {
     scenes: {
@@ -75,6 +77,7 @@ const {
 
   return {
     patchSceneMock,
+    recordHistoryEntryMock,
     useScenesMock,
     apiMock,
     captured,
@@ -320,6 +323,7 @@ afterEach(() => {
   proseSyncState.selectedSceneId = null;
   vi.clearAllMocks();
   useScenesMock.mockReturnValue([]);
+  recordHistoryEntryMock.mockReset();
 });
 
 // ---------------------------------------------------------------------------
@@ -1355,5 +1359,226 @@ describe('handleNarrativeReorder (drag-reorder user interaction)', () => {
     expect(notifyError).toHaveBeenCalledTimes(1);
     expect(apiMock.scenes.reorderProse).toHaveBeenCalledTimes(1);
     expect(patchSceneMock).not.toHaveBeenCalled();
+  });
+});
+
+// ============================================================================
+// Undo/redo history recording coverage
+// ============================================================================
+
+describe('scene mutations record history entries', () => {
+  it('records history for add, move, save, and delete scene', async () => {
+    const created = makeScene({ id: 'new-1', summary: '' });
+    const moved = makeScene({ id: 'new-1', pinboard_x: 10, pinboard_y: 20 });
+    const saved = makeScene({ id: 'new-1', summary: 'Saved summary' });
+
+    apiMock.scenes.create.mockResolvedValueOnce(created);
+    apiMock.scenes.update.mockResolvedValueOnce(moved).mockResolvedValueOnce(saved);
+    apiMock.scenes.delete.mockResolvedValueOnce(undefined);
+
+    useScenesMock.mockReturnValue([created]);
+    const { container } = wrap(
+      <ScenesPanelContainer recordHistoryEntry={recordHistoryEntryMock} />
+    );
+
+    await act(async () => {
+      fireEvent.click(container.querySelector('button[aria-label]')!);
+    });
+
+    await act(async () => {
+      await pb().onMoveScene('new-1', 10, 20);
+    });
+
+    await act(async () => {
+      pb().onEditScene('new-1');
+    });
+
+    await act(async () => {
+      await dlg().onSave({ summary: 'Saved summary' });
+      await dlg().onDelete();
+    });
+
+    const labels = recordHistoryEntryMock.mock.calls.map(
+      (call: [{ label: string }]) => call[0].label
+    );
+    expect(labels).toContain('Add scene');
+    expect(labels).toContain('Move scene');
+    expect(labels).toContain('Update scene');
+    expect(labels).toContain('Delete scene');
+  });
+
+  it('records history for dependency and prose-link mutations', async () => {
+    const sceneA = makeScene({ id: 'a', order_before: [], order_after: [] });
+    const sceneB = makeScene({ id: 'b', order_before: [], order_after: [] });
+    const withConstraintA = makeScene({ id: 'a', order_before: ['b'] });
+    const withConstraintB = makeScene({ id: 'b', order_after: ['a'] });
+    const proseLinkedA = makeScene({
+      id: 'a',
+      prose_link: makeProseLink({ start_offset: 0, end_offset: 15 }),
+    });
+
+    apiMock.scenes.update
+      .mockResolvedValueOnce(withConstraintA)
+      .mockResolvedValueOnce(withConstraintB);
+    apiMock.scenes.linkProse.mockResolvedValueOnce([proseLinkedA]);
+
+    useScenesMock.mockReturnValue([sceneA, sceneB]);
+    await act(async () => {
+      wrap(<ScenesPanelContainer recordHistoryEntry={recordHistoryEntryMock} />);
+    });
+
+    await act(async () => {
+      await pb().onCreateCause('a', 'b');
+      await pb().onDropProse('a', {
+        scopeType: 'story',
+        startOffset: 0,
+        endOffset: 15,
+        chapterId: null,
+        bookId: null,
+      });
+    });
+
+    const labels = recordHistoryEntryMock.mock.calls.map(
+      (call: [{ label: string }]) => call[0].label
+    );
+    expect(labels).toContain('Add scene dependency');
+    expect(labels).toContain('Link scene prose');
+  });
+
+  it('records history for removing a dependency', async () => {
+    const sceneA = makeScene({ id: 'a', order_before: ['b'], order_after: [] });
+    const sceneB = makeScene({ id: 'b', order_before: [], order_after: ['a'] });
+    const withoutConstraintA = makeScene({ id: 'a', order_before: [] });
+    const withoutConstraintB = makeScene({ id: 'b', order_after: [] });
+
+    apiMock.scenes.update
+      .mockResolvedValueOnce(withoutConstraintA)
+      .mockResolvedValueOnce(withoutConstraintB);
+
+    await renderAndOpenDialog([sceneA, sceneB], {
+      recordHistoryEntry: recordHistoryEntryMock,
+    });
+
+    await act(async () => {
+      await (
+        captured.dialog as { onDeleteCause: (x: string, y: string) => Promise<void> }
+      ).onDeleteCause('a', 'b');
+    });
+
+    const labels = recordHistoryEntryMock.mock.calls.map(
+      (call: [{ label: string }]) => call[0].label
+    );
+    expect(labels).toContain('Remove scene dependency');
+  });
+
+  it('records history for narrative reorder and prose content edit', async () => {
+    const linkA = makeProseLink({ start_offset: 0, end_offset: 8 });
+    const linkB = makeProseLink({ start_offset: 9, end_offset: 17 });
+    const sceneA = makeScene({ id: 'a', prose_link: linkA });
+    const sceneB = makeScene({ id: 'b', prose_link: linkB });
+
+    apiMock.scenes.reorderProse.mockResolvedValueOnce({
+      scenes: [
+        makeScene({ id: 'a', prose_link: linkA }),
+        makeScene({ id: 'b', prose_link: linkB }),
+      ],
+      scope_type: 'story',
+      chapter_id: null,
+      book_id: null,
+      scope_start: 0,
+      scope_end: 17,
+      rebuilt_text: 'Scene B. Scene A.',
+    });
+    apiMock.scenes.linkProse.mockResolvedValueOnce([
+      makeScene({
+        id: 'a',
+        prose_link: makeProseLink({ start_offset: 0, end_offset: 10 }),
+      }),
+    ]);
+    apiMock.scenes.updateProseContent.mockResolvedValueOnce(
+      makeScene({
+        id: 'a',
+        prose_link: makeProseLink({ start_offset: 0, end_offset: 10 }),
+      })
+    );
+
+    const { ref } = makeEditorRefWithBoundary('Scene A. Scene B.');
+    useScenesMock.mockReturnValue([sceneA, sceneB]);
+    const narrativeRender = wrap(
+      <ScenesPanelContainer
+        editorRef={ref}
+        currentChapter={STORY_UNIT}
+        recordHistoryEntry={recordHistoryEntryMock}
+      />
+    );
+
+    await act(async () => {
+      fireEvent.click(narrativeRender.getByRole('button', { name: 'Narrative' }));
+    });
+
+    await act(async () => {
+      await nv().onReorderScene?.('b', 'a', true);
+    });
+
+    await renderAndOpenDialog([sceneA, sceneB], {
+      editorRef: ref,
+      currentChapter: STORY_UNIT,
+      recordHistoryEntry: recordHistoryEntryMock,
+    });
+
+    await act(async () => {
+      await dlg().onSaveProseContent?.('Scene B. Scene A.');
+    });
+
+    const boundaryCb = (
+      ref.current?.setOnProseBoundaryChange as ReturnType<typeof vi.fn>
+    ).mock.calls.at(-1)?.[0] as
+      | ((sceneId: string, edge: 'start' | 'end', offset: number) => Promise<void>)
+      | undefined;
+    expect(boundaryCb).toBeTypeOf('function');
+
+    const labels = recordHistoryEntryMock.mock.calls.map(
+      (call: [{ label: string }]) => call[0].label
+    );
+    expect(labels).toContain('Reorder scene prose');
+    expect(labels).toContain('Edit scene linked prose');
+  });
+
+  it('records history for prose boundary adjustments', async () => {
+    const linkA = makeProseLink({ start_offset: 0, end_offset: 8 });
+    const sceneA = makeScene({ id: 'a', prose_link: linkA });
+    apiMock.scenes.linkProse.mockResolvedValueOnce([
+      makeScene({
+        id: 'a',
+        prose_link: makeProseLink({ start_offset: 0, end_offset: 10 }),
+      }),
+    ]);
+
+    const { ref } = makeEditorRefWithBoundary('Scene A.');
+    useScenesMock.mockReturnValue([sceneA]);
+    await act(async () => {
+      wrap(
+        <ScenesPanelContainer
+          editorRef={ref}
+          recordHistoryEntry={recordHistoryEntryMock}
+        />
+      );
+    });
+
+    const cb = (
+      ref.current?.setOnProseBoundaryChange as ReturnType<typeof vi.fn>
+    ).mock.calls.at(-1)?.[0] as
+      | ((sceneId: string, edge: 'start' | 'end', offset: number) => Promise<void>)
+      | undefined;
+    expect(cb).toBeTypeOf('function');
+
+    await act(async () => {
+      await cb?.('a', 'end', 10);
+    });
+
+    const labels = recordHistoryEntryMock.mock.calls.map(
+      (call: [{ label: string }]) => call[0].label
+    );
+    expect(labels).toContain('Adjust scene prose boundary');
   });
 });

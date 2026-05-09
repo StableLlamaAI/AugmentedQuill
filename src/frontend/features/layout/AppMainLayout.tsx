@@ -195,6 +195,7 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = React.memo(
       currentChapter,
       isChapterLoading,
       editorRef,
+      recordHistoryEntry,
       viewMode,
       suggestionControls,
       aiControls,
@@ -248,6 +249,7 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = React.memo(
                 <ScenesPanelContainer
                   editorRef={editorRef}
                   currentChapter={currentChapter}
+                  recordHistoryEntry={recordHistoryEntry}
                 />
               </div>
               <div className="flex-1 flex flex-col min-w-0 h-full relative">

@@ -18,6 +18,7 @@ import type {
   ChatAttachment,
   EditorSettings,
   LLMConfig,
+  StoryState,
   SourcebookEntry,
   SuggestionGenerationMode,
   ViewMode,
@@ -243,6 +244,13 @@ export type MainEditorControls = {
   setShowWhitespace: (v: boolean) => void;
   baselineContent?: string;
   onOpenSearch?: () => void;
+  recordHistoryEntry?: (params: {
+    label: string;
+    state?: StoryState;
+    onUndo?: () => Promise<void> | void;
+    onRedo?: () => Promise<void> | void;
+    forceNewHistory?: boolean;
+  }) => void;
 };
 
 export type MainChatControls = {

@@ -106,8 +106,9 @@ type UseAppMainLayoutPropsParams = {
   patchSourcebook: (entry: SourcebookEntry | null, entryId?: string) => boolean;
   pushExternalHistoryEntry: (params: {
     label: string;
-    onUndo?: () => Promise<void>;
-    onRedo?: () => Promise<void>;
+    state?: StoryState;
+    onUndo?: () => Promise<void> | void;
+    onRedo?: () => Promise<void> | void;
     forceNewHistory?: boolean;
     entryId?: string;
   }) => void;
@@ -532,6 +533,7 @@ export function useAppMainLayoutProps(params: UseAppMainLayoutPropsParams): {
       setShowWhitespace,
       baselineContent: editorBaselineContent,
       onOpenSearch: openSearch,
+      recordHistoryEntry: pushExternalHistoryEntry,
     }),
     [
       editorUpdateChapter,
@@ -560,6 +562,7 @@ export function useAppMainLayoutProps(params: UseAppMainLayoutPropsParams): {
       setShowWhitespace,
       editorBaselineContent,
       openSearch,
+      pushExternalHistoryEntry,
     ]
   );
   return {

@@ -15,7 +15,7 @@ import { useTranslation } from 'react-i18next';
 import { Plus } from 'lucide-react';
 import type { EditorView } from '@codemirror/view';
 import type { EditorHandle } from '../editor/Editor';
-import type { Scene, SceneProseLink } from '../../types';
+import type { Scene, SceneProseLink, StoryState } from '../../types';
 import type { WritingUnit } from '../../types/domain';
 import { useScenes } from '../../stores/storyStore';
 import { useStoryStore } from '../../stores/storyStore';
@@ -40,6 +40,13 @@ type ViewMode = 'pinboard' | 'narrative';
 interface ScenesPanelContainerProps {
   editorRef?: React.RefObject<EditorHandle | null>;
   currentChapter?: WritingUnit | null;
+  recordHistoryEntry?: (params: {
+    label: string;
+    state?: StoryState;
+    onUndo?: () => Promise<void> | void;
+    onRedo?: () => Promise<void> | void;
+    forceNewHistory?: boolean;
+  }) => void;
 }
 
 type BoundaryAdjustment = {
@@ -82,13 +89,43 @@ function collectBoundaryAdjustments(
   return toAdjust;
 }
 
+function applyScenePatch(
+  prevScenes: Scene[],
+  scene: Scene | null,
+  sceneId?: string
+): Scene[] {
+  if (scene === null) {
+    return prevScenes.filter((candidate: Scene): boolean => candidate.id !== sceneId);
+  }
+
+  const idx = prevScenes.findIndex(
+    (candidate: Scene): boolean => candidate.id === scene.id
+  );
+  if (idx >= 0) {
+    const next = [...prevScenes];
+    next[idx] = scene;
+    return next;
+  }
+  return [...prevScenes, scene];
+}
+
+function applyScenePatches(prevScenes: Scene[], updates: Scene[]): Scene[] {
+  return updates.reduce(
+    (nextScenes: Scene[], nextScene: Scene): Scene[] =>
+      applyScenePatch(nextScenes, nextScene),
+    prevScenes
+  );
+}
+
 export const ScenesPanelContainer: React.FC<ScenesPanelContainerProps> = ({
   editorRef,
   currentChapter,
+  recordHistoryEntry,
 }: ScenesPanelContainerProps) => {
   const { t } = useTranslation();
   const tc = useThemeClasses();
   const scenes = useScenes();
+  const story = useStoryStore((s: StoryStoreState) => s.story);
   const patchScene = useStoryStore((s: StoryStoreState) => s.patchScene);
   const { projectType } = useStoryMeta();
   const chapters = useStoryChaptersListMeta();
@@ -96,6 +133,23 @@ export const ScenesPanelContainer: React.FC<ScenesPanelContainerProps> = ({
 
   const [viewMode, setViewMode] = useState<ViewMode>('pinboard');
   const [editingSceneId, setEditingSceneId] = useState<string | null>(null);
+
+  const storyRef = React.useRef(story);
+  storyRef.current = story;
+
+  const recordSceneHistory = useCallback(
+    (label: string, nextScenes: Scene[]): void => {
+      if (!recordHistoryEntry) {
+        return;
+      }
+      recordHistoryEntry({
+        label,
+        state: { ...storyRef.current, scenes: nextScenes },
+        forceNewHistory: true,
+      });
+    },
+    [recordHistoryEntry]
+  );
 
   // ---- Scene selection + bidirectional prose-link sync ----
   const { selectedSceneId, handleSelectScene, handleMultipleSelectScenes } =
@@ -114,11 +168,12 @@ export const ScenesPanelContainer: React.FC<ScenesPanelContainerProps> = ({
         pinboard_y: 40 + Math.random() * 200,
       });
       patchScene(created as Scene);
+      recordSceneHistory('Add scene', applyScenePatch(scenes, created as Scene));
       setEditingSceneId(created.id);
     } catch (err) {
       notifyError(t('Add Scene'), err);
     }
-  }, [patchScene, t]);
+  }, [patchScene, recordSceneHistory, scenes, t]);
 
   // ---- Create scene from prose drop on the Add Scene button ----
   const handleAddSceneDragOver = useCallback((e: React.DragEvent): void => {
@@ -154,12 +209,17 @@ export const ScenesPanelContainer: React.FC<ScenesPanelContainerProps> = ({
           end_offset: data.endOffset,
         });
         modified.forEach((s: Scene) => patchScene(s));
+        const scenesAfterCreate = applyScenePatch(scenes, created as Scene);
+        recordSceneHistory(
+          'Add scene from prose',
+          applyScenePatches(scenesAfterCreate, modified as Scene[])
+        );
         setEditingSceneId(created.id);
       } catch (err) {
         notifyError(t('Add Scene'), err);
       }
     },
-    [patchScene, t]
+    [patchScene, recordSceneHistory, scenes, t]
   );
 
   // ---- Move (position update from drag) ----
@@ -175,13 +235,14 @@ export const ScenesPanelContainer: React.FC<ScenesPanelContainerProps> = ({
           pinboard_y: y,
         });
         patchScene(updated as Scene);
+        recordSceneHistory('Move scene', applyScenePatch(scenes, updated as Scene));
       } catch (err) {
         // Revert on failure
         patchScene(prev);
         notifyError(t('Save'), err);
       }
     },
-    [scenes, patchScene, t]
+    [scenes, patchScene, recordSceneHistory, t]
   );
 
   // ---- Save from editor ----
@@ -193,8 +254,9 @@ export const ScenesPanelContainer: React.FC<ScenesPanelContainerProps> = ({
         updates as SceneUpdatePayload
       );
       patchScene(updated as Scene);
+      recordSceneHistory('Update scene', applyScenePatch(scenes, updated as Scene));
     },
-    [editingSceneId, patchScene]
+    [editingSceneId, patchScene, recordSceneHistory, scenes]
   );
 
   // ---- Delete from editor ----
@@ -202,8 +264,9 @@ export const ScenesPanelContainer: React.FC<ScenesPanelContainerProps> = ({
     if (!editingSceneId) return;
     await api.scenes.delete(editingSceneId);
     patchScene(null, editingSceneId);
+    recordSceneHistory('Delete scene', applyScenePatch(scenes, null, editingSceneId));
     setEditingSceneId(null);
-  }, [editingSceneId, patchScene]);
+  }, [editingSceneId, patchScene, recordSceneHistory, scenes]);
 
   // ---- Delete cause ----
   const handleDeleteCause = useCallback(
@@ -226,6 +289,10 @@ export const ScenesPanelContainer: React.FC<ScenesPanelContainerProps> = ({
         ]);
         patchScene(updatedFrom as Scene);
         patchScene(updatedTo as Scene);
+        recordSceneHistory(
+          'Remove scene dependency',
+          applyScenePatches(scenes, [updatedFrom as Scene, updatedTo as Scene])
+        );
       } catch (err) {
         // Revert
         patchScene(fromScene);
@@ -233,7 +300,7 @@ export const ScenesPanelContainer: React.FC<ScenesPanelContainerProps> = ({
         notifyError(t('Save'), err);
       }
     },
-    [scenes, patchScene, t]
+    [scenes, patchScene, recordSceneHistory, t]
   );
 
   // ---- Create cause (Alt+drag on pinboard) ----
@@ -258,6 +325,10 @@ export const ScenesPanelContainer: React.FC<ScenesPanelContainerProps> = ({
         ]);
         patchScene(updatedFrom as Scene);
         patchScene(updatedTo as Scene);
+        recordSceneHistory(
+          'Add scene dependency',
+          applyScenePatches(scenes, [updatedFrom as Scene, updatedTo as Scene])
+        );
       } catch (err) {
         // Revert
         patchScene(fromScene);
@@ -265,7 +336,7 @@ export const ScenesPanelContainer: React.FC<ScenesPanelContainerProps> = ({
         notifyError(t('Save'), err);
       }
     },
-    [scenes, patchScene, t]
+    [scenes, patchScene, recordSceneHistory, t]
   );
 
   // ---- Prose drop (drag from editor to scene card) ----
@@ -280,11 +351,12 @@ export const ScenesPanelContainer: React.FC<ScenesPanelContainerProps> = ({
           end_offset: data.endOffset,
         });
         modified.forEach((s: Scene) => patchScene(s));
+        recordSceneHistory('Link scene prose', applyScenePatches(scenes, modified));
       } catch (err) {
         notifyError(t('Link Prose'), err);
       }
     },
-    [patchScene, t]
+    [patchScene, recordSceneHistory, scenes, t]
   );
 
   // ---- Narrative reorder (drag in list + move linked prose text) ----
@@ -306,6 +378,10 @@ export const ScenesPanelContainer: React.FC<ScenesPanelContainerProps> = ({
           place_before: placeBefore,
         });
         reorderResult.scenes.forEach((scene: Scene) => patchScene(scene));
+        recordSceneHistory(
+          'Reorder scene prose',
+          applyScenePatches(scenes, reorderResult.scenes)
+        );
 
         if (reorderResult.scenes.length === 0) return;
 
@@ -331,7 +407,7 @@ export const ScenesPanelContainer: React.FC<ScenesPanelContainerProps> = ({
         notifyError(t('Save'), err);
       }
     },
-    [scenes, patchScene, editorRef, currentChapter, t]
+    [scenes, patchScene, recordSceneHistory, editorRef, currentChapter, t]
   );
 
   // ---- Prose-link boundary drag (update start/end offset) ----
@@ -354,6 +430,7 @@ export const ScenesPanelContainer: React.FC<ScenesPanelContainerProps> = ({
       );
 
       try {
+        let nextScenes = scenes;
         // Adjust neighbours first so the backend does not see transient overlaps.
         for (const adj of toAdjust) {
           const modified = await api.scenes.linkProse(adj.id, {
@@ -364,6 +441,7 @@ export const ScenesPanelContainer: React.FC<ScenesPanelContainerProps> = ({
             end_offset: adj.newEnd,
           });
           modified.forEach((s: Scene) => patchScene(s));
+          nextScenes = applyScenePatches(nextScenes, modified);
         }
         const modified = await api.scenes.linkProse(sceneId, {
           scope_type: link.scope_type,
@@ -373,11 +451,13 @@ export const ScenesPanelContainer: React.FC<ScenesPanelContainerProps> = ({
           end_offset: endOffset,
         });
         modified.forEach((s: Scene) => patchScene(s));
+        nextScenes = applyScenePatches(nextScenes, modified);
+        recordSceneHistory('Adjust scene prose boundary', nextScenes);
       } catch (err) {
         notifyError(t('Update prose link'), err);
       }
     },
-    [scenes, patchScene, t]
+    [scenes, patchScene, recordSceneHistory, t]
   );
 
   // Register the boundary-change handler on the editor handle so the callback
@@ -418,6 +498,10 @@ export const ScenesPanelContainer: React.FC<ScenesPanelContainerProps> = ({
         scenes.find((s: Scene) => s.id === editingSceneId)?.prose_link ?? null;
       const updated = await api.scenes.updateProseContent(editingSceneId, text);
       patchScene(updated as Scene);
+      recordSceneHistory(
+        'Edit scene linked prose',
+        applyScenePatch(scenes, updated as Scene)
+      );
       // Reflect the change immediately in the editor so the writer sees the
       // updated text without having to close and reopen the chapter.
       if (proseLink && editorRef?.current) {
@@ -430,7 +514,7 @@ export const ScenesPanelContainer: React.FC<ScenesPanelContainerProps> = ({
         }
       }
     },
-    [editingSceneId, patchScene, scenes, editorRef]
+    [editingSceneId, patchScene, recordSceneHistory, scenes, editorRef]
   );
 
   return (
