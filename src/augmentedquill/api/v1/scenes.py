@@ -22,6 +22,8 @@ from augmentedquill.models.scene import (
     SceneCreateRequest,
     SceneLinkProseRequest,
     SceneProseLink,
+    SceneReorderProseRequest,
+    SceneReorderProseResponse,
     SceneUpdateProseContentRequest,
     SceneUpdateRequest,
 )
@@ -31,6 +33,7 @@ from augmentedquill.services.scenes.scene_service import (
     get_scene,
     link_prose,
     list_scenes,
+    reorder_scene_prose,
     update_prose_content,
     update_prose_link_hash,
     update_scene,
@@ -134,6 +137,29 @@ async def link_scene_prose(
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return [Scene(**s) for s in updated]
+
+
+@router.post("/scenes/reorder-prose", response_model=SceneReorderProseResponse)
+async def reorder_scene_prose_route(
+    project_dir: ProjectDep,
+    payload: SceneReorderProseRequest,
+) -> SceneReorderProseResponse:
+    """Reorder linked prose blocks and persist the rewritten offsets."""
+    try:
+        updated = reorder_scene_prose(project_dir, payload)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return SceneReorderProseResponse(
+        scenes=[Scene(**s) for s in updated["scenes"]],
+        scope_type=updated["scope_type"],
+        chapter_id=updated.get("chapter_id"),
+        book_id=updated.get("book_id"),
+        scope_start=updated["scope_start"],
+        scope_end=updated["scope_end"],
+        rebuilt_text=updated["rebuilt_text"],
+    )
 
 
 @router.patch("/scenes/{scene_id}/prose-content", response_model=Scene)

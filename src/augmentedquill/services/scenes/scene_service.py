@@ -19,9 +19,11 @@ client-driven but based on data computed here.
 from __future__ import annotations
 
 import hashlib
+import os
 import uuid
 from pathlib import Path
 from typing import Any
+import tempfile
 
 from augmentedquill.core.config import load_story_config, save_story_config
 from augmentedquill.models.scene import (
@@ -29,6 +31,7 @@ from augmentedquill.models.scene import (
     SceneCreateRequest,
     SceneLinkProseRequest,
     SceneProseLink,
+    SceneReorderProseRequest,
     SceneUpdateRequest,
 )
 
@@ -87,6 +90,33 @@ def _scene_content_path(project_dir: Path, link: dict[str, Any]) -> Path | None:
         return p
 
     return None
+
+
+def _same_prose_scope(a: dict[str, Any], b: dict[str, Any]) -> bool:
+    """Return True when two prose-link dicts point at the same scope."""
+    return (
+        a.get("scope_type") == b.get("scope_type")
+        and (a.get("chapter_id") or None) == (b.get("chapter_id") or None)
+        and (a.get("book_id") or None) == (b.get("book_id") or None)
+    )
+
+
+def _write_text_atomic(path: Path, content: str) -> None:
+    """Write text atomically so a failed save never leaves partial content."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp_path: Path | None = None
+    replaced = False
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", dir=path.parent, delete=False
+        ) as tmp_file:
+            tmp_file.write(content)
+            temp_path = Path(tmp_file.name)
+        os.replace(temp_path, path)
+        replaced = True
+    finally:
+        if temp_path is not None and temp_path.exists() and not replaced:
+            temp_path.unlink(missing_ok=True)
 
 
 def _normalise_scene(raw: dict[str, Any]) -> dict[str, Any]:
@@ -444,7 +474,7 @@ def update_prose_content(
     else:
         new_content = existing_content[:start] + new_text + existing_content[end_raw:]
 
-    content_path.write_text(new_content, encoding="utf-8")
+    _write_text_atomic(content_path, new_content)
 
     new_end = start + len(new_text)
     new_hash = _compute_file_hash(content_path)
@@ -462,3 +492,188 @@ def update_prose_content(
     result = _normalise_scene({"id": scene_id, **scenes_dict[scene_id]})
     _attach_stale_flags([result], project_dir)
     return result
+
+
+def reorder_scene_prose(
+    project_dir: Path,
+    request: SceneReorderProseRequest,
+) -> dict[str, Any]:
+    """Reorder scenes within a prose scope and rewrite the linked text block.
+
+    The operation is intentionally transactional from the caller's perspective:
+    all offsets in the affected scope are recomputed, the prose file is rewritten
+    once, and then the scene links are persisted together.
+    """
+    if request.source_scene_id == request.target_scene_id:
+        raise ValueError("Source and target scenes must differ")
+
+    story_path = project_dir / "story.json"
+    story = load_story_config(story_path) or {}
+    scenes_dict = _load_scenes_dict(story)
+
+    source_data = scenes_dict.get(request.source_scene_id)
+    target_data = scenes_dict.get(request.target_scene_id)
+    if source_data is None:
+        raise LookupError(f"Scene '{request.source_scene_id}' not found")
+    if target_data is None:
+        raise LookupError(f"Scene '{request.target_scene_id}' not found")
+
+    source_link = source_data.get("prose_link")
+    target_link = target_data.get("prose_link")
+    if not source_link or not target_link:
+        raise ValueError("Both scenes must have prose links")
+    if not _same_prose_scope(source_link, target_link):
+        raise ValueError("Scenes must share the same prose scope")
+
+    linked_in_scope: list[dict[str, Any]] = []
+    for scene_id, scene_data in scenes_dict.items():
+        link = scene_data.get("prose_link")
+        if not link or link.get("end_offset") is None:
+            continue
+        if not _same_prose_scope(link, source_link):
+            continue
+        linked_in_scope.append(
+            {
+                "scene_id": scene_id,
+                "scene_data": scene_data,
+                "link": link,
+                "start": link.get("start_offset", 0),
+                "end": link.get("end_offset"),
+            }
+        )
+
+    linked_in_scope.sort(key=lambda entry: entry["start"])
+    source_index = next(
+        (
+            index
+            for index, entry in enumerate(linked_in_scope)
+            if entry["scene_id"] == request.source_scene_id
+        ),
+        -1,
+    )
+    target_index = next(
+        (
+            index
+            for index, entry in enumerate(linked_in_scope)
+            if entry["scene_id"] == request.target_scene_id
+        ),
+        -1,
+    )
+    if source_index < 0:
+        raise ValueError(
+            f"Scene '{request.source_scene_id}' is not linked in the selected scope"
+        )
+    if target_index < 0:
+        raise ValueError(
+            f"Scene '{request.target_scene_id}' is not linked in the selected scope"
+        )
+
+    insert_index = target_index + (0 if request.place_before else 1)
+    if source_index < insert_index:
+        insert_index -= 1
+    if insert_index == source_index:
+        return {
+            "scenes": [],
+            "scope_type": source_link.get("scope_type", "story"),
+            "chapter_id": source_link.get("chapter_id"),
+            "book_id": source_link.get("book_id"),
+            "scope_start": 0,
+            "scope_end": 0,
+            "rebuilt_text": "",
+        }
+
+    reordered = list(linked_in_scope)
+    moved = reordered.pop(source_index)
+    reordered.insert(insert_index, moved)
+
+    content_path = _scene_content_path(project_dir, source_link)
+    if content_path is None:
+        raise ValueError("Cannot resolve content path for the selected scope")
+    original_content = (
+        content_path.read_text(encoding="utf-8") if content_path.exists() else ""
+    )
+    if not content_path.exists():
+        raise ValueError("Cannot resolve content path for the selected scope")
+
+    scene_text_by_id: dict[str, str] = {}
+    for entry in linked_in_scope:
+        scene_text_by_id[entry["scene_id"]] = original_content[
+            entry["start"] : entry["end"]
+        ]
+
+    gaps_between: list[str] = []
+    for index in range(len(linked_in_scope) - 1):
+        left = linked_in_scope[index]
+        right = linked_in_scope[index + 1]
+        gaps_between.append(original_content[left["end"] : right["start"]])
+
+    scope_start = linked_in_scope[0]["start"]
+    scope_end = linked_in_scope[-1]["end"]
+    rebuilt_text_parts: list[str] = []
+    next_links: dict[str, dict[str, Any]] = {}
+    cursor = scope_start
+
+    for index, entry in enumerate(reordered):
+        if index > 0:
+            gap = gaps_between[index - 1] if index - 1 < len(gaps_between) else ""
+            rebuilt_text_parts.append(gap)
+            cursor += len(gap)
+
+        scene_text = scene_text_by_id[entry["scene_id"]]
+        start = cursor
+        end = start + len(scene_text)
+        rebuilt_text_parts.append(scene_text)
+        cursor = end
+        next_links[entry["scene_id"]] = {
+            **entry["link"],
+            "start_offset": start,
+            "end_offset": end,
+        }
+
+    rebuilt_scope_text = "".join(rebuilt_text_parts)
+    rebuilt_content = (
+        original_content[:scope_start]
+        + rebuilt_scope_text
+        + original_content[scope_end:]
+    )
+
+    _write_text_atomic(content_path, rebuilt_content)
+
+    updated_hash = _compute_file_hash(content_path)
+    modified_ids: list[str] = []
+    original_scene_data: dict[str, dict[str, Any]] = {}
+    try:
+        for entry in reordered:
+            scene_id = entry["scene_id"]
+            original_scene_data[scene_id] = scenes_dict[scene_id]
+            next_link = {
+                **next_links[scene_id],
+                "content_hash": updated_hash,
+                "is_stale": False,
+            }
+            scenes_dict[scene_id] = {**scenes_dict[scene_id], "prose_link": next_link}
+            modified_ids.append(scene_id)
+
+        story["scenes"] = scenes_dict
+        save_story_config(story_path, story)
+    except Exception:
+        _write_text_atomic(content_path, original_content)
+        for scene_id, scene_data in original_scene_data.items():
+            scenes_dict[scene_id] = scene_data
+        story["scenes"] = scenes_dict
+        raise
+
+    result: list[dict[str, Any]] = []
+    for scene_id in modified_ids:
+        scene = _normalise_scene({"id": scene_id, **scenes_dict[scene_id]})
+        _attach_stale_flags([scene], project_dir)
+        result.append(scene)
+    return {
+        "scenes": result,
+        "scope_type": source_link.get("scope_type", "story"),
+        "chapter_id": source_link.get("chapter_id"),
+        "book_id": source_link.get("book_id"),
+        "scope_start": scope_start,
+        "scope_end": scope_end,
+        "rebuilt_text": rebuilt_scope_text,
+    }

@@ -3893,6 +3893,59 @@
         }
       }
     },
+    "/api/v1/projects/{project_name}/scenes/reorder-prose": {
+      "post": {
+        "tags": ["Scenes"],
+        "summary": "Reorder Scene Prose Route",
+        "description": "Reorder linked prose blocks and persist the rewritten offsets.",
+        "operationId": "reorder_scene_prose_route_api_v1_projects__project_name__scenes_reorder_prose_post",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SceneReorderProseRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SceneReorderProseResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/projects/{project_name}/scenes/{scene_id}/prose-content": {
       "patch": {
         "tags": ["Scenes"],
@@ -6771,6 +6824,86 @@
         "required": ["scope_type"],
         "title": "SceneProseLink",
         "description": "A link between a scene (or beat) and a specific text range in the prose.\n\n``scope_type`` distinguishes between:\n- ``'story'`` \u2013 the main story content file (short-story projects)\n- ``'chapter'`` \u2013 a specific chapter file (novel / series projects)\n\n``start_offset`` and ``end_offset`` are UTF-8 character offsets within the\ncontent of the referenced file.  ``end_offset`` being ``None`` means the\nscene/beat runs to the end of the file from ``start_offset``.\n\n``content_hash`` is the first 16 hex characters of the SHA-256 digest of\nthe file content at the time the link was last saved.  The frontend\ncompares this against the current content hash to detect external changes."
+      },
+      "SceneReorderProseRequest": {
+        "properties": {
+          "source_scene_id": {
+            "type": "string",
+            "title": "Source Scene Id"
+          },
+          "target_scene_id": {
+            "type": "string",
+            "title": "Target Scene Id"
+          },
+          "place_before": {
+            "type": "boolean",
+            "title": "Place Before",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": ["source_scene_id", "target_scene_id"],
+        "title": "SceneReorderProseRequest",
+        "description": "Payload for reordering scenes within a linked prose scope."
+      },
+      "SceneReorderProseResponse": {
+        "properties": {
+          "scenes": {
+            "items": {
+              "$ref": "#/components/schemas/Scene"
+            },
+            "type": "array",
+            "title": "Scenes"
+          },
+          "scope_type": {
+            "type": "string",
+            "title": "Scope Type"
+          },
+          "chapter_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chapter Id"
+          },
+          "book_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Book Id"
+          },
+          "scope_start": {
+            "type": "integer",
+            "title": "Scope Start"
+          },
+          "scope_end": {
+            "type": "integer",
+            "title": "Scope End"
+          },
+          "rebuilt_text": {
+            "type": "string",
+            "title": "Rebuilt Text"
+          }
+        },
+        "type": "object",
+        "required": [
+          "scenes",
+          "scope_type",
+          "scope_start",
+          "scope_end",
+          "rebuilt_text"
+        ],
+        "title": "SceneReorderProseResponse",
+        "description": "Result of a prose reorder transaction."
       },
       "SceneUpdateProseContentRequest": {
         "properties": {

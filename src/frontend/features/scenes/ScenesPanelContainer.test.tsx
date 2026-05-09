@@ -38,7 +38,14 @@ import type { ProseBoundaryCallback } from '../editor/CodeMirrorEditor';
 // Hoisted mocks
 // ---------------------------------------------------------------------------
 
-const { patchSceneMock, useScenesMock, apiMock, captured } = vi.hoisted(() => {
+const {
+  patchSceneMock,
+  useScenesMock,
+  apiMock,
+  captured,
+  proseSyncState,
+  useSceneProseSyncMock,
+} = vi.hoisted(() => {
   const patchSceneMock = vi.fn();
   const useScenesMock = vi.fn(() => [] as Scene[]);
   const apiMock = {
@@ -47,15 +54,33 @@ const { patchSceneMock, useScenesMock, apiMock, captured } = vi.hoisted(() => {
       update: vi.fn(),
       delete: vi.fn(),
       linkProse: vi.fn(),
+      reorderProse: vi.fn(),
+      refreshHash: vi.fn(),
       updateProseContent: vi.fn(),
     },
   };
   // Mutable holder — spy stubs close over this object; tests read from it.
-  const captured: { pinboard: unknown; dialog: unknown } = {
+  const captured: { pinboard: unknown; dialog: unknown; narrative: unknown } = {
     pinboard: null,
     dialog: null,
+    narrative: null,
   };
-  return { patchSceneMock, useScenesMock, apiMock, captured };
+
+  const proseSyncState = {
+    selectedSceneId: null as string | null,
+    handleSelectScene: vi.fn(),
+    handleMultipleSelectScenes: vi.fn(),
+  };
+  const useSceneProseSyncMock = vi.fn(() => proseSyncState);
+
+  return {
+    patchSceneMock,
+    useScenesMock,
+    apiMock,
+    captured,
+    proseSyncState,
+    useSceneProseSyncMock,
+  };
 });
 
 vi.mock('../../stores/storyStore', () => ({
@@ -85,7 +110,11 @@ vi.mock('./PinboardView', () => ({
 }));
 
 vi.mock('./NarrativeView', () => ({
-  NarrativeView: () => null,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  NarrativeView: (props: any) => {
+    captured.narrative = props;
+    return null;
+  },
 }));
 
 vi.mock('./SceneEditorDialog', () => ({
@@ -97,11 +126,7 @@ vi.mock('./SceneEditorDialog', () => ({
 }));
 
 vi.mock('./useSceneProseSync', () => ({
-  useSceneProseSync: vi.fn(() => ({
-    selectedSceneId: null,
-    handleSelectScene: vi.fn(),
-    handleMultipleSelectScenes: vi.fn(),
-  })),
+  useSceneProseSync: () => useSceneProseSyncMock(),
 }));
 
 vi.mock('../../services/errorNotifier', () => ({ notifyError: vi.fn() }));
@@ -135,6 +160,14 @@ interface DialogHandlers {
   getLinkedProseText: ((link: SceneProseLink) => string | null) | undefined;
 }
 
+interface NarrativeHandlers {
+  onReorderScene?: (
+    sourceSceneId: string,
+    targetSceneId: string,
+    placeBefore: boolean
+  ) => Promise<void>;
+}
+
 function pb(): PinboardHandlers {
   if (!captured.pinboard) throw new Error('PinboardView not rendered yet');
   return captured.pinboard as PinboardHandlers;
@@ -143,6 +176,11 @@ function pb(): PinboardHandlers {
 function dlg(): DialogHandlers {
   if (!captured.dialog) throw new Error('SceneEditorDialog not open yet');
   return captured.dialog as DialogHandlers;
+}
+
+function nv(): NarrativeHandlers {
+  if (!captured.narrative) throw new Error('NarrativeView not rendered yet');
+  return captured.narrative as NarrativeHandlers;
 }
 
 // ---------------------------------------------------------------------------
@@ -278,6 +316,8 @@ afterEach(() => {
   cleanup();
   captured.pinboard = null;
   captured.dialog = null;
+  captured.narrative = null;
+  proseSyncState.selectedSceneId = null;
   vi.clearAllMocks();
   useScenesMock.mockReturnValue([]);
 });
@@ -1118,5 +1158,176 @@ describe('handleProseBoundaryChange', () => {
     // Only the main linkProse for A is called.
     expect(apiMock.scenes.linkProse).toHaveBeenCalledTimes(1);
     expect(apiMock.scenes.linkProse).toHaveBeenCalledWith('a', expect.anything());
+  });
+});
+
+// ============================================================================
+// Narrative view reorder tests
+// ============================================================================
+
+describe('handleNarrativeReorder (drag-reorder user interaction)', () => {
+  async function renderNarrative(
+    scenes: Scene[],
+    props: Partial<React.ComponentProps<typeof ScenesPanelContainer>> = {}
+  ): Promise<void> {
+    useScenesMock.mockReturnValue(scenes);
+    const utils = wrap(<ScenesPanelContainer {...props} />);
+    await act(async () => {
+      fireEvent.click(utils.getByRole('button', { name: 'Narrative' }));
+    });
+  }
+
+  it.each([
+    { label: 'none selected and no active scene', selectedSceneId: null },
+    { label: 'source scene active', selectedSceneId: 'b' },
+    { label: 'target scene active', selectedSceneId: 'a' },
+  ])(
+    '[VALID] forwards reorder intent to backend with $label',
+    async ({ selectedSceneId }: { label: string; selectedSceneId: string | null }) => {
+      proseSyncState.selectedSceneId = selectedSceneId;
+
+      const sceneA = makeScene({
+        id: 'a',
+        prose_link: makeProseLink({ start_offset: 0, end_offset: 8, is_stale: false }),
+      });
+      const sceneB = makeScene({
+        id: 'b',
+        prose_link: makeProseLink({ start_offset: 9, end_offset: 17, is_stale: false }),
+      });
+
+      apiMock.scenes.reorderProse.mockResolvedValueOnce({
+        scenes: [
+          makeScene({
+            id: 'b',
+            prose_link: makeProseLink({ start_offset: 0, end_offset: 8 }),
+          }),
+          makeScene({
+            id: 'a',
+            prose_link: makeProseLink({ start_offset: 9, end_offset: 17 }),
+          }),
+        ],
+        scope_type: 'story',
+        chapter_id: null,
+        book_id: null,
+        scope_start: 0,
+        scope_end: 17,
+        rebuilt_text: 'Scene B. Scene A.',
+      });
+
+      const { ref, dispatch } = makeEditorRef('Scene A. Scene B.');
+      await renderNarrative([sceneA, sceneB], {
+        editorRef: ref,
+        currentChapter: STORY_UNIT,
+      });
+
+      await act(async () => {
+        await nv().onReorderScene?.('b', 'a', true);
+      });
+
+      expect(apiMock.scenes.reorderProse).toHaveBeenCalledTimes(1);
+      expect(apiMock.scenes.reorderProse).toHaveBeenCalledWith({
+        source_scene_id: 'b',
+        target_scene_id: 'a',
+        place_before: true,
+      });
+      expect(patchSceneMock).toHaveBeenCalledTimes(2);
+      expect(dispatch).toHaveBeenCalledWith({
+        changes: { from: 0, to: 17, insert: 'Scene B. Scene A.' },
+      });
+    }
+  );
+
+  it('[INVALID] no-op when source and target are same', async () => {
+    const sceneA = makeScene({ id: 'a', prose_link: makeProseLink() });
+    await renderNarrative([sceneA]);
+
+    await act(async () => {
+      await nv().onReorderScene?.('a', 'a', true);
+    });
+
+    expect(apiMock.scenes.reorderProse).not.toHaveBeenCalled();
+  });
+
+  it('[INVALID] no-op when source has no prose_link', async () => {
+    const sceneA = makeScene({ id: 'a', prose_link: null });
+    const sceneB = makeScene({ id: 'b', prose_link: makeProseLink() });
+    await renderNarrative([sceneA, sceneB]);
+
+    await act(async () => {
+      await nv().onReorderScene?.('a', 'b', true);
+    });
+
+    expect(apiMock.scenes.reorderProse).not.toHaveBeenCalled();
+  });
+
+  it('[INVALID] no-op when target has no prose_link', async () => {
+    const sceneA = makeScene({ id: 'a', prose_link: makeProseLink() });
+    const sceneB = makeScene({ id: 'b', prose_link: null });
+    await renderNarrative([sceneA, sceneB]);
+
+    await act(async () => {
+      await nv().onReorderScene?.('a', 'b', true);
+    });
+
+    expect(apiMock.scenes.reorderProse).not.toHaveBeenCalled();
+  });
+
+  it('[INVALID] no-op for different prose scopes', async () => {
+    const sceneA = makeScene({
+      id: 'a',
+      prose_link: makeProseLink({ scope_type: 'story', chapter_id: null }),
+    });
+    const sceneB = makeScene({
+      id: 'b',
+      prose_link: makeProseLink({ scope_type: 'chapter', chapter_id: 'ch-1' }),
+    });
+    await renderNarrative([sceneA, sceneB]);
+
+    await act(async () => {
+      await nv().onReorderScene?.('a', 'b', true);
+    });
+
+    expect(apiMock.scenes.reorderProse).not.toHaveBeenCalled();
+  });
+
+  it('[INVALID] no-op for different chapters', async () => {
+    const sceneA = makeScene({
+      id: 'a',
+      prose_link: makeProseLink({ scope_type: 'chapter', chapter_id: 'ch-1' }),
+    });
+    const sceneB = makeScene({
+      id: 'b',
+      prose_link: makeProseLink({ scope_type: 'chapter', chapter_id: 'ch-2' }),
+    });
+    await renderNarrative([sceneA, sceneB]);
+
+    await act(async () => {
+      await nv().onReorderScene?.('a', 'b', true);
+    });
+
+    expect(apiMock.scenes.reorderProse).not.toHaveBeenCalled();
+  });
+
+  it('[ERROR] reports backend reorder failures without patching store', async () => {
+    const { notifyError } = await import('../../services/errorNotifier');
+    const sceneA = makeScene({
+      id: 'a',
+      prose_link: makeProseLink({ start_offset: 0, end_offset: 8 }),
+    });
+    const sceneB = makeScene({
+      id: 'b',
+      prose_link: makeProseLink({ start_offset: 9, end_offset: 17 }),
+    });
+    apiMock.scenes.reorderProse.mockRejectedValueOnce(new Error('Network error'));
+
+    await renderNarrative([sceneA, sceneB]);
+
+    await act(async () => {
+      await nv().onReorderScene?.('b', 'a', true);
+    });
+
+    expect(notifyError).toHaveBeenCalledTimes(1);
+    expect(apiMock.scenes.reorderProse).toHaveBeenCalledTimes(1);
+    expect(patchSceneMock).not.toHaveBeenCalled();
   });
 });

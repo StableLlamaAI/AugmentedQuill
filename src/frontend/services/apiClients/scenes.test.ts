@@ -214,6 +214,40 @@ describe('createScenesApi.linkProse', () => {
 });
 
 // ---------------------------------------------------------------------------
+// reorderProse
+// ---------------------------------------------------------------------------
+
+describe('createScenesApi.reorderProse', () => {
+  it('calls POST /projects/{name}/scenes/reorder-prose and returns transaction payload', async () => {
+    const response = {
+      scenes: [stubScene(), { ...stubScene(), id: 'scene-2' }],
+      scope_type: 'story',
+      chapter_id: null,
+      book_id: null,
+      scope_start: 0,
+      scope_end: 20,
+      rebuilt_text: 'rewritten',
+    };
+    vi.mocked(postJson).mockResolvedValueOnce(response);
+
+    const payload = {
+      source_scene_id: 'scene-2',
+      target_scene_id: 'scene-1',
+      place_before: true,
+    };
+    const result = await api.reorderProse(payload);
+
+    expect(postJson).toHaveBeenCalledWith(
+      `${BASE}/reorder-prose`,
+      payload,
+      'Failed to reorder prose'
+    );
+    expect(result.scenes).toHaveLength(2);
+    expect(result.rebuilt_text).toBe('rewritten');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // updateProseContent
 // ---------------------------------------------------------------------------
 

@@ -221,7 +221,7 @@ export const PinboardView: React.FC<PinboardViewProps> = ({
   );
 
   // ---- Background click / lasso drag ----
-  const handleCanvasMouseDown = (e: React.PointerEvent<HTMLDivElement>): void => {
+  const handleCanvasMouseDown = (e: React.MouseEvent<HTMLDivElement>): void => {
     if (e.target !== e.currentTarget) return;
     if (e.button !== 0 || e.altKey) return;
 
@@ -309,7 +309,7 @@ export const PinboardView: React.FC<PinboardViewProps> = ({
     document.addEventListener('mouseup', onUp);
   };
 
-  const handleMouseDown = (e: React.PointerEvent<HTMLDivElement>): void => {
+  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>): void => {
     if (e.button === 1 || (e.button === 0 && e.altKey)) {
       e.preventDefault();
       isPanning.current = true;
@@ -418,7 +418,7 @@ export const PinboardView: React.FC<PinboardViewProps> = ({
         backgroundSize: `${24 * zoom}px ${24 * zoom}px`,
         backgroundPosition: `${pan.x % (24 * zoom)}px ${pan.y % (24 * zoom)}px`,
       }}
-      onPointerDown={handleMouseDown}
+      onMouseDown={handleMouseDown}
       aria-label={t('Pinboard')}
       role="region"
     >
@@ -461,7 +461,7 @@ export const PinboardView: React.FC<PinboardViewProps> = ({
           position: 'absolute',
           inset: 0,
         }}
-        onPointerDown={handleCanvasMouseDown}
+        onMouseDown={handleCanvasMouseDown}
       >
         {/* Cause arrows drawn under the cards */}
         <CauseArrows

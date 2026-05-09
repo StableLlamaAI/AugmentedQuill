@@ -143,6 +143,26 @@ class SceneLinkProseRequest(BaseModel):
     end_offset: int
 
 
+class SceneReorderProseRequest(BaseModel):
+    """Payload for reordering scenes within a linked prose scope."""
+
+    source_scene_id: str
+    target_scene_id: str
+    place_before: bool = True
+
+
+class SceneReorderProseResponse(BaseModel):
+    """Result of a prose reorder transaction."""
+
+    scenes: list[Scene]
+    scope_type: str
+    chapter_id: Optional[str] = None
+    book_id: Optional[str] = None
+    scope_start: int
+    scope_end: int
+    rebuilt_text: str
+
+
 class SceneUpdateProseContentRequest(BaseModel):
     """Payload for replacing the prose text at a scene's linked offsets."""
 

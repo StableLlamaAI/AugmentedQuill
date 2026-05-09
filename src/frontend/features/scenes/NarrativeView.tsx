@@ -54,6 +54,11 @@ interface NarrativeViewProps {
   onSelectionChange?: (ids: ReadonlySet<string>) => void;
   onEditScene: (sceneId: string) => void;
   onDropProse?: (sceneId: string, data: ProseDropData) => void;
+  onReorderScene?: (
+    sourceSceneId: string,
+    targetSceneId: string,
+    placeBefore: boolean
+  ) => Promise<void>;
 }
 
 // ---------------------------------------------------------------------------
@@ -289,7 +294,9 @@ export const NarrativeView: React.FC<NarrativeViewProps> = ({
   onSelectionChange,
   onEditScene,
   onDropProse,
+  onReorderScene,
 }: NarrativeViewProps) => {
+  const DRAG_SCENE_MIME = 'application/x-augmentedquill-scene-id';
   const { t } = useTranslation();
   const { isLight } = useTheme();
 
@@ -452,6 +459,83 @@ export const NarrativeView: React.FC<NarrativeViewProps> = ({
   }, [measureLayouts]);
 
   // -------------------------------------------------------------------------
+  // Narrative drag/reorder interactions
+  // -------------------------------------------------------------------------
+
+  const [dragSceneId, setDragSceneId] = useState<string | null>(null);
+  const dragSceneIdRef = useRef<string | null>(null);
+  const [dropHint, setDropHint] = useState<{ id: string; placeBefore: boolean } | null>(
+    null
+  );
+
+  const handleNarrativeBackgroundMouseDown = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>): void => {
+      const target = e.target as HTMLElement;
+      if (target.closest('[data-scene-card]')) return;
+      onSelectScene(null);
+      onSelectionChange?.(new Set<string>());
+    },
+    [onSelectScene, onSelectionChange]
+  );
+
+  const handleSceneDragStart = useCallback(
+    (e: React.DragEvent<HTMLDivElement>, sceneId: string): void => {
+      dragSceneIdRef.current = sceneId;
+      e.dataTransfer.effectAllowed = 'move';
+      // Keep scene id in the drag payload in case React state isn't visible
+      // synchronously inside dragover/drop handlers.
+      e.dataTransfer.setData(DRAG_SCENE_MIME, sceneId);
+      e.dataTransfer.setData('text/plain', sceneId);
+      setDragSceneId(sceneId);
+      setDropHint(null);
+    },
+    [DRAG_SCENE_MIME]
+  );
+
+  const handleSceneDragEnd = useCallback((): void => {
+    dragSceneIdRef.current = null;
+    setDragSceneId(null);
+    setDropHint(null);
+  }, []);
+
+  const handleSceneDragOver = useCallback(
+    (e: React.DragEvent<HTMLDivElement>, sceneId: string): void => {
+      const sourceId =
+        dragSceneIdRef.current ||
+        e.dataTransfer.getData(DRAG_SCENE_MIME) ||
+        dragSceneId;
+      if (!sourceId || sourceId === sceneId) return;
+      e.preventDefault();
+      const rect = e.currentTarget.getBoundingClientRect();
+      const placeBefore = e.clientY < rect.top + rect.height / 2;
+      setDropHint((prev: { id: string; placeBefore: boolean } | null) => {
+        if (prev && prev.id === sceneId && prev.placeBefore === placeBefore)
+          return prev;
+        return { id: sceneId, placeBefore };
+      });
+    },
+    [DRAG_SCENE_MIME, dragSceneId]
+  );
+
+  const handleSceneDrop = useCallback(
+    async (e: React.DragEvent<HTMLDivElement>, targetId: string): Promise<void> => {
+      e.preventDefault();
+      const sourceId =
+        dragSceneIdRef.current ||
+        e.dataTransfer.getData(DRAG_SCENE_MIME) ||
+        dragSceneId;
+      if (!sourceId || sourceId === targetId) return;
+      const rect = e.currentTarget.getBoundingClientRect();
+      const placeBefore = e.clientY < rect.top + rect.height / 2;
+      dragSceneIdRef.current = null;
+      setDropHint(null);
+      setDragSceneId(null);
+      await onReorderScene?.(sourceId, targetId, placeBefore);
+    },
+    [DRAG_SCENE_MIME, dragSceneId, onReorderScene]
+  );
+
+  // -------------------------------------------------------------------------
   // Render
   // -------------------------------------------------------------------------
 
@@ -460,6 +544,7 @@ export const NarrativeView: React.FC<NarrativeViewProps> = ({
       className={`w-full h-full overflow-y-auto ${bgClass}`}
       role="region"
       aria-label={t('Narrative')}
+      onMouseDown={handleNarrativeBackgroundMouseDown}
     >
       {/* Inner container is position:relative so the SVG overlay and card
           wrapper offsetTop values share the same coordinate origin. */}
@@ -487,6 +572,17 @@ export const NarrativeView: React.FC<NarrativeViewProps> = ({
             }
             const { scene } = item;
             const displayIndex = sceneIndexMap.get(scene.id) ?? 0;
+            const dropTop =
+              dropHint &&
+              dropHint.id === scene.id &&
+              dropHint.placeBefore &&
+              dragSceneId;
+            const dropBottom =
+              dropHint &&
+              dropHint.id === scene.id &&
+              !dropHint.placeBefore &&
+              dragSceneId;
+
             return (
               <div
                 key={scene.id}
@@ -497,6 +593,28 @@ export const NarrativeView: React.FC<NarrativeViewProps> = ({
                     cardWrapperRefs.current.delete(scene.id);
                   }
                 }}
+                draggable={Boolean(onReorderScene)}
+                onDragStart={(e: React.DragEvent<HTMLDivElement>) =>
+                  handleSceneDragStart(e, scene.id)
+                }
+                onDragEnd={handleSceneDragEnd}
+                onDragOver={(e: React.DragEvent<HTMLDivElement>) =>
+                  handleSceneDragOver(e, scene.id)
+                }
+                onDrop={(e: React.DragEvent<HTMLDivElement>) =>
+                  void handleSceneDrop(e, scene.id)
+                }
+                className={[
+                  'relative',
+                  dropTop
+                    ? 'before:absolute before:left-0 before:right-0 before:-top-1 before:h-0.5 before:bg-brand-500 before:rounded'
+                    : '',
+                  dropBottom
+                    ? 'after:absolute after:left-0 after:right-0 after:-bottom-1 after:h-0.5 after:bg-brand-500 after:rounded'
+                    : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
               >
                 <SceneCard
                   scene={scene}

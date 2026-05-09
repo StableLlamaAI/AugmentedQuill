@@ -260,6 +260,8 @@ export const api = {
       currentProjectApi().scenes.refreshHash(...args),
     linkProse: (...args: Parameters<ProjectApiClients['scenes']['linkProse']>) =>
       currentProjectApi().scenes.linkProse(...args),
+    reorderProse: (...args: Parameters<ProjectApiClients['scenes']['reorderProse']>) =>
+      currentProjectApi().scenes.reorderProse(...args),
     updateProseContent: (
       ...args: Parameters<ProjectApiClients['scenes']['updateProseContent']>
     ) => currentProjectApi().scenes.updateProseContent(...args),

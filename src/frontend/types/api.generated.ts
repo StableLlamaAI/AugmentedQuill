@@ -1646,6 +1646,26 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/projects/{project_name}/scenes/reorder-prose': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Reorder Scene Prose Route
+     * @description Reorder linked prose blocks and persist the rewritten offsets.
+     */
+    post: operations['reorder_scene_prose_route_api_v1_projects__project_name__scenes_reorder_prose_post'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/projects/{project_name}/scenes/{scene_id}/prose-content': {
     parameters: {
       query?: never;
@@ -2877,6 +2897,41 @@ export interface components {
        * @default false
        */
       is_stale: boolean;
+    };
+    /**
+     * SceneReorderProseRequest
+     * @description Payload for reordering scenes within a linked prose scope.
+     */
+    SceneReorderProseRequest: {
+      /** Source Scene Id */
+      source_scene_id: string;
+      /** Target Scene Id */
+      target_scene_id: string;
+      /**
+       * Place Before
+       * @default true
+       */
+      place_before: boolean;
+    };
+    /**
+     * SceneReorderProseResponse
+     * @description Result of a prose reorder transaction.
+     */
+    SceneReorderProseResponse: {
+      /** Scenes */
+      scenes: components['schemas']['Scene'][];
+      /** Scope Type */
+      scope_type: string;
+      /** Chapter Id */
+      chapter_id?: string | null;
+      /** Book Id */
+      book_id?: string | null;
+      /** Scope Start */
+      scope_start: number;
+      /** Scope End */
+      scope_end: number;
+      /** Rebuilt Text */
+      rebuilt_text: string;
     };
     /**
      * SceneUpdateProseContentRequest
@@ -6146,6 +6201,42 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['Scene'][];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  reorder_scene_prose_route_api_v1_projects__project_name__scenes_reorder_prose_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Directory name of the project */
+        project_name: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SceneReorderProseRequest'];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SceneReorderProseResponse'];
         };
       };
       /** @description Validation Error */

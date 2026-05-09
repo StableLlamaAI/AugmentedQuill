@@ -16,6 +16,7 @@ from augmentedquill.models.scene import (
     SceneCreateRequest,
     SceneLinkProseRequest,
     SceneProseLink,
+    SceneReorderProseRequest,
     SceneUpdateRequest,
 )
 from augmentedquill.services.scenes.scene_service import (
@@ -25,6 +26,7 @@ from augmentedquill.services.scenes.scene_service import (
     get_scene,
     link_prose,
     list_scenes,
+    reorder_scene_prose,
     update_prose_content,
     update_prose_link_hash,
     update_scene,
@@ -364,6 +366,40 @@ def _make_two_scene_project(project_dir: Path) -> tuple[str, str]:
     return a["id"], b["id"]
 
 
+def _make_three_scene_project(project_dir: Path) -> tuple[str, str, str]:
+    """Create three linked story scenes with distinct text blocks and gaps."""
+    content = "Alpha--Bravo==Charlie"
+    (project_dir / "content.md").write_text(content, encoding="utf-8")
+    a = create_scene(
+        project_dir,
+        SceneCreateRequest(
+            summary="Scene A",
+            prose_link=SceneProseLink(
+                scope_type="story", start_offset=0, end_offset=5, content_hash=""
+            ),
+        ),
+    )
+    b = create_scene(
+        project_dir,
+        SceneCreateRequest(
+            summary="Scene B",
+            prose_link=SceneProseLink(
+                scope_type="story", start_offset=7, end_offset=12, content_hash=""
+            ),
+        ),
+    )
+    c = create_scene(
+        project_dir,
+        SceneCreateRequest(
+            summary="Scene C",
+            prose_link=SceneProseLink(
+                scope_type="story", start_offset=14, end_offset=21, content_hash=""
+            ),
+        ),
+    )
+    return a["id"], b["id"], c["id"]
+
+
 class TestLinkProse:
     def test_no_overlap_links_cleanly(self, project_dir: Path) -> None:
         """Drag [0, 9] onto Scene C – no overlap with A or B."""
@@ -564,6 +600,115 @@ class TestLinkProse:
         )
         a_after = get_scene(project_dir, a_id)
         assert a_after["prose_link"]["end_offset"] == 50  # trimmed
+
+
+# ---------------------------------------------------------------------------
+# reorder_scene_prose tests
+# ---------------------------------------------------------------------------
+
+
+class TestReorderSceneProse:
+    def test_reorders_and_rewrites_all_linked_scenes(self, project_dir: Path) -> None:
+        a_id, b_id, c_id = _make_three_scene_project(project_dir)
+
+        result = reorder_scene_prose(
+            project_dir,
+            SceneReorderProseRequest(
+                source_scene_id=b_id,
+                target_scene_id=a_id,
+                place_before=True,
+            ),
+        )
+
+        assert {scene["id"] for scene in result["scenes"]} == {a_id, b_id, c_id}
+        assert result["scope_type"] == "story"
+        assert result["scope_start"] == 0
+        assert result["scope_end"] == 21
+        assert result["rebuilt_text"] == "Bravo--Alpha==Charlie"
+
+        content = (project_dir / "content.md").read_text(encoding="utf-8")
+        assert content == "Bravo--Alpha==Charlie"
+
+        a_after = get_scene(project_dir, a_id)
+        b_after = get_scene(project_dir, b_id)
+        c_after = get_scene(project_dir, c_id)
+        assert b_after["prose_link"]["start_offset"] == 0
+        assert b_after["prose_link"]["end_offset"] == 5
+        assert a_after["prose_link"]["start_offset"] == 7
+        assert a_after["prose_link"]["end_offset"] == 12
+        assert c_after["prose_link"]["start_offset"] == 14
+        assert c_after["prose_link"]["end_offset"] == 21
+        assert a_after["prose_link"]["is_stale"] is False
+        assert b_after["prose_link"]["is_stale"] is False
+        assert c_after["prose_link"]["is_stale"] is False
+
+    def test_same_scene_is_noop(self, project_dir: Path) -> None:
+        a_id, _, _ = _make_three_scene_project(project_dir)
+
+        with pytest.raises(ValueError, match="must differ"):
+            reorder_scene_prose(
+                project_dir,
+                SceneReorderProseRequest(
+                    source_scene_id=a_id,
+                    target_scene_id=a_id,
+                    place_before=True,
+                ),
+            )
+
+    def test_rejects_missing_links(self, project_dir: Path) -> None:
+        a = create_scene(
+            project_dir,
+            SceneCreateRequest(summary="A", prose_link=None),
+        )
+        b = create_scene(
+            project_dir,
+            SceneCreateRequest(
+                summary="B", prose_link=SceneProseLink(scope_type="story")
+            ),
+        )
+
+        with pytest.raises(ValueError, match="must have prose links"):
+            reorder_scene_prose(
+                project_dir,
+                SceneReorderProseRequest(
+                    source_scene_id=a["id"],
+                    target_scene_id=b["id"],
+                    place_before=True,
+                ),
+            )
+
+    def test_rejects_different_scopes(self, project_dir: Path) -> None:
+        a = create_scene(
+            project_dir,
+            SceneCreateRequest(
+                summary="A",
+                prose_link=SceneProseLink(
+                    scope_type="story", start_offset=0, end_offset=5
+                ),
+            ),
+        )
+        b = create_scene(
+            project_dir,
+            SceneCreateRequest(
+                summary="B",
+                prose_link=SceneProseLink(
+                    scope_type="chapter",
+                    chapter_id="ch-1",
+                    start_offset=0,
+                    end_offset=5,
+                ),
+            ),
+        )
+
+        with pytest.raises(ValueError, match="same prose scope"):
+            reorder_scene_prose(
+                project_dir,
+                SceneReorderProseRequest(
+                    source_scene_id=a["id"],
+                    target_scene_id=b["id"],
+                    place_before=True,
+                ),
+            )
 
 
 # ---------------------------------------------------------------------------

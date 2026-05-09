@@ -255,3 +255,97 @@ class ScenesApiTest(ApiTestCase):
             json={"text": "anything"},
         )
         self.assertEqual(resp.status_code, 404)
+
+    # ------------------------------------------------------------------
+    # reorder-prose endpoint
+    # ------------------------------------------------------------------
+
+    def test_reorder_prose_rewrites_scene_offsets(self) -> None:
+        pdir = self.projects_root / self.pname
+        pdir.joinpath("content.md").write_text(
+            "Alpha--Bravo==Charlie", encoding="utf-8"
+        )
+
+        scene_a = self._create(
+            summary="Scene A",
+            prose_link={
+                "scope_type": "story",
+                "start_offset": 0,
+                "end_offset": 5,
+                "content_hash": "",
+            },
+        )
+        scene_b = self._create(
+            summary="Scene B",
+            prose_link={
+                "scope_type": "story",
+                "start_offset": 7,
+                "end_offset": 12,
+                "content_hash": "",
+            },
+        )
+
+        resp = self.client.post(
+            self._url("/reorder-prose"),
+            json={
+                "source_scene_id": scene_b["id"],
+                "target_scene_id": scene_a["id"],
+                "place_before": True,
+            },
+        )
+        self.assertEqual(resp.status_code, 200, resp.text)
+        payload = resp.json()
+        scenes = payload["scenes"]
+        self.assertEqual(
+            {scene["id"] for scene in scenes}, {scene_a["id"], scene_b["id"]}
+        )
+        self.assertEqual(payload["scope_type"], "story")
+        self.assertEqual(payload["rebuilt_text"], "Bravo--Alpha")
+
+        updated_a = self.client.get(self._url(f"/{scene_a['id']}")).json()
+        updated_b = self.client.get(self._url(f"/{scene_b['id']}")).json()
+        self.assertEqual(updated_b["prose_link"]["start_offset"], 0)
+        self.assertEqual(updated_a["prose_link"]["start_offset"], 7)
+
+    def test_reorder_prose_422_for_missing_link(self) -> None:
+        scene_a = self._create(summary="Unlinked A")
+        scene_b = self._create(
+            summary="Linked B",
+            prose_link={
+                "scope_type": "story",
+                "start_offset": 0,
+                "end_offset": 5,
+                "content_hash": "",
+            },
+        )
+
+        resp = self.client.post(
+            self._url("/reorder-prose"),
+            json={
+                "source_scene_id": scene_a["id"],
+                "target_scene_id": scene_b["id"],
+                "place_before": True,
+            },
+        )
+        self.assertEqual(resp.status_code, 422)
+
+    def test_reorder_prose_404_for_unknown_scene(self) -> None:
+        scene = self._create(
+            summary="Linked",
+            prose_link={
+                "scope_type": "story",
+                "start_offset": 0,
+                "end_offset": 5,
+                "content_hash": "",
+            },
+        )
+
+        resp = self.client.post(
+            self._url("/reorder-prose"),
+            json={
+                "source_scene_id": scene["id"],
+                "target_scene_id": "ghost",
+                "place_before": True,
+            },
+        )
+        self.assertEqual(resp.status_code, 404)

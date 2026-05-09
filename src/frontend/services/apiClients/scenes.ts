@@ -54,6 +54,22 @@ export interface LinkProsePayload {
   end_offset: number;
 }
 
+export interface ReorderProsePayload {
+  source_scene_id: string;
+  target_scene_id: string;
+  place_before: boolean;
+}
+
+export interface ReorderProseResponse {
+  scenes: Scene[];
+  scope_type: string;
+  chapter_id?: string | null;
+  book_id?: string | null;
+  scope_start: number;
+  scope_end: number;
+  rebuilt_text: string;
+}
+
 // ---------------------------------------------------------------------------
 // API interface
 // ---------------------------------------------------------------------------
@@ -69,6 +85,7 @@ export interface ScenesApi {
     payload: RefreshHashPayload
   ) => Promise<SceneProseLink>;
   linkProse: (sceneId: string, payload: LinkProsePayload) => Promise<Scene[]>;
+  reorderProse: (payload: ReorderProsePayload) => Promise<ReorderProseResponse>;
   updateProseContent: (sceneId: string, text: string) => Promise<Scene>;
 }
 
@@ -106,6 +123,13 @@ export const createScenesApi = (projectName: string): ScenesApi => {
         `${base}/${sceneId}/link-prose`,
         payload,
         'Failed to link prose'
+      ),
+
+    reorderProse: (payload: ReorderProsePayload): Promise<ReorderProseResponse> =>
+      postJson<ReorderProseResponse>(
+        `${base}/reorder-prose`,
+        payload,
+        'Failed to reorder prose'
       ),
 
     updateProseContent: (sceneId: string, text: string): Promise<Scene> =>

@@ -49,6 +49,14 @@ type BoundaryAdjustment = {
   newEnd: number;
 };
 
+function isSameProseScope(a: SceneProseLink, b: SceneProseLink): boolean {
+  return (
+    a.scope_type === b.scope_type &&
+    (a.chapter_id ?? null) === (b.chapter_id ?? null) &&
+    (a.book_id ?? null) === (b.book_id ?? null)
+  );
+}
+
 function collectBoundaryAdjustments(
   scenes: Scene[],
   sceneId: string,
@@ -287,6 +295,54 @@ export const ScenesPanelContainer: React.FC<ScenesPanelContainerProps> = ({
     [patchScene, t]
   );
 
+  // ---- Narrative reorder (drag in list + move linked prose text) ----
+  const handleNarrativeReorder = useCallback(
+    async (
+      sourceSceneId: string,
+      targetSceneId: string,
+      placeBefore: boolean
+    ): Promise<void> => {
+      if (sourceSceneId === targetSceneId) return;
+
+      const sourceScene = scenes.find((s: Scene) => s.id === sourceSceneId);
+      const targetScene = scenes.find((s: Scene) => s.id === targetSceneId);
+      if (!sourceScene?.prose_link || !targetScene?.prose_link) return;
+      if (!isSameProseScope(sourceScene.prose_link, targetScene.prose_link)) return;
+      try {
+        const reorderResult = await api.scenes.reorderProse({
+          source_scene_id: sourceSceneId,
+          target_scene_id: targetSceneId,
+          place_before: placeBefore,
+        });
+        reorderResult.scenes.forEach((scene: Scene) => patchScene(scene));
+
+        if (reorderResult.scenes.length === 0) return;
+
+        const view: EditorView | null = editorRef?.current?.getEditorView() ?? null;
+        if (!view || !currentChapter) return;
+
+        const scopeMatchesCurrentChapter =
+          reorderResult.scope_type === 'story'
+            ? currentChapter.scope === 'story'
+            : reorderResult.scope_type === 'chapter' &&
+              reorderResult.chapter_id === currentChapter.id;
+
+        if (!scopeMatchesCurrentChapter) return;
+
+        view.dispatch({
+          changes: {
+            from: reorderResult.scope_start,
+            to: reorderResult.scope_end,
+            insert: reorderResult.rebuilt_text,
+          },
+        });
+      } catch (err) {
+        notifyError(t('Save'), err);
+      }
+    },
+    [scenes, patchScene, editorRef, currentChapter, t]
+  );
+
   // ---- Prose-link boundary drag (update start/end offset) ----
   const handleProseBoundaryChange = useCallback(
     async (sceneId: string, edge: 'start' | 'end', offset: number): Promise<void> => {
@@ -457,6 +513,7 @@ export const ScenesPanelContainer: React.FC<ScenesPanelContainerProps> = ({
             onSelectionChange={handleMultipleSelectScenes}
             onEditScene={setEditingSceneId}
             onDropProse={handleDropProse}
+            onReorderScene={handleNarrativeReorder}
           />
         )}
       </div>
