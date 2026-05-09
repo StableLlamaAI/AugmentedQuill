@@ -156,8 +156,39 @@ export const ScenesPanelContainer: React.FC<ScenesPanelContainerProps> = ({
     setEditingSceneId(null);
   }, [editingSceneId, patchScene]);
 
-  // ---- Order constraint (Ctrl+drag) ----
-  const handleCreateConstraint = useCallback(
+  // ---- Delete cause ----
+  const handleDeleteCause = useCallback(
+    async (fromId: string, toId: string): Promise<void> => {
+      const fromScene = scenes.find((s: Scene) => s.id === fromId);
+      const toScene = scenes.find((s: Scene) => s.id === toId);
+      if (!fromScene || !toScene) return;
+
+      const newBefore = fromScene.order_before.filter((id: string) => id !== toId);
+      const newAfter = toScene.order_after.filter((id: string) => id !== fromId);
+
+      // Optimistic update
+      patchScene({ ...fromScene, order_before: newBefore });
+      patchScene({ ...toScene, order_after: newAfter });
+
+      try {
+        const [updatedFrom, updatedTo] = await Promise.all([
+          api.scenes.update(fromId, { order_before: newBefore } as SceneUpdatePayload),
+          api.scenes.update(toId, { order_after: newAfter } as SceneUpdatePayload),
+        ]);
+        patchScene(updatedFrom as Scene);
+        patchScene(updatedTo as Scene);
+      } catch (err) {
+        // Revert
+        patchScene(fromScene);
+        patchScene(toScene);
+        notifyError(t('Save'), err);
+      }
+    },
+    [scenes, patchScene, t]
+  );
+
+  // ---- Create cause (Alt+drag on pinboard) ----
+  const handleCreateCause = useCallback(
     async (fromId: string, toId: string): Promise<void> => {
       const fromScene = scenes.find((s: Scene) => s.id === fromId);
       const toScene = scenes.find((s: Scene) => s.id === toId);
@@ -375,7 +406,7 @@ export const ScenesPanelContainer: React.FC<ScenesPanelContainerProps> = ({
             onSelectionChange={handleMultipleSelectScenes}
             onMoveScene={handleMoveScene}
             onEditScene={setEditingSceneId}
-            onCreateConstraint={handleCreateConstraint}
+            onCreateCause={handleCreateCause}
             onDropProse={handleDropProse}
           />
         )}
@@ -389,6 +420,7 @@ export const ScenesPanelContainer: React.FC<ScenesPanelContainerProps> = ({
           onClose={() => setEditingSceneId(null)}
           onSave={handleSaveScene}
           onDelete={handleDeleteScene}
+          onDeleteCause={handleDeleteCause}
           getLinkedProseText={editorRef ? getLinkedProseText : undefined}
           onSaveProseContent={editorRef ? handleSaveProseContent : undefined}
         />

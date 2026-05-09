@@ -7,9 +7,16 @@
 
 /**
  * Infinite-canvas pinboard for scenes.
- * Supports pan (middle-mouse or space+drag), zoom (wheel), free-position cards,
- * Ctrl+drag to create order constraints between scenes, and multi-card
- * selection via Ctrl+click, Shift+click, and lasso drag.
+ * Supports pan (middle-mouse or Alt+drag on background), zoom (wheel),
+ * free-position cards with live arrow tracking during drag,
+ * multi-card drag (dragging one selected card moves all selected cards),
+ * Alt+drag on a card to create causal links with ghost-arrow preview,
+ * and multi-card selection via Ctrl+click, Shift+click, and lasso drag.
+ *
+ * Active scene and selection are independent: Ctrl+click adds a card to
+ * the selection and makes it the new active scene. Lasso in additive mode
+ * (Ctrl/Shift held) adds to the selection without changing the active scene.
+ * Plain click selects and activates only the clicked card.
  */
 
 import React, { useCallback, useRef, useState, useEffect } from 'react';
@@ -17,7 +24,8 @@ import { useTranslation } from 'react-i18next';
 import type { Scene } from '../../types';
 import type { ProseDropData } from './types';
 import { SceneCard } from './SceneCard';
-import { ConstraintArrows } from './ConstraintArrows';
+import { CauseArrows } from './ConstraintArrows';
+import type { GhostArrow, ScenePositions } from './ConstraintArrows';
 import { useTheme } from '../layout/ThemeContext';
 
 /** Approximate card width matching Tailwind w-48 = 192 px. */
@@ -26,7 +34,6 @@ const CARD_WIDTH = 192;
 const CARD_APPROX_HEIGHT = 130;
 
 interface LassoRect {
-  /** All values are in screen-space pixels relative to the container element. */
   x1: number;
   y1: number;
   x2: number;
@@ -35,20 +42,12 @@ interface LassoRect {
 
 interface PinboardViewProps {
   scenes: Scene[];
-  /**
-   * The single "primary" scene to treat as selected on initial render and
-   * whenever the editor cursor sync drives selection from the outside.  The
-   * pinboard manages its own extended multi-selection state internally and
-   * only calls back with the primary scene id.
-   */
   primarySelectedSceneId: string | null;
-  /** Called with the primary scene id whenever selection changes. */
   onSelectScene: (id: string | null) => void;
   onMoveScene: (sceneId: string, x: number, y: number) => void;
   onEditScene: (sceneId: string) => void;
-  onCreateConstraint: (fromId: string, toId: string) => void;
+  onCreateCause: (fromId: string, toId: string) => void;
   onDropProse?: (sceneId: string, data: ProseDropData) => void;
-  /** Called whenever the internal multi-selection set changes (including plain single-click). */
   onSelectionChange?: (ids: ReadonlySet<string>) => void;
 }
 
@@ -58,7 +57,7 @@ export const PinboardView: React.FC<PinboardViewProps> = ({
   onSelectScene,
   onMoveScene,
   onEditScene,
-  onCreateConstraint,
+  onCreateCause,
   onDropProse,
   onSelectionChange,
 }: PinboardViewProps) => {
@@ -72,22 +71,60 @@ export const PinboardView: React.FC<PinboardViewProps> = ({
   // Keep refs in sync so async handlers always have current values.
   const zoomRef = useRef(zoom);
   const panRef = useRef(pan);
+  const scenesRef = useRef(scenes);
   useEffect(() => {
     zoomRef.current = zoom;
   }, [zoom]);
   useEffect(() => {
     panRef.current = pan;
   }, [pan]);
+  useEffect(() => {
+    scenesRef.current = scenes;
+  }, [scenes]);
 
   // ---- Multi-selection state ----
   const [selectedSceneIds, setSelectedSceneIds] = useState<ReadonlySet<string>>(
     primarySelectedSceneId ? new Set([primarySelectedSceneId]) : new Set()
   );
-  // Anchor for shift-range-select: the last scene that was primary-clicked.
   const anchorIdRef = useRef<string | null>(primarySelectedSceneId);
 
-  // When the external primary selection changes (driven by editor cursor sync),
-  // reset internal multi-selection to just that one scene.
+  // ---- Active scene (independent of selection) ----
+  const [activeSceneId, setActiveSceneId] = useState<string | null>(null);
+  const activeSceneIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    activeSceneIdRef.current = activeSceneId;
+  }, [activeSceneId]);
+
+  // ---- Live card positions during drag ----
+  // A plain Map updated every mousemove frame. We store it in state so React
+  // re-renders the SVG arrows every frame, but only the Map reference changes
+  // (not individual scene objects).
+  const [livePositions, setLivePositions] = useState<ScenePositions>(new Map());
+  // Set to true in handleCardDragEnd; cleared by the useEffect below once the
+  // 'scenes' prop reflects the committed store update so we never clear
+  // livePositions before scene.pinboard_x has been updated (prevents snapback).
+  const pendingLiveClearRef = useRef(false);
+  const selectedIdsRef = useRef(selectedSceneIds);
+  useEffect(() => {
+    selectedIdsRef.current = selectedSceneIds;
+  }, [selectedSceneIds]);
+
+  // ---- Ghost arrow during Alt+drag ----
+  const [ghostArrow, setGhostArrow] = useState<GhostArrow | null>(null);
+
+  // ---- Actual card heights measured via ResizeObserver (used by CauseArrows) ----
+  const [cardHeights, setCardHeights] = useState<Map<string, number>>(new Map());
+
+  const handleCardLayout = useCallback((sceneId: string, height: number): void => {
+    setCardHeights((prev: Map<string, number>) => {
+      if (prev.get(sceneId) === height) return prev; // avoid spurious re-renders
+      const next = new Map(prev);
+      next.set(sceneId, height);
+      return next;
+    });
+  }, []);
+
+  // When external primary selection changes (editor cursor sync), reset.
   const prevPrimaryRef = useRef(primarySelectedSceneId);
   useEffect(() => {
     if (primarySelectedSceneId === prevPrimaryRef.current) return;
@@ -96,20 +133,31 @@ export const PinboardView: React.FC<PinboardViewProps> = ({
       primarySelectedSceneId ? new Set([primarySelectedSceneId]) : new Set()
     );
     anchorIdRef.current = primarySelectedSceneId;
+    setActiveSceneId(primarySelectedSceneId);
   }, [primarySelectedSceneId]);
 
-  // Notify parent whenever the full selection set changes so it can update
-  // multi-highlights in the editor.
   useEffect((): void => {
     onSelectionChange?.(selectedSceneIds);
   }, [selectedSceneIds, onSelectionChange]);
 
-  // ---- Lasso selection overlay ----
+  // Clear live drag positions once the 'scenes' prop has caught up with the
+  // store update committed in handleCardDragEnd.  Using a useEffect that depends
+  // on [scenes] guarantees we wait until the new pinboard_x/y values are
+  // available in the render that clears the override – preventing a one-frame
+  // snapback to the original position.
+  useEffect((): void => {
+    if (!pendingLiveClearRef.current) return;
+    pendingLiveClearRef.current = false;
+    setLivePositions(new Map());
+  }, [scenes]);
+
+  // ---- Lasso overlay ----
   const [lassoRect, setLassoRect] = useState<LassoRect | null>(null);
 
-  // Constraint drag state
-  const constraintSourceRef = useRef<string | null>(null);
-  const [constraintTarget, setConstraintTarget] = useState<string | null>(null);
+  // ---- Cause drag state ----
+  const causeDragSourceRef = useRef<string | null>(null);
+  const causeTargetRef = useRef<string | null>(null);
+  const [causeTargetDisplay, setCauseTargetDisplay] = useState<string | null>(null);
 
   // Pan via middle-mouse
   const isPanning = useRef(false);
@@ -130,16 +178,25 @@ export const PinboardView: React.FC<PinboardViewProps> = ({
     return () => el.removeEventListener('wheel', handleWheel);
   }, [handleWheel]);
 
-  // ---- Card multi-selection handler ----
-  // Called by SceneCard.onSelect with the native MouseEvent so modifier keys
-  // are accessible.
+  // ---- Card multi-selection + active-scene handler ----
   const handleCardSelect = useCallback(
     (sceneId: string, e: MouseEvent): void => {
       const ctrl = e.ctrlKey || e.metaKey;
       const shift = e.shiftKey;
 
+      if (!ctrl && !shift) {
+        // Plain click: activate this card AND select only it.
+        setActiveSceneId(sceneId);
+        setSelectedSceneIds(new Set([sceneId]));
+        anchorIdRef.current = sceneId;
+        prevPrimaryRef.current = sceneId;
+        onSelectScene(sceneId);
+        return;
+      }
+
       if (ctrl && !shift) {
-        // Ctrl+click: toggle this card in the selection.
+        // Ctrl+click: add/remove from selection AND make this card the active one.
+        setActiveSceneId(sceneId);
         setSelectedSceneIds((prev: ReadonlySet<string>) => {
           const next = new Set(prev);
           if (next.has(sceneId)) {
@@ -150,47 +207,94 @@ export const PinboardView: React.FC<PinboardViewProps> = ({
           return next;
         });
         anchorIdRef.current = sceneId;
-        prevPrimaryRef.current = sceneId; // prevent useEffect reset
+        prevPrimaryRef.current = sceneId;
         onSelectScene(sceneId);
-      } else if (shift) {
-        // Shift+click: extend selection from anchor to this card by scenes-array order.
-        const anchorIdx = scenes.findIndex(
-          (s: Scene) => s.id === (anchorIdRef.current ?? sceneId)
-        );
-        const clickIdx = scenes.findIndex((s: Scene) => s.id === sceneId);
-        if (anchorIdx === -1 || clickIdx === -1) {
-          setSelectedSceneIds(new Set([sceneId]));
-          anchorIdRef.current = sceneId;
-          prevPrimaryRef.current = sceneId; // prevent useEffect reset
-          onSelectScene(sceneId);
-          return;
-        }
-        const lo = Math.min(anchorIdx, clickIdx);
-        const hi = Math.max(anchorIdx, clickIdx);
-        const rangeIds = scenes.slice(lo, hi + 1).map((s: Scene) => s.id);
-        setSelectedSceneIds((prev: ReadonlySet<string>) => {
-          const next = new Set(prev);
-          rangeIds.forEach((id: string) => next.add(id));
-          return next;
-        });
-        // Anchor stays; only update primary callback.
-        prevPrimaryRef.current = sceneId; // prevent useEffect reset
-        onSelectScene(sceneId);
-      } else {
-        // Plain click: select only this card.
+        return;
+      }
+
+      // Shift+click: extend selection, keep active scene unchanged.
+      const anchorIdx = scenesRef.current.findIndex(
+        (s: Scene) => s.id === (anchorIdRef.current ?? sceneId)
+      );
+      const clickIdx = scenesRef.current.findIndex((s: Scene) => s.id === sceneId);
+      if (anchorIdx === -1 || clickIdx === -1) {
         setSelectedSceneIds(new Set([sceneId]));
         anchorIdRef.current = sceneId;
-        prevPrimaryRef.current = sceneId; // prevent useEffect reset
+        prevPrimaryRef.current = sceneId;
         onSelectScene(sceneId);
+        return;
       }
+      const lo = Math.min(anchorIdx, clickIdx);
+      const hi = Math.max(anchorIdx, clickIdx);
+      const rangeIds = scenesRef.current.slice(lo, hi + 1).map((s: Scene) => s.id);
+      setSelectedSceneIds((prev: ReadonlySet<string>) => {
+        const next = new Set(prev);
+        rangeIds.forEach((id: string) => next.add(id));
+        return next;
+      });
+      prevPrimaryRef.current = sceneId;
+      onSelectScene(sceneId);
     },
-    [scenes, onSelectScene]
+    [onSelectScene]
+  );
+
+  // ---- Multi-card move handler ----
+  // Called by SceneCard when the user drags a card. The delta is in screen
+  // pixels; we convert to canvas pixels by dividing by the current zoom.
+  // If the dragged card is selected, all selected cards move together.
+  const handleCardDragMove = useCallback(
+    (draggedId: string, screenDx: number, screenDy: number): void => {
+      const cz = zoomRef.current;
+      const dx = screenDx / cz;
+      const dy = screenDy / cz;
+      const currentSelected = selectedIdsRef.current;
+      const movers: string[] = currentSelected.has(draggedId)
+        ? Array.from(currentSelected)
+        : [draggedId];
+
+      const next: ScenePositions = new Map();
+      for (const id of movers) {
+        const s = scenesRef.current.find((sc: Scene) => sc.id === id);
+        if (!s) continue;
+        next.set(id, {
+          x: Math.max(0, s.pinboard_x + dx),
+          y: Math.max(0, s.pinboard_y + dy),
+        });
+      }
+      setLivePositions(next);
+    },
+    []
+  );
+
+  // Called when drag ends – commit all positions to the store.
+  const handleCardDragEnd = useCallback(
+    (draggedId: string, screenDx: number, screenDy: number): void => {
+      const cz = zoomRef.current;
+      const dx = screenDx / cz;
+      const dy = screenDy / cz;
+      const currentSelected = selectedIdsRef.current;
+      const movers: string[] = currentSelected.has(draggedId)
+        ? Array.from(currentSelected)
+        : [draggedId];
+
+      const finalLive: ScenePositions = new Map();
+      for (const id of movers) {
+        const s = scenesRef.current.find((sc: Scene) => sc.id === id);
+        if (!s) continue;
+        const newX = Math.max(0, s.pinboard_x + dx);
+        const newY = Math.max(0, s.pinboard_y + dy);
+        finalLive.set(id, { x: newX, y: newY });
+        onMoveScene(id, newX, newY);
+      }
+      // Keep live positions at the final dragged location until the store update
+      // propagates through React (useEffect on [scenes] will clear them then).
+      setLivePositions(finalLive);
+      pendingLiveClearRef.current = true;
+    },
+    [onMoveScene]
   );
 
   // ---- Background click / lasso drag ----
-  // Clicking the canvas div (the transform layer that covers the full viewport)
-  // means the user clicked empty background.  SceneCard calls stopPropagation on
-  // mousedown, so this only fires when no card was hit.
   const handleCanvasMouseDown = (e: React.MouseEvent<HTMLDivElement>): void => {
     if (e.target !== e.currentTarget) return;
     if (e.button !== 0 || e.altKey) return;
@@ -222,8 +326,6 @@ export const PinboardView: React.FC<PinboardViewProps> = ({
       setLassoRect(null);
 
       if (dragged) {
-        // Convert lasso corners from screen-space (relative to container) into
-        // canvas space by undoing the pan+zoom transform.
         const curX = me.clientX - containerRect.left;
         const curY = me.clientY - containerRect.top;
         const currentZoom = zoomRef.current;
@@ -235,7 +337,7 @@ export const PinboardView: React.FC<PinboardViewProps> = ({
         const tl = toCanvas(Math.min(startX, curX), Math.min(startY, curY));
         const br = toCanvas(Math.max(startX, curX), Math.max(startY, curY));
 
-        const inLasso = scenes
+        const inLasso = scenesRef.current
           .filter(
             (s: Scene) =>
               s.pinboard_x < br.cx &&
@@ -246,24 +348,32 @@ export const PinboardView: React.FC<PinboardViewProps> = ({
           .map((s: Scene) => s.id);
 
         if (additive) {
+          // Additive lasso: add to selection, preserve active scene.
           setSelectedSceneIds((prev: ReadonlySet<string>) => {
             const next = new Set(prev);
             inLasso.forEach((id: string) => next.add(id));
             return next;
           });
+          // Do not change active scene in additive mode.
+          const primary = inLasso[0] ?? null;
+          if (primary) anchorIdRef.current = primary;
+          prevPrimaryRef.current = activeSceneIdRef.current;
+          onSelectScene(primary);
         } else {
+          // Non-additive lasso: replace selection and clear active scene.
           setSelectedSceneIds(new Set(inLasso));
+          setActiveSceneId(null);
+          const primary = inLasso[0] ?? null;
+          if (primary) anchorIdRef.current = primary;
+          prevPrimaryRef.current = null;
+          onSelectScene(primary);
         }
-        const primary = inLasso[0] ?? null;
-        if (primary) anchorIdRef.current = primary;
-        prevPrimaryRef.current = primary; // prevent useEffect reset
-        onSelectScene(primary);
       } else {
-        // Plain click on background: clear selection.
         if (!additive) {
+          setActiveSceneId(null);
           setSelectedSceneIds(new Set());
           anchorIdRef.current = null;
-          prevPrimaryRef.current = null; // prevent useEffect reset
+          prevPrimaryRef.current = null;
           onSelectScene(null);
         }
       }
@@ -283,7 +393,6 @@ export const PinboardView: React.FC<PinboardViewProps> = ({
         panX: pan.x,
         panY: pan.y,
       };
-
       const onMove = (me: MouseEvent): void => {
         if (!isPanning.current) return;
         setPan({
@@ -301,30 +410,78 @@ export const PinboardView: React.FC<PinboardViewProps> = ({
     }
   };
 
-  // Constraint drag
-  const handleConstraintDragStart = (sceneId: string): void => {
-    constraintSourceRef.current = sceneId;
-    setConstraintTarget(null);
+  // ---- Cause drag handlers (Alt+drag on a card) ----
+  const handleCauseDragStart = useCallback(
+    (sceneId: string, startCanvasX: number, startCanvasY: number): void => {
+      causeDragSourceRef.current = sceneId;
+      causeTargetRef.current = null;
+      setCauseTargetDisplay(null);
 
-    const onUp = (): void => {
-      if (constraintSourceRef.current && constraintTarget !== null) {
-        onCreateConstraint(constraintSourceRef.current, constraintTarget);
-      }
-      constraintSourceRef.current = null;
-      setConstraintTarget(null);
-      document.removeEventListener('mouseup', onUp);
-    };
-    document.addEventListener('mouseup', onUp);
-  };
+      // Initialise ghost arrow at the start point.
+      setGhostArrow({
+        fromId: sceneId,
+        toX: startCanvasX,
+        toY: startCanvasY,
+        connected: false,
+      });
 
-  const handleConstraintDrop = (targetId: string): void => {
-    if (constraintSourceRef.current && constraintSourceRef.current !== targetId) {
-      setConstraintTarget(targetId);
+      const onMouseMove = (me: MouseEvent): void => {
+        const containerEl = containerRef.current;
+        if (!containerEl || !causeDragSourceRef.current) return;
+        const rect = containerEl.getBoundingClientRect();
+        const screenX = me.clientX - rect.left;
+        const screenY = me.clientY - rect.top;
+        const cz = zoomRef.current;
+        const cp = panRef.current;
+        const canvasX = (screenX - cp.x) / cz;
+        const canvasY = (screenY - cp.y) / cz;
+        const connected = causeTargetRef.current !== null;
+        setGhostArrow({
+          fromId: causeDragSourceRef.current,
+          toX: canvasX,
+          toY: canvasY,
+          connected,
+        });
+      };
+
+      const onUp = (): void => {
+        if (causeDragSourceRef.current && causeTargetRef.current !== null) {
+          onCreateCause(causeDragSourceRef.current, causeTargetRef.current);
+        }
+        causeDragSourceRef.current = null;
+        causeTargetRef.current = null;
+        setCauseTargetDisplay(null);
+        setGhostArrow(null);
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onUp);
+      };
+
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onUp);
+    },
+    [onCreateCause]
+  );
+
+  const handleCauseDrop = useCallback((targetId: string): void => {
+    if (causeDragSourceRef.current && causeDragSourceRef.current !== targetId) {
+      causeTargetRef.current = targetId;
+      setCauseTargetDisplay(targetId);
     }
-  };
+  }, []);
+
+  const handleCauseLeave = useCallback((): void => {
+    causeTargetRef.current = null;
+    setCauseTargetDisplay(null);
+  }, []);
 
   const bgClass = isLight ? 'bg-brand-gray-50' : 'bg-brand-gray-950';
   const dotColor = isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.06)';
+
+  const activeScene = activeSceneId
+    ? (scenes.find((s: Scene) => s.id === activeSceneId) ?? null)
+    : null;
+  const causeIds = new Set<string>(activeScene?.order_after ?? []);
+  const effectIds = new Set<string>(activeScene?.order_before ?? []);
 
   return (
     <div
@@ -370,7 +527,7 @@ export const PinboardView: React.FC<PinboardViewProps> = ({
         </button>
       </div>
 
-      {/* Canvas — covers the full viewport; direct clicks (not on a card) deselect */}
+      {/* Canvas layer */}
       <div
         style={{
           transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
@@ -380,27 +537,44 @@ export const PinboardView: React.FC<PinboardViewProps> = ({
         }}
         onMouseDown={handleCanvasMouseDown}
       >
-        {/* Constraint arrows drawn under the cards */}
-        <ConstraintArrows scenes={scenes} />
+        {/* Cause arrows drawn under the cards */}
+        <CauseArrows
+          scenes={scenes}
+          livePositions={livePositions}
+          cardHeights={cardHeights}
+          activeSceneId={activeSceneId}
+          ghostArrow={ghostArrow}
+        />
 
-        {scenes.map((scene: Scene, idx: number) => (
-          <SceneCard
-            key={scene.id}
-            scene={scene}
-            index={idx}
-            onMove={onMoveScene}
-            onSelect={handleCardSelect}
-            onEdit={onEditScene}
-            onConstraintDragStart={handleConstraintDragStart}
-            onConstraintDrop={handleConstraintDrop}
-            isConstraintTarget={constraintTarget === scene.id}
-            isSelected={selectedSceneIds.has(scene.id)}
-            onDropProse={onDropProse}
-          />
-        ))}
+        {scenes.map((scene: Scene, idx: number) => {
+          const livePos = livePositions.get(scene.id);
+          return (
+            <SceneCard
+              key={scene.id}
+              scene={scene}
+              index={idx}
+              onSelect={handleCardSelect}
+              onEdit={onEditScene}
+              onDragMove={handleCardDragMove}
+              onDragEnd={handleCardDragEnd}
+              onCauseDragStart={handleCauseDragStart}
+              onCauseDrop={handleCauseDrop}
+              onCauseLeave={handleCauseLeave}
+              isCauseTarget={causeTargetDisplay === scene.id}
+              isSelected={selectedSceneIds.has(scene.id)}
+              isActive={activeSceneId === scene.id}
+              isCause={causeIds.has(scene.id)}
+              isEffect={effectIds.has(scene.id)}
+              onDropProse={onDropProse}
+              displayX={livePos?.x}
+              displayY={livePos?.y}
+              onLayout={handleCardLayout}
+            />
+          );
+        })}
       </div>
 
-      {/* Lasso selection rectangle overlay — rendered in screen space */}
+      {/* Lasso overlay — screen space */}
       {lassoRect && (
         <div
           aria-hidden="true"

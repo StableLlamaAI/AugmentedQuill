@@ -519,7 +519,7 @@ export const fr = {
     active: 'actif',
     inactive: 'inactif',
     draft: 'brouillon',
-    'Order Constraints': "Contraintes d'ordre",
+    Causes: 'Causes',
     'Must come before': 'Doit venir avant',
     'Must come after': 'Doit venir après',
     'Prose Link': 'Lien prose',
@@ -536,8 +536,7 @@ export const fr = {
     'Zoom In': 'Zoom avant',
     'Zoom Out': 'Zoom arrière',
     'Reset Zoom': 'Réinitialiser le zoom',
-    'Ctrl+drag to create order constraint':
-      "Ctrl+glisser pour créer une contrainte d'ordre",
+    'Alt+drag to create cause': 'Alt+glisser pour créer une cause',
     'Scene {{index}}': 'Scène {{index}}',
     'Linked Prose': 'Prose liée',
     'Unlink prose': 'Délier la prose',

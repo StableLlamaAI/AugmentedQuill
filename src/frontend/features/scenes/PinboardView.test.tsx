@@ -29,16 +29,24 @@ import type { Scene } from '../../types';
 // ---------------------------------------------------------------------------
 
 type SelectHandler = (sceneId: string, e: MouseEvent) => void;
+type LayoutHandler = (sceneId: string, height: number) => void;
 // Each rendered card's onSelect callback, keyed by sceneId.
 const cardSelectHandlers: Record<string, SelectHandler> = {};
 // Most-recent isSelected value per card.
 const cardIsSelected: Record<string, boolean> = {};
+// Most-recent onLayout callback per card.
+const cardLayoutHandlers: Record<string, LayoutHandler> = {};
+// Last cardHeights map received by CauseArrows.
+let lastArrowsCardHeights: Map<string, number> | null = null;
 
 vi.mock('./SceneCard', () => ({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   SceneCard: (props: any) => {
     cardSelectHandlers[props.scene.id] = props.onSelect;
     cardIsSelected[props.scene.id] = props.isSelected;
+    if (props.onLayout) {
+      cardLayoutHandlers[props.scene.id] = props.onLayout;
+    }
     return (
       <div
         data-testid={`card-${props.scene.id}`}
@@ -49,7 +57,11 @@ vi.mock('./SceneCard', () => ({
 }));
 
 vi.mock('./ConstraintArrows', () => ({
-  ConstraintArrows: () => null,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  CauseArrows: (props: any) => {
+    lastArrowsCardHeights = props.cardHeights ?? null;
+    return null;
+  },
 }));
 
 vi.mock('../layout/ThemeContext', () => ({
@@ -131,7 +143,7 @@ function renderPinboard(
     onSelectionChange,
     onMoveScene: vi.fn(),
     onEditScene: vi.fn(),
-    onCreateConstraint: vi.fn(),
+    onCreateCause: vi.fn(),
   };
 
   const { rerender: baseRerender, container } = render(
@@ -388,5 +400,89 @@ describe('PinboardView — multi-select', () => {
     expect(lastCallArg.has('s1')).toBe(true);
     expect(lastCallArg.has('s2')).toBe(true);
     expect(lastCallArg.size).toBe(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// PinboardView — cardHeights wiring
+// ---------------------------------------------------------------------------
+
+describe('PinboardView — cardHeights wiring', () => {
+  beforeEach(() => {
+    Object.keys(cardSelectHandlers).forEach(
+      (k: string) => delete cardSelectHandlers[k]
+    );
+    Object.keys(cardIsSelected).forEach((k: string) => delete cardIsSelected[k]);
+    Object.keys(cardLayoutHandlers).forEach(
+      (k: string) => delete cardLayoutHandlers[k]
+    );
+    lastArrowsCardHeights = null;
+  });
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
+  it('passes onLayout to every rendered SceneCard', () => {
+    renderPinboard(null, scenes);
+    for (const s of scenes) {
+      expect(typeof cardLayoutHandlers[s.id]).toBe('function');
+    }
+  });
+
+  it('passes cardHeights map to CauseArrows on initial render', () => {
+    renderPinboard();
+    expect(lastArrowsCardHeights).toBeInstanceOf(Map);
+  });
+
+  it('updates cardHeights when onLayout is called by a card', () => {
+    renderPinboard(null, scenes);
+
+    // Simulate the SceneCard reporting its height via onLayout
+    act(() => {
+      cardLayoutHandlers['s1']?.('s1', 120);
+    });
+
+    expect(lastArrowsCardHeights?.get('s1')).toBe(120);
+  });
+
+  it('does not re-render CauseArrows when same height is reported again (dedup)', () => {
+    renderPinboard(null, scenes);
+
+    act(() => {
+      cardLayoutHandlers['s1']?.('s1', 80);
+    });
+    const heightsAfterFirst = lastArrowsCardHeights;
+
+    act(() => {
+      cardLayoutHandlers['s1']?.('s1', 80); // same value
+    });
+    // Map reference should be unchanged (identity preserved by the dedup guard)
+    expect(lastArrowsCardHeights).toBe(heightsAfterFirst);
+  });
+
+  it('accumulates heights from multiple cards independently', () => {
+    renderPinboard(null, scenes);
+
+    act(() => {
+      cardLayoutHandlers['s1']?.('s1', 64);
+      cardLayoutHandlers['s2']?.('s2', 96);
+    });
+
+    expect(lastArrowsCardHeights?.get('s1')).toBe(64);
+    expect(lastArrowsCardHeights?.get('s2')).toBe(96);
+  });
+
+  it('overwrites previous height when a card reports a new value', () => {
+    renderPinboard(null, scenes);
+
+    act(() => {
+      cardLayoutHandlers['s1']?.('s1', 64);
+    });
+    act(() => {
+      cardLayoutHandlers['s1']?.('s1', 128); // card grew
+    });
+
+    expect(lastArrowsCardHeights?.get('s1')).toBe(128);
   });
 });

@@ -7,10 +7,10 @@
 
 /**
  * Draggable scene card for the Pinboard view.
- * Supports free positioning, color tags, and Ctrl+drag to create order constraints.
+ * Supports free positioning, color tags, and Alt+drag to create causal links between scenes.
  */
 
-import React, { useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Scene, SceneBeat } from '../../types';
 import type { ProseDropData } from './types';
@@ -60,42 +60,85 @@ const DEFAULT_CARD = {
 interface SceneCardProps {
   scene: Scene;
   index: number;
-  /** Called when the user finishes dragging to a new position. */
-  onMove: (sceneId: string, x: number, y: number) => void;
+  /** Called every frame while dragging to report the cumulative delta (in canvas
+   *  pixels) so that the parent can update live positions and SVG arrows. */
+  onDragMove: (sceneId: string, dx: number, dy: number) => void;
+  /** Called when the drag ends, with the final cumulative delta. */
+  onDragEnd: (sceneId: string, dx: number, dy: number) => void;
   /** Called on single click to select this card. Receives the native event so
    *  the caller can inspect ctrlKey / shiftKey for multi-selection logic. */
   onSelect: (sceneId: string, e: MouseEvent) => void;
   /** Called on double-click to open the editor. */
   onEdit: (sceneId: string) => void;
-  /** Called when Ctrl+drag starts – provides the source scene id. */
-  onConstraintDragStart: (sceneId: string) => void;
-  /** Called when Ctrl+drag ends over this card – provides the target scene id. */
-  onConstraintDrop: (targetSceneId: string) => void;
-  /** Whether this card is the target of an ongoing constraint drag. */
-  isConstraintTarget: boolean;
+  /** Called when Alt+drag starts, providing the source scene id and the
+   *  starting canvas-space coordinates so the ghost arrow can be placed. */
+  onCauseDragStart: (
+    sceneId: string,
+    startCanvasX: number,
+    startCanvasY: number
+  ) => void;
+  /** Called when Alt+drag enters this card – provides the target scene id. */
+  onCauseDrop: (targetSceneId: string) => void;
+  /** Called when Alt+drag leaves this card without releasing. */
+  onCauseLeave: () => void;
+  /** Whether this card is the target of an ongoing cause drag. */
+  isCauseTarget: boolean;
   /** Whether this card is currently selected. */
   isSelected: boolean;
+  /** Whether this card is the single active card (shows cause/effect arrows). */
+  isActive: boolean;
+  /** Whether this card is a cause of the currently active scene (red glow). */
+  isCause: boolean;
+  /** Whether the active scene is a cause of this card (green glow). */
+  isEffect: boolean;
   /** Called when prose text is dropped onto this card. */
   onDropProse?: (sceneId: string, data: ProseDropData) => void;
+  /** Override display position (canvas px) during live drag. Falls back to scene.pinboard_x/y. */
+  displayX?: number;
+  displayY?: number;
+  /** Called whenever the card's rendered height changes (used by CauseArrows for
+   *  accurate border-intersection math). */
+  onLayout?: (sceneId: string, height: number) => void;
 }
 
 export const SceneCard: React.FC<SceneCardProps> = ({
   scene,
   index,
-  onMove,
+  onDragMove,
+  onDragEnd,
   onSelect,
   onEdit,
-  onConstraintDragStart,
-  onConstraintDrop,
-  isConstraintTarget,
+  onCauseDragStart,
+  onCauseDrop,
+  onCauseLeave,
+  isCauseTarget,
   isSelected,
+  isActive,
+  isCause,
+  isEffect,
   onDropProse,
+  displayX,
+  displayY,
+  onLayout,
 }: SceneCardProps) => {
   const { t } = useTranslation();
   const { isLight } = useTheme();
 
   const colorKey = scene.color_tag ?? '';
   const colorClasses = COLOR_TAG_CLASSES[colorKey] ?? DEFAULT_CARD;
+
+  // ---------- layout reporting ----------
+  const cardRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = cardRef.current;
+    if (!el || !onLayout) return;
+    onLayout(scene.id, el.offsetHeight);
+    const ro = new ResizeObserver(() => {
+      onLayout(scene.id, el.offsetHeight);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [scene.id, onLayout]);
 
   // ---------- drag state ----------
   const dragStart = useRef<{
@@ -110,31 +153,34 @@ export const SceneCard: React.FC<SceneCardProps> = ({
     if (e.button !== 0) return;
     e.stopPropagation();
 
-    if (e.ctrlKey || e.metaKey) {
-      // Ctrl+mousedown: signal potential constraint drag; if mouse doesn't move
-      // it becomes a multi-select toggle instead.
-      onConstraintDragStart(scene.id);
+    if (e.altKey) {
+      // Alt+mousedown: begin cause drag. Compute canvas-space start position
+      // from the card's stored position (the zoom/pan are accounted for by the
+      // parent when converting mouse coords to canvas coords).
+      const startCanvasX = scene.pinboard_x + 96; // card horizontal centre
+      const startCanvasY = scene.pinboard_y + 45; // card vertical centre (approx for ~90px card)
+      onCauseDragStart(scene.id, startCanvasX, startCanvasY);
+
       const startX = e.clientX;
       const startY = e.clientY;
       const nativeStart = e.nativeEvent;
-      let ctrlMoved = false;
+      let altMoved = false;
 
-      const onCtrlMove = (me: MouseEvent): void => {
+      const onAltMove = (me: MouseEvent): void => {
         if (Math.abs(me.clientX - startX) + Math.abs(me.clientY - startY) > 4)
-          ctrlMoved = true;
+          altMoved = true;
       };
-      const onCtrlUp = (me: MouseEvent): void => {
-        document.removeEventListener('mousemove', onCtrlMove);
-        document.removeEventListener('mouseup', onCtrlUp);
-        if (!ctrlMoved) {
-          // Ctrl+click with no drag → multi-select toggle (pass the mousedown
-          // event so ctrlKey is visible to the selection handler).
+      const onAltUp = (me: MouseEvent): void => {
+        document.removeEventListener('mousemove', onAltMove);
+        document.removeEventListener('mouseup', onAltUp);
+        if (!altMoved) {
+          // Alt+click with no drag → activate the scene (plain select).
           onSelect(scene.id, nativeStart);
         }
-        void me; // suppress unused-var lint
+        void me;
       };
-      document.addEventListener('mousemove', onCtrlMove);
-      document.addEventListener('mouseup', onCtrlUp);
+      document.addEventListener('mousemove', onAltMove);
+      document.addEventListener('mouseup', onAltUp);
       return;
     }
 
@@ -151,11 +197,9 @@ export const SceneCard: React.FC<SceneCardProps> = ({
       const dx = me.clientX - dragStart.current.mouseX;
       const dy = me.clientY - dragStart.current.mouseY;
       if (Math.abs(dx) + Math.abs(dy) > 4) moved.current = true;
-      // Optimistically move the card via CSS while dragging (parent handles final position)
-      const el = (e.target as HTMLElement).closest<HTMLElement>('[data-scene-card]');
-      if (el) {
-        el.style.left = `${dragStart.current.cardX + dx}px`;
-        el.style.top = `${dragStart.current.cardY + dy}px`;
+      if (moved.current) {
+        // Report raw screen-pixel delta; parent divides by zoom.
+        onDragMove(scene.id, dx, dy);
       }
     };
 
@@ -166,9 +210,7 @@ export const SceneCard: React.FC<SceneCardProps> = ({
       if (dragStart.current && moved.current) {
         const dx = me.clientX - dragStart.current.mouseX;
         const dy = me.clientY - dragStart.current.mouseY;
-        const newX = Math.max(0, dragStart.current.cardX + dx);
-        const newY = Math.max(0, dragStart.current.cardY + dy);
-        onMove(scene.id, newX, newY);
+        onDragEnd(scene.id, dx, dy);
       } else if (!moved.current) {
         onSelect(scene.id, me);
       }
@@ -180,8 +222,14 @@ export const SceneCard: React.FC<SceneCardProps> = ({
   };
 
   const handleMouseEnter = (e: React.MouseEvent): void => {
-    if (e.buttons === 1 && (e.ctrlKey || e.metaKey)) {
-      onConstraintDrop(scene.id);
+    if (e.buttons === 1 && e.altKey) {
+      onCauseDrop(scene.id);
+    }
+  };
+
+  const handleMouseLeave = (e: React.MouseEvent): void => {
+    if (e.buttons === 1 && e.altKey) {
+      onCauseLeave();
     }
   };
 
@@ -222,6 +270,7 @@ export const SceneCard: React.FC<SceneCardProps> = ({
 
   return (
     <div
+      ref={cardRef}
       data-scene-card={scene.id}
       role="button"
       tabIndex={0}
@@ -232,18 +281,34 @@ export const SceneCard: React.FC<SceneCardProps> = ({
       onMouseDown={handleMouseDown}
       onDoubleClick={handleDoubleClick}
       onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
       onDragOver={handleDragOver}
       onDrop={handleDrop}
-      style={{ left: scene.pinboard_x, top: scene.pinboard_y }}
+      style={{ left: displayX ?? scene.pinboard_x, top: displayY ?? scene.pinboard_y }}
       className={[
         'absolute w-48 min-h-16 rounded-lg border-2 shadow-md cursor-grab active:cursor-grabbing select-none',
         'transition-shadow hover:shadow-lg',
         colorClasses.bg,
-        isConstraintTarget
-          ? 'ring-2 ring-brand-500'
-          : isSelected
-            ? 'ring-2 ring-brand-400 ' + colorClasses.border
-            : colorClasses.border,
+        isCauseTarget
+          ? 'ring-2 ring-brand-500 shadow-lg'
+          : isActive
+            ? [
+                'ring-2 ring-violet-400/80',
+                'shadow-[0_0_0_4px_rgba(139,92,246,0.15),0_8px_32px_rgba(139,92,246,0.35)]',
+              ].join(' ')
+            : isCause
+              ? [
+                  'ring-2 ring-red-500/80',
+                  'shadow-[0_0_0_4px_rgba(239,68,68,0.12),0_8px_28px_rgba(239,68,68,0.5)]',
+                ].join(' ')
+              : isEffect
+                ? [
+                    'ring-2 ring-green-500/80',
+                    'shadow-[0_0_0_4px_rgba(34,197,94,0.12),0_8px_28px_rgba(34,197,94,0.5)]',
+                  ].join(' ')
+                : isSelected
+                  ? 'ring-2 ring-brand-400 ' + colorClasses.border
+                  : colorClasses.border,
         scene.status === 'inactive' ? 'opacity-60' : '',
       ]
         .filter(Boolean)

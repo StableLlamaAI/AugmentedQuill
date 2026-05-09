@@ -6,8 +6,17 @@
 // (at your option) any later version.
 
 /**
- * SVG overlay that draws bezier arrows between scene cards to represent order constraints.
- * Rendered as a sibling of the card container inside the pinboard canvas.
+ * SVG overlay that draws bezier arrows between scene cards to represent causal
+ * ordering relationships. When an active scene is set, shows only arrows
+ * involving that scene: causes → active in red, active → effects in green.
+ * When no scene is active, all arrows are shown in the accent colour.
+ *
+ * Arrows start and end at the card border (not the centre). Each endpoint
+ * carries the outward normal of the edge it exits, which is used as the
+ * bezier tangent direction to create visible, correctly-angled curves.
+ *
+ * Card heights are measured in the DOM and passed in via `cardHeights` so the
+ * intersection math is accurate even for variable-content cards.
  */
 
 import React from 'react';
@@ -15,80 +24,347 @@ import type { Scene } from '../../types';
 import { useTheme } from '../layout/ThemeContext';
 
 const CARD_WIDTH = 192; // matches w-48 (12rem × 16px)
-const CARD_HEIGHT = 80; // approximate half-height for center calculation
+/** Fallback when a card's measured height is not yet available. */
+const DEFAULT_CARD_HEIGHT = 90;
 
-type Arrow = { x1: number; y1: number; x2: number; y2: number; key: string };
+type ArrowColor = 'default' | 'red' | 'green' | 'ghost' | 'ghost-connected';
 
-interface ConstraintArrowsProps {
-  scenes: Scene[];
+/**
+ * An arrow to draw. x1/y1 is the source border exit, nx1/ny1 its outward
+ * normal; x2/y2 is the target border entry, nx2/ny2 the outward normal from
+ * the target card facing the source (used to form the arrival control point).
+ */
+type Arrow = {
+  x1: number;
+  y1: number;
+  nx1: number;
+  ny1: number;
+  x2: number;
+  y2: number;
+  nx2: number;
+  ny2: number;
+  key: string;
+  arrowColor: ArrowColor;
+};
+
+/** Position lookup – keyed by scene id, allowing live values during drag. */
+export type ScenePositions = Map<string, { x: number; y: number }>;
+
+/** Ghost arrow state during an Alt+drag cause creation. */
+export interface GhostArrow {
+  /** Source scene id */
+  fromId: string;
+  /** Canvas-space mouse X */
+  toX: number;
+  /** Canvas-space mouse Y */
+  toY: number;
+  /** Whether the mouse is currently over a valid target card */
+  connected: boolean;
 }
 
-export const ConstraintArrows: React.FC<ConstraintArrowsProps> = ({
+interface CauseArrowsProps {
+  scenes: Scene[];
+  /** Live per-scene positions (overrides scene.pinboard_x/y during drag). */
+  livePositions: ScenePositions;
+  /** Actual rendered heights keyed by scene id (from ResizeObserver in SceneCard). */
+  cardHeights: Map<string, number>;
+  /** The currently active scene id. When set, only arrows involving this scene
+   *  are drawn, coloured red (causes → active) or green (active → effects). */
+  activeSceneId: string | null;
+  /** Optional ghost arrow to draw during an Alt+drag cause creation. */
+  ghostArrow?: GhostArrow | null;
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Computes where the ray from the card centre toward (targetCX, targetCY)
+ * exits the card border. Returns the exit point exactly on the card edge and
+ * the outward normal of the hit edge (one of the four axis-aligned unit vectors).
+ *
+ * Exported so it can be unit-tested independently of the React component.
+ */
+export function borderExit(
+  cardX: number,
+  cardY: number,
+  cardW: number,
+  cardH: number,
+  targetCX: number,
+  targetCY: number
+): { x: number; y: number; nx: number; ny: number } {
+  const cx = cardX + cardW / 2;
+  const cy = cardY + cardH / 2;
+  const dx = targetCX - cx;
+  const dy = targetCY - cy;
+
+  if (dx === 0 && dy === 0) {
+    // Degenerate: same centre – exit right edge.
+    return { x: cx + cardW / 2, y: cy, nx: 1, ny: 0 };
+  }
+
+  const hw = cardW / 2;
+  const hh = cardH / 2;
+
+  let t = Infinity;
+  let outNx = 1;
+  let outNy = 0;
+
+  if (dx !== 0) {
+    const tx = (dx > 0 ? hw : -hw) / dx;
+    if (tx > 0 && tx < t) {
+      t = tx;
+      outNx = dx > 0 ? 1 : -1;
+      outNy = 0;
+    }
+  }
+  if (dy !== 0) {
+    const ty = (dy > 0 ? hh : -hh) / dy;
+    if (ty > 0 && ty < t) {
+      t = ty;
+      outNx = 0;
+      outNy = dy > 0 ? 1 : -1;
+    }
+  }
+
+  return { x: cx + dx * t, y: cy + dy * t, nx: outNx, ny: outNy };
+}
+
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
+
+export const CauseArrows: React.FC<CauseArrowsProps> = ({
   scenes,
-}: ConstraintArrowsProps) => {
+  livePositions,
+  cardHeights,
+  activeSceneId,
+  ghostArrow,
+}: CauseArrowsProps) => {
   const { isLight } = useTheme();
-  const color = isLight ? '#6366f1' : '#818cf8'; // indigo-500 / indigo-400
+  const defaultColor = isLight ? '#6366f1' : '#818cf8'; // indigo-500 / indigo-400
+  const redColor = '#ef4444'; // red-500
+  const greenColor = '#22c55e'; // green-500
+  const ghostColor = '#94a3b8'; // slate-400
 
-  // Build a lookup from id → position
+  /** Resolve live position for a scene (falls back to stored value). */
+  const pos = (s: Scene): { x: number; y: number } =>
+    livePositions.get(s.id) ?? { x: s.pinboard_x, y: s.pinboard_y };
+
+  /** Resolve actual card height (falls back to default). */
+  const h = (id: string): number => cardHeights.get(id) ?? DEFAULT_CARD_HEIGHT;
+
   const byId = new Map<string, Scene>(scenes.map((s: Scene) => [s.id, s]));
-
   const arrows: Arrow[] = [];
 
-  for (const scene of scenes) {
-    for (const beforeId of scene.order_before) {
-      const target = byId.get(beforeId);
-      if (!target) continue;
+  /** Build one arrow from scene A (source) to scene B (target). */
+  const makeArrow = (fromId: string, toId: string, color: ArrowColor): Arrow | null => {
+    const from = byId.get(fromId);
+    const to = byId.get(toId);
+    if (!from || !to) return null;
+    const fp = pos(from);
+    const tp = pos(to);
+    const tCX = tp.x + CARD_WIDTH / 2;
+    const tCY = tp.y + h(toId) / 2;
+    const fCX = fp.x + CARD_WIDTH / 2;
+    const fCY = fp.y + h(fromId) / 2;
+    const src = borderExit(fp.x, fp.y, CARD_WIDTH, h(fromId), tCX, tCY);
+    const tgt = borderExit(tp.x, tp.y, CARD_WIDTH, h(toId), fCX, fCY);
+    return {
+      key: `${fromId}->${toId}`,
+      x1: src.x,
+      y1: src.y,
+      nx1: src.nx,
+      ny1: src.ny,
+      x2: tgt.x,
+      y2: tgt.y,
+      nx2: tgt.nx,
+      ny2: tgt.ny,
+      arrowColor: color,
+    };
+  };
+
+  if (activeSceneId) {
+    const active = byId.get(activeSceneId);
+    if (active) {
+      for (const causeId of active.order_after) {
+        const a = makeArrow(causeId, activeSceneId, 'red');
+        if (a) arrows.push(a);
+      }
+      for (const effectId of active.order_before) {
+        const a = makeArrow(activeSceneId, effectId, 'green');
+        if (a) arrows.push(a);
+      }
+    }
+  } else {
+    for (const scene of scenes) {
+      for (const beforeId of scene.order_before) {
+        const a = makeArrow(scene.id, beforeId, 'default');
+        if (a) arrows.push(a);
+      }
+    }
+  }
+
+  // Ghost arrow during Alt+drag
+  if (ghostArrow) {
+    const src = byId.get(ghostArrow.fromId);
+    if (src) {
+      const sp = pos(src);
+      const exit = borderExit(
+        sp.x,
+        sp.y,
+        CARD_WIDTH,
+        h(ghostArrow.fromId),
+        ghostArrow.toX,
+        ghostArrow.toY
+      );
+      // For the tip we use a straight arrival normal (continue same direction).
+      const dx = ghostArrow.toX - exit.x;
+      const dy = ghostArrow.toY - exit.y;
+      const dist = Math.sqrt(dx * dx + dy * dy) || 1;
       arrows.push({
-        key: `${scene.id}->${beforeId}`,
-        x1: scene.pinboard_x + CARD_WIDTH / 2,
-        y1: scene.pinboard_y + CARD_HEIGHT / 2,
-        x2: target.pinboard_x + CARD_WIDTH / 2,
-        y2: target.pinboard_y + CARD_HEIGHT / 2,
+        key: '__ghost__',
+        x1: exit.x,
+        y1: exit.y,
+        nx1: exit.nx,
+        ny1: exit.ny,
+        x2: ghostArrow.toX,
+        y2: ghostArrow.toY,
+        nx2: -dx / dist,
+        ny2: -dy / dist,
+        arrowColor: ghostArrow.connected ? 'ghost-connected' : 'ghost',
       });
     }
   }
 
   if (arrows.length === 0) return null;
 
-  // Compute bounding box for the SVG so it only covers needed area
   const allX = arrows.flatMap((a: Arrow) => [a.x1, a.x2]);
   const allY = arrows.flatMap((a: Arrow) => [a.y1, a.y2]);
-  const maxX = Math.max(...allX) + 20;
-  const maxY = Math.max(...allY) + 20;
+  const maxX = Math.max(...allX) + 40;
+  const maxY = Math.max(...allY) + 40;
+
+  const colorOf = (c: ArrowColor): string => {
+    if (c === 'red') return redColor;
+    if (c === 'green') return greenColor;
+    if (c === 'ghost') return ghostColor;
+    if (c === 'ghost-connected') return greenColor;
+    return defaultColor;
+  };
 
   return (
     <svg
-      style={{ position: 'absolute', left: 0, top: 0, pointerEvents: 'none' }}
+      style={{
+        position: 'absolute',
+        left: 0,
+        top: 0,
+        pointerEvents: 'none',
+        overflow: 'visible',
+      }}
       width={maxX}
       height={maxY}
       aria-hidden="true"
     >
       <defs>
+        {/*
+          markerUnits="userSpaceOnUse" gives fixed pixel sizes independent of
+          stroke width, so the arrowhead is always 14×9 canvas-px.
+          refX="14" aligns the tip (x=14) with the path endpoint, which now lies
+          exactly on the card border – no overshoot, no inset.
+        */}
         <marker
-          id="arrowhead"
-          markerWidth="8"
-          markerHeight="8"
-          refX="6"
-          refY="3"
+          id="ah-default"
+          markerUnits="userSpaceOnUse"
+          markerWidth="14"
+          markerHeight="9"
+          refX="14"
+          refY="4.5"
           orient="auto"
         >
-          <path d="M0,0 L0,6 L8,3 z" fill={color} />
+          <path d="M0,0 L0,9 L14,4.5 z" fill={defaultColor} />
+        </marker>
+        <marker
+          id="ah-red"
+          markerUnits="userSpaceOnUse"
+          markerWidth="14"
+          markerHeight="9"
+          refX="14"
+          refY="4.5"
+          orient="auto"
+        >
+          <path d="M0,0 L0,9 L14,4.5 z" fill={redColor} />
+        </marker>
+        <marker
+          id="ah-green"
+          markerUnits="userSpaceOnUse"
+          markerWidth="14"
+          markerHeight="9"
+          refX="14"
+          refY="4.5"
+          orient="auto"
+        >
+          <path d="M0,0 L0,9 L14,4.5 z" fill={greenColor} />
+        </marker>
+        <marker
+          id="ah-ghost"
+          markerUnits="userSpaceOnUse"
+          markerWidth="14"
+          markerHeight="9"
+          refX="14"
+          refY="4.5"
+          orient="auto"
+        >
+          <path d="M0,0 L0,9 L14,4.5 z" fill={ghostColor} />
+        </marker>
+        <marker
+          id="ah-ghost-connected"
+          markerUnits="userSpaceOnUse"
+          markerWidth="14"
+          markerHeight="9"
+          refX="14"
+          refY="4.5"
+          orient="auto"
+        >
+          <path d="M0,0 L0,9 L14,4.5 z" fill={greenColor} />
         </marker>
       </defs>
       {arrows.map((a: Arrow) => {
-        const cx = (a.x1 + a.x2) / 2;
-        const cy1 = a.y1;
-        const cy2 = a.y2;
+        const stroke = colorOf(a.arrowColor);
+        const isColoured = activeSceneId !== null || a.arrowColor === 'ghost-connected';
+        const isGhost = a.arrowColor === 'ghost' || a.arrowColor === 'ghost-connected';
+
+        // Edge-normal cubic bezier: each control point extends from its
+        // endpoint along the outward edge normal. This ensures the curve
+        // is tangent to the card border at both ends, producing visible
+        // arcs regardless of the cards' relative positions.
+        const edgeDist = Math.sqrt((a.x2 - a.x1) ** 2 + (a.y2 - a.y1) ** 2);
+        // Arm length: 40 % of distance, clamped to [50, 120] px so nearby
+        // cards still show a curve and distant ones don't over-extend.
+        const arm = Math.min(120, Math.max(50, edgeDist * 0.4));
+        const cp1x = a.x1 + a.nx1 * arm;
+        const cp1y = a.y1 + a.ny1 * arm;
+        // Target normal points AWAY from the target toward the source;
+        // extending in that direction gives the arrival control point.
+        const cp2x = a.x2 + a.nx2 * arm;
+        const cp2y = a.y2 + a.ny2 * arm;
+
         return (
           <path
             key={a.key}
-            d={`M ${a.x1} ${a.y1} C ${cx} ${cy1}, ${cx} ${cy2}, ${a.x2} ${a.y2}`}
+            d={`M ${a.x1} ${a.y1} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${a.x2} ${a.y2}`}
             fill="none"
-            stroke={color}
-            strokeWidth={1.5}
-            strokeDasharray="5,4"
-            markerEnd="url(#arrowhead)"
-            opacity={0.75}
+            stroke={stroke}
+            strokeWidth={isGhost ? 2 : isColoured ? 2.5 : 1.5}
+            strokeDasharray={
+              isGhost && a.arrowColor !== 'ghost-connected'
+                ? '6,4'
+                : isColoured
+                  ? undefined
+                  : '5,4'
+            }
+            markerEnd={`url(#ah-${a.arrowColor})`}
+            opacity={isGhost ? 0.7 : isColoured ? 0.9 : 0.7}
           />
         );
       })}

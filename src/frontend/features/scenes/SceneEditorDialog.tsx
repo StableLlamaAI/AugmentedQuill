@@ -45,6 +45,8 @@ interface SceneEditorDialogProps {
   onClose: () => void;
   onSave: (updates: Partial<Omit<Scene, 'id'>>) => Promise<void>;
   onDelete: () => Promise<void>;
+  /** Removes the causal link between fromId and toId (updates both sides). */
+  onDeleteCause: (fromId: string, toId: string) => Promise<void>;
   /** Returns the current prose text for a given link, or null if unavailable. */
   getLinkedProseText?: (link: SceneProseLink) => string | null;
   /** Saves new prose content back to the file at the link range. */
@@ -57,6 +59,7 @@ export const SceneEditorDialog: React.FC<SceneEditorDialogProps> = ({
   onClose,
   onSave,
   onDelete,
+  onDeleteCause,
   getLinkedProseText,
   onSaveProseContent,
 }: SceneEditorDialogProps) => {
@@ -163,12 +166,6 @@ export const SceneEditorDialog: React.FC<SceneEditorDialogProps> = ({
   };
 
   const otherScenes = allScenes.filter((s: Scene) => s.id !== scene.id);
-  const beforeNames = scene.order_before.map(
-    (id: string) => allScenes.find((s: Scene) => s.id === id)?.summary || id
-  );
-  const afterNames = scene.order_after.map(
-    (id: string) => allScenes.find((s: Scene) => s.id === id)?.summary || id
-  );
 
   const inputCls = `w-full px-3 py-2 rounded-md border ${tc.border} ${tc.input} ${tc.text} text-sm focus:outline-none focus:ring-2 focus:ring-brand-500`;
   const labelCls = `block text-xs font-semibold uppercase tracking-wide ${tc.muted} mb-1`;
@@ -390,24 +387,72 @@ export const SceneEditorDialog: React.FC<SceneEditorDialogProps> = ({
             )}
           </div>
 
-          {/* Order constraints (read-only list; Ctrl+drag on the board edits these) */}
-          {(beforeNames.length > 0 ||
-            afterNames.length > 0 ||
+          {/* Causes — list with per-entry delete; Alt+drag on board creates new ones */}
+          {(scene.order_before.length > 0 ||
+            scene.order_after.length > 0 ||
             otherScenes.length > 0) && (
             <div className={sectionCls}>
-              <label className={labelCls}>{t('Order Constraints')}</label>
-              {beforeNames.length > 0 && (
-                <p className={`text-xs ${tc.muted}`}>
-                  {t('Must come before')}: {beforeNames.join(', ')}
-                </p>
+              <label className={labelCls}>{t('Causes')}</label>
+              {scene.order_before.length > 0 && (
+                <div className="space-y-1">
+                  <p className={`text-xs font-medium ${tc.muted}`}>
+                    {t('Must come before')}:
+                  </p>
+                  {scene.order_before.map((id: string) => {
+                    const name =
+                      allScenes.find((s: Scene) => s.id === id)?.summary || id;
+                    return (
+                      <div key={id} className="flex items-center gap-1 group">
+                        <span
+                          className={`flex-1 text-xs ${tc.text} truncate`}
+                          title={name}
+                        >
+                          {name}
+                        </span>
+                        <button
+                          type="button"
+                          aria-label={t('Delete cause')}
+                          onClick={() => void onDeleteCause(scene.id, id)}
+                          className={`p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-red-100 dark:hover:bg-red-900/40 ${tc.muted} hover:text-red-600 dark:hover:text-red-400 transition-opacity`}
+                        >
+                          🗑
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
               )}
-              {afterNames.length > 0 && (
-                <p className={`text-xs ${tc.muted}`}>
-                  {t('Must come after')}: {afterNames.join(', ')}
-                </p>
+              {scene.order_after.length > 0 && (
+                <div className="space-y-1">
+                  <p className={`text-xs font-medium ${tc.muted}`}>
+                    {t('Must come after')}:
+                  </p>
+                  {scene.order_after.map((id: string) => {
+                    const name =
+                      allScenes.find((s: Scene) => s.id === id)?.summary || id;
+                    return (
+                      <div key={id} className="flex items-center gap-1 group">
+                        <span
+                          className={`flex-1 text-xs ${tc.text} truncate`}
+                          title={name}
+                        >
+                          {name}
+                        </span>
+                        <button
+                          type="button"
+                          aria-label={t('Delete cause')}
+                          onClick={() => void onDeleteCause(id, scene.id)}
+                          className={`p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-red-100 dark:hover:bg-red-900/40 ${tc.muted} hover:text-red-600 dark:hover:text-red-400 transition-opacity`}
+                        >
+                          🗑
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
               )}
               <p className={`text-xs italic ${tc.muted}`}>
-                {t('Ctrl+drag to create order constraint')}
+                {t('Alt+drag to create cause')}
               </p>
             </div>
           )}

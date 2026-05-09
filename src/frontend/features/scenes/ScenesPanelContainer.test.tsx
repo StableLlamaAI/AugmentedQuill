@@ -108,7 +108,7 @@ vi.mock('../../services/api', () => ({ api: apiMock }));
 interface PinboardHandlers {
   onMoveScene: (id: string, x: number, y: number) => Promise<void>;
   onEditScene: (id: string) => void;
-  onCreateConstraint: (fromId: string, toId: string) => Promise<void>;
+  onCreateCause: (fromId: string, toId: string) => Promise<void>;
   onDropProse: (
     sceneId: string,
     data: {
@@ -407,7 +407,7 @@ describe('handleDeleteScene', () => {
 });
 
 // ---------------------------------------------------------------------------
-// handleCreateConstraint (via pinboard's onCreateConstraint)
+// handleCreateCause (via pinboard's onCreateCause)
 // ---------------------------------------------------------------------------
 
 describe('handleCreateConstraint', () => {
@@ -424,7 +424,7 @@ describe('handleCreateConstraint', () => {
     wrap(<ScenesPanelContainer />);
 
     await act(async () => {
-      await pb().onCreateConstraint('a', 'b');
+      await pb().onCreateCause('a', 'b');
     });
 
     expect(apiMock.scenes.update).toHaveBeenCalledTimes(2);
@@ -440,7 +440,7 @@ describe('handleCreateConstraint', () => {
     wrap(<ScenesPanelContainer />);
 
     await act(async () => {
-      await pb().onCreateConstraint('a', 'b');
+      await pb().onCreateCause('a', 'b');
     });
 
     expect(apiMock.scenes.update).not.toHaveBeenCalled();
@@ -455,7 +455,7 @@ describe('handleCreateConstraint', () => {
     wrap(<ScenesPanelContainer />);
 
     await act(async () => {
-      await pb().onCreateConstraint('a', 'b');
+      await pb().onCreateCause('a', 'b');
     });
 
     const calls = patchSceneMock.mock.calls as Array<[Scene]>;

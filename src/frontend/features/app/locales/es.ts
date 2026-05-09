@@ -512,7 +512,7 @@ export const es = {
     active: 'activo',
     inactive: 'inactivo',
     draft: 'borrador',
-    'Order Constraints': 'Restricciones de orden',
+    Causes: 'Causas',
     'Must come before': 'Debe ir antes',
     'Must come after': 'Debe ir después',
     'Prose Link': 'Enlace de prosa',
@@ -529,8 +529,7 @@ export const es = {
     'Zoom In': 'Acercar',
     'Zoom Out': 'Alejar',
     'Reset Zoom': 'Restablecer zoom',
-    'Ctrl+drag to create order constraint':
-      'Ctrl+arrastrar para crear restricción de orden',
+    'Alt+drag to create cause': 'Alt+arrastrar para crear causa',
     'Scene {{index}}': 'Escena {{index}}',
     'Linked Prose': 'Prosa vinculada',
     'Unlink prose': 'Desvincular prosa',
