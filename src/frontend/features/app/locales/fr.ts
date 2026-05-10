@@ -550,6 +550,9 @@ export const fr = {
     'Chapter: {{title}}': 'Chapitre : {{title}}',
     'Not yet linked': 'Pas encore liée',
     'Scenes not yet linked to prose': 'Scènes pas encore liées au texte',
+    'Scene time set': 'Heure de scène définie',
+    'Story time: {{value}}': 'Heure de scène : {{value}}',
+    'International: {{value}}': 'International : {{value}}',
     'No scenes yet': 'Pas encore de scènes',
     'Choose the scene moment, how the builder should interpret your input, and how the scene should display that time.':
       'Choisissez le moment de la scène, la manière dont le constructeur doit interpréter votre saisie, et la manière dont la scène doit afficher cette heure.',

@@ -27,7 +27,7 @@ import {
 } from '../../stores/storyStore';
 import { api } from '../../services/api';
 import { notifyError } from '../../services/errorNotifier';
-import { useThemeClasses } from '../layout/ThemeContext';
+import { useThemeClasses, useTheme } from '../layout/ThemeContext';
 import { PinboardView } from './PinboardView';
 import { NarrativeView } from './NarrativeView';
 import { SceneEditorDialog } from './SceneEditorDialog';
@@ -37,7 +37,7 @@ import { useSceneProseSync } from './useSceneProseSync';
 import { uiStoreActions, useUIStore } from '../../stores/uiStore';
 import type { UIStoreState } from '../../stores/uiStore';
 
-type ViewMode = 'pinboard' | 'narrative';
+type ViewMode = 'pinboard' | 'narrative' | 'chronological';
 
 interface ScenesPanelContainerProps {
   editorRef?: React.RefObject<EditorHandle | null>;
@@ -126,6 +126,7 @@ export const ScenesPanelContainer: React.FC<ScenesPanelContainerProps> = ({
 }: ScenesPanelContainerProps) => {
   const { t } = useTranslation();
   const tc = useThemeClasses();
+  const { isLight } = useTheme();
   const setIsSidebarOpen = useUIStore(
     (s: UIStoreState): UIStoreState['setIsSidebarOpen'] => s.setIsSidebarOpen
   );
@@ -528,32 +529,42 @@ export const ScenesPanelContainer: React.FC<ScenesPanelContainerProps> = ({
       <div
         className={`flex items-center justify-between px-3 py-1.5 border-b ${tc.border} flex-shrink-0`}
       >
-        <div className="flex items-center gap-1">
-          {/* View mode buttons */}
-          <button
-            type="button"
-            aria-pressed={viewMode === 'pinboard'}
-            onClick={() => setViewMode('pinboard')}
-            className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
-              viewMode === 'pinboard'
-                ? 'bg-brand-500 text-white'
-                : `${tc.text} hover:bg-brand-gray-100 dark:hover:bg-brand-gray-800`
-            }`}
-          >
-            {t('Pinboard')}
-          </button>
-          <button
-            type="button"
-            aria-pressed={viewMode === 'narrative'}
-            onClick={() => setViewMode('narrative')}
-            className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
-              viewMode === 'narrative'
-                ? 'bg-brand-500 text-white'
-                : `${tc.text} hover:bg-brand-gray-100 dark:hover:bg-brand-gray-800`
-            }`}
-          >
-            {t('Narrative')}
-          </button>
+        <div
+          className={`flex items-center rounded-md p-0.5 border ${
+            isLight
+              ? 'bg-brand-gray-100 border-brand-gray-200'
+              : 'bg-brand-gray-800 border-brand-gray-700'
+          }`}
+          role="group"
+          aria-label={t('View mode')}
+        >
+          {(['pinboard', 'narrative', 'chronological'] as const).map(
+            (mode: ViewMode) => (
+              <button
+                key={mode}
+                type="button"
+                aria-pressed={viewMode === mode}
+                onClick={() => setViewMode(mode)}
+                className={`px-3 py-1 text-xs font-medium rounded-sm transition-colors ${
+                  viewMode === mode
+                    ? isLight
+                      ? 'bg-white shadow-sm text-brand-gray-900 border border-brand-gray-200'
+                      : 'bg-brand-gray-700 text-brand-gray-100 border border-brand-gray-600'
+                    : isLight
+                      ? 'text-brand-gray-500 hover:text-brand-gray-700'
+                      : 'text-brand-gray-400 hover:text-brand-gray-200 hover:bg-brand-gray-700/50'
+                }`}
+              >
+                {t(
+                  mode === 'pinboard'
+                    ? 'Pinboard'
+                    : mode === 'narrative'
+                      ? 'Narrative'
+                      : 'Chronological'
+                )}
+              </button>
+            )
+          )}
         </div>
         <button
           type="button"
@@ -561,7 +572,11 @@ export const ScenesPanelContainer: React.FC<ScenesPanelContainerProps> = ({
           onClick={handleAddScene}
           onDragOver={handleAddSceneDragOver}
           onDrop={handleAddSceneDrop}
-          className="flex items-center gap-1 px-2.5 py-1 rounded-md text-sm font-medium bg-brand-500 text-white hover:bg-brand-600"
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-1 ${
+            isLight
+              ? 'bg-brand-600 text-white border-brand-500 hover:bg-brand-700'
+              : 'bg-brand-gray-800 text-brand-gray-200 border-brand-gray-700 hover:bg-brand-gray-700'
+          }`}
         >
           <Plus size={14} aria-hidden="true" />
           {t('Add Scene')}
@@ -588,12 +603,27 @@ export const ScenesPanelContainer: React.FC<ScenesPanelContainerProps> = ({
             projectType={projectType}
             chapters={chapters}
             books={books}
+            sortMode="narrative"
             primarySelectedSceneId={selectedSceneId}
             onSelectScene={handleSelectScene}
             onSelectionChange={handleMultipleSelectScenes}
             onEditScene={setEditingSceneId}
             onDropProse={handleDropProse}
             onReorderScene={handleNarrativeReorder}
+          />
+        )}
+        {viewMode === 'chronological' && (
+          <NarrativeView
+            scenes={scenes}
+            projectType={projectType}
+            chapters={chapters}
+            books={books}
+            sortMode="chronological"
+            primarySelectedSceneId={selectedSceneId}
+            onSelectScene={handleSelectScene}
+            onSelectionChange={handleMultipleSelectScenes}
+            onEditScene={setEditingSceneId}
+            onDropProse={handleDropProse}
           />
         )}
       </div>

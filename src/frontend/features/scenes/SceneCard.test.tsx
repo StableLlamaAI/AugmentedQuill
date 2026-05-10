@@ -316,6 +316,35 @@ describe('SceneCard — visual state class application', () => {
   });
 });
 
+describe('SceneCard — scene time indicator', () => {
+  it('shows a scene time icon with story and international tooltip values', () => {
+    const scene = makeScene({
+      scene_time: {
+        temporal_zoned_datetime: '2024-03-01T12:34:56+00:00[UTC][u-ca=gregory]',
+      },
+    });
+
+    const { container } = renderCard(scene);
+    const indicator = container.querySelector<HTMLElement>(
+      '[data-scene-time-indicator]'
+    );
+
+    expect(indicator).toBeTruthy();
+    expect(indicator?.getAttribute('title')).toContain('Story time:');
+    expect(indicator?.getAttribute('title')).toContain('International:');
+  });
+
+  it('does not show a scene time icon for invalid temporal values', () => {
+    const scene = makeScene({
+      scene_time: { temporal_zoned_datetime: 'not-a-valid-temporal-value' },
+    });
+
+    const { container } = renderCard(scene);
+    const indicator = container.querySelector('[data-scene-time-indicator]');
+    expect(indicator).toBeNull();
+  });
+});
+
 // ---------------------------------------------------------------------------
 // displayX / displayY
 // ---------------------------------------------------------------------------

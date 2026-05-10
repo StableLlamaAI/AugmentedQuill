@@ -102,6 +102,7 @@ vi.mock('../layout/ThemeContext', () => ({
     muted: '',
     input: '',
   })),
+  useTheme: vi.fn(() => ({ isLight: true })),
 }));
 
 vi.mock('./PinboardView', () => ({
@@ -164,6 +165,7 @@ interface DialogHandlers {
 }
 
 interface NarrativeHandlers {
+  sortMode?: 'narrative' | 'chronological';
   onReorderScene?: (
     sourceSceneId: string,
     targetSceneId: string,
@@ -1168,6 +1170,20 @@ describe('handleProseBoundaryChange', () => {
 // ============================================================================
 // Narrative view reorder tests
 // ============================================================================
+
+describe('scene view mode wiring', () => {
+  it('passes chronological sort mode and disables prose reorder callback in Chronological view', async () => {
+    useScenesMock.mockReturnValue([makeScene({ id: 'scene-a' })]);
+    const utils = wrap(<ScenesPanelContainer />);
+
+    await act(async () => {
+      fireEvent.click(utils.getByRole('button', { name: 'Chronological' }));
+    });
+
+    expect(nv().sortMode).toBe('chronological');
+    expect(nv().onReorderScene).toBeUndefined();
+  });
+});
 
 describe('handleNarrativeReorder (drag-reorder user interaction)', () => {
   async function renderNarrative(

@@ -37,6 +37,7 @@ import { CauseArrows } from './ConstraintArrows';
 import type { CardLayoutMap } from './ConstraintArrows';
 import { useSceneSelection } from './useSceneSelection';
 import { useThemeClasses, useTheme } from '../layout/ThemeContext';
+import { parseZonedDateTime } from '../../utils/temporal';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -49,6 +50,7 @@ interface NarrativeViewProps {
   projectType: ProjectType;
   chapters: Chapter[];
   books?: Book[];
+  sortMode?: 'narrative' | 'chronological';
   primarySelectedSceneId: string | null;
   onSelectScene: (id: string | null) => void;
   onSelectionChange?: (ids: ReadonlySet<string>) => void;
@@ -167,6 +169,54 @@ function sceneSortKey(
   return [chIdx, link.start_offset];
 }
 
+function proseSort(
+  sceneA: Scene,
+  sceneB: Scene,
+  chapterOrderMap: Map<string, number>
+): number {
+  const [aChIdx, aOff] = sceneSortKey(sceneA, chapterOrderMap);
+  const [bChIdx, bOff] = sceneSortKey(sceneB, chapterOrderMap);
+  if (aChIdx !== bChIdx) return aChIdx < bChIdx ? -1 : 1;
+  if (aOff !== bOff) return aOff - bOff;
+  return sceneA.id.localeCompare(sceneB.id);
+}
+
+function getSceneEpochNanoseconds(scene: Scene): bigint | null {
+  const temporalString = scene.scene_time?.temporal_zoned_datetime;
+  const parsed = parseZonedDateTime(temporalString);
+  return parsed?.epochNanoseconds ?? null;
+}
+
+function chronologicalSort(
+  sceneA: Scene,
+  sceneB: Scene,
+  chapterOrderMap: Map<string, number>,
+  sceneEpochNanosecondsById: Map<string, bigint>
+): number {
+  const epochA = sceneEpochNanosecondsById.get(sceneA.id);
+  const epochB = sceneEpochNanosecondsById.get(sceneB.id);
+  const hasTimeA = epochA !== undefined;
+  const hasTimeB = epochB !== undefined;
+  const hasLinkA = Boolean(sceneA.prose_link);
+  const hasLinkB = Boolean(sceneB.prose_link);
+  const isExtraA = !hasLinkA && !hasTimeA;
+  const isExtraB = !hasLinkB && !hasTimeB;
+
+  // "Not yet linked" extras (no prose link and no valid time) must always
+  // stay at the very end in Chronological mode.
+  if (isExtraA !== isExtraB) return isExtraA ? 1 : -1;
+
+  if (hasTimeA && hasTimeB) {
+    if (epochA < epochB) return -1;
+    if (epochA > epochB) return 1;
+    return proseSort(sceneA, sceneB, chapterOrderMap);
+  }
+
+  // When one or both scenes have no valid time, keep chronology stable by
+  // falling back to prose order so untimed scenes can interleave naturally.
+  return proseSort(sceneA, sceneB, chapterOrderMap);
+}
+
 // ---------------------------------------------------------------------------
 // Rendering items (dividers + scene rows)
 // ---------------------------------------------------------------------------
@@ -181,6 +231,16 @@ interface BreakState {
   prevChapterId: string | null | undefined;
   prevBookId: string | null | undefined;
   unlinkedHeaderShown: boolean;
+}
+
+function isUnlinkedWithoutChronology(
+  scene: Scene,
+  sortMode: 'narrative' | 'chronological',
+  sceneEpochNanosecondsById: Map<string, bigint>
+): boolean {
+  if (scene.prose_link) return false;
+  if (sortMode !== 'chronological') return true;
+  return !sceneEpochNanosecondsById.has(scene.id);
 }
 
 function appendUnlinkedItem(
@@ -230,6 +290,8 @@ function appendChapterBreakItems(
 
 function buildItems(
   sortedScenes: Scene[],
+  sortMode: 'narrative' | 'chronological',
+  sceneEpochNanosecondsById: Map<string, bigint>,
   projectType: ProjectType,
   chapters: Chapter[],
   books: Book[]
@@ -247,8 +309,13 @@ function buildItems(
   sortedScenes.forEach((scene: Scene, sortIndex: number) => {
     const link = scene.prose_link;
 
-    if (!link) {
+    if (isUnlinkedWithoutChronology(scene, sortMode, sceneEpochNanosecondsById)) {
       appendUnlinkedItem(items, scene, sortIndex, state);
+      return;
+    }
+
+    if (!link) {
+      items.push({ kind: 'scene', scene, sortIndex });
       return;
     }
 
@@ -357,6 +424,7 @@ export const NarrativeView: React.FC<NarrativeViewProps> = ({
   projectType,
   chapters,
   books = [],
+  sortMode = 'narrative',
   primarySelectedSceneId,
   onSelectScene,
   onSelectionChange,
@@ -374,16 +442,28 @@ export const NarrativeView: React.FC<NarrativeViewProps> = ({
     [projectType, chapters, books]
   );
 
-  // Sort scenes by (chapterIndex, startOffset); unlinked scenes go to the end.
+  const sceneEpochNanosecondsById = useMemo(() => {
+    const map = new Map<string, bigint>();
+    for (const scene of scenes) {
+      const epochNanoseconds = getSceneEpochNanoseconds(scene);
+      if (epochNanoseconds !== null) {
+        map.set(scene.id, epochNanoseconds);
+      }
+    }
+    return map;
+  }, [scenes]);
+
+  // Sort scenes either by prose order (Narrative) or by scene time (Chronological),
+  // using prose order as deterministic fallback for ties and missing times.
   const sortedScenes = useMemo(
     () =>
       [...scenes].sort((a: Scene, b: Scene) => {
-        const [aChIdx, aOff] = sceneSortKey(a, chapterOrderMap);
-        const [bChIdx, bOff] = sceneSortKey(b, chapterOrderMap);
-        if (aChIdx !== bChIdx) return aChIdx < bChIdx ? -1 : 1;
-        return aOff - bOff;
+        if (sortMode === 'chronological') {
+          return chronologicalSort(a, b, chapterOrderMap, sceneEpochNanosecondsById);
+        }
+        return proseSort(a, b, chapterOrderMap);
       }),
-    [scenes, chapterOrderMap]
+    [scenes, chapterOrderMap, sortMode, sceneEpochNanosecondsById]
   );
 
   // Multi-select state — identical semantics to PinboardView.
@@ -405,8 +485,16 @@ export const NarrativeView: React.FC<NarrativeViewProps> = ({
 
   // Build the ordered list of items (dividers + scenes) to render.
   const items = useMemo(
-    () => buildItems(sortedScenes, projectType, chapters, books),
-    [sortedScenes, projectType, chapters, books]
+    () =>
+      buildItems(
+        sortedScenes,
+        sortMode,
+        sceneEpochNanosecondsById,
+        projectType,
+        chapters,
+        books
+      ),
+    [sortedScenes, sortMode, sceneEpochNanosecondsById, projectType, chapters, books]
   );
 
   // Build a flat index of scene entries so we can pass the correct 'index' to
@@ -611,7 +699,7 @@ export const NarrativeView: React.FC<NarrativeViewProps> = ({
     <div
       className={`w-full h-full overflow-y-auto ${bgClass}`}
       role="region"
-      aria-label={t('Narrative')}
+      aria-label={t(sortMode === 'chronological' ? 'Chronological' : 'Narrative')}
       onMouseDown={handleNarrativeBackgroundMouseDown}
     >
       {/* Inner container is position:relative so the SVG overlay and card

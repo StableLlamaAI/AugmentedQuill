@@ -544,6 +544,9 @@ export const de = {
     'Chapter: {{title}}': 'Kapitel: {{title}}',
     'Not yet linked': 'Noch nicht verknüpft',
     'Scenes not yet linked to prose': 'Szenen noch nicht mit Prosa verknüpft',
+    'Scene time set': 'Szenenzeit gesetzt',
+    'Story time: {{value}}': 'Szenenzeit: {{value}}',
+    'International: {{value}}': 'International: {{value}}',
     'No scenes yet': 'Noch keine Szenen',
     'Choose the scene moment, how the builder should interpret your input, and how the scene should display that time.':
       'Wählen Sie den Szenenzeitpunkt, wie der Builder Ihre Eingabe interpretieren soll und wie die Szene diese Zeit darstellen soll.',

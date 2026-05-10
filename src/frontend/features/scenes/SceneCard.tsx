@@ -18,9 +18,11 @@
 
 import React, { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Clock3 } from 'lucide-react';
 import type { Scene, SceneBeat } from '../../types';
 import type { ProseDropData } from './types';
 import { useTheme } from '../layout/ThemeContext';
+import { toDisplayString, toInternationalDisplayString } from '../../utils/temporal';
 
 // Color tag palette — matches tailwind classes so purge doesn't strip them.
 const COLOR_TAG_CLASSES: Record<string, { bg: string; border: string }> = {
@@ -142,7 +144,7 @@ export const SceneCard: React.FC<SceneCardProps> = ({
   displayY,
   onLayout,
 }: SceneCardProps) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { isLight } = useTheme();
 
   const isNarrative = variant === 'narrative';
@@ -323,6 +325,20 @@ export const SceneCard: React.FC<SceneCardProps> = ({
     scene.prose_link?.is_stale ||
     scene.beats.some((b: SceneBeat) => b.prose_link?.is_stale);
 
+  const sceneTimeRaw = scene.scene_time?.temporal_zoned_datetime;
+  const storyTimeDisplay = toDisplayString(sceneTimeRaw, i18n.language);
+  const internationalTimeDisplay = toInternationalDisplayString(
+    sceneTimeRaw,
+    i18n.language
+  );
+  const hasSceneTime = storyTimeDisplay.length > 0;
+  const sceneTimeTooltip = hasSceneTime
+    ? [
+        t('Story time: {{value}}', { value: storyTimeDisplay }),
+        t('International: {{value}}', { value: internationalTimeDisplay }),
+      ].join('\n')
+    : '';
+
   return (
     <div
       ref={cardRef}
@@ -375,6 +391,17 @@ export const SceneCard: React.FC<SceneCardProps> = ({
         .filter(Boolean)
         .join(' ')}
     >
+      {hasSceneTime && (
+        <span
+          data-scene-time-indicator="true"
+          className={`absolute top-2 right-2 ${isLight ? 'text-brand-gray-500' : 'text-brand-gray-300'}`}
+          title={sceneTimeTooltip}
+          aria-label={t('Scene time set')}
+        >
+          <Clock3 size={14} aria-hidden="true" />
+        </span>
+      )}
+
       {/* color stripe at top */}
       {colorKey && (
         <div
@@ -401,7 +428,7 @@ export const SceneCard: React.FC<SceneCardProps> = ({
 
         {/* summary */}
         <p
-          className={`text-sm font-medium leading-snug line-clamp-3 ${isLight ? 'text-brand-gray-900' : 'text-brand-gray-100'}`}
+          className={`text-sm font-medium leading-snug line-clamp-3 ${hasSceneTime ? 'pr-5' : ''} ${isLight ? 'text-brand-gray-900' : 'text-brand-gray-100'}`}
         >
           {scene.summary || t('Scene {{index}}', { index: index + 1 })}
         </p>

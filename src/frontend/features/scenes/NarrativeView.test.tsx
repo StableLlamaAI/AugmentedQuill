@@ -398,3 +398,413 @@ describe('NarrativeView series sorting and grouping', () => {
     ]);
   });
 });
+
+describe('NarrativeView chronological sorting', () => {
+  it('sorts by scene_time while allowing flashback ordering independent of prose order', () => {
+    const scenes: Scene[] = [
+      makeScene({
+        id: 'late-prose-early-time',
+        summary: 'Flashback',
+        prose_link: {
+          scope_type: 'story',
+          chapter_id: null,
+          book_id: null,
+          start_offset: 100,
+          end_offset: 110,
+          content_hash: 'hash',
+          is_stale: false,
+        },
+        scene_time: {
+          temporal_zoned_datetime: '2024-03-01T12:00:00+00:00[UTC][u-ca=gregory]',
+        },
+      }),
+      makeScene({
+        id: 'early-prose-late-time',
+        summary: 'Present',
+        prose_link: {
+          scope_type: 'story',
+          chapter_id: null,
+          book_id: null,
+          start_offset: 10,
+          end_offset: 20,
+          content_hash: 'hash',
+          is_stale: false,
+        },
+        scene_time: {
+          temporal_zoned_datetime: '2024-03-02T12:00:00+00:00[UTC][u-ca=gregory]',
+        },
+      }),
+    ];
+
+    const { container } = render(
+      <I18nextProvider i18n={i18n}>
+        <NarrativeView
+          scenes={scenes}
+          projectType="novel"
+          chapters={[]}
+          books={[]}
+          sortMode="chronological"
+          primarySelectedSceneId={null}
+          onSelectScene={vi.fn()}
+          onSelectionChange={vi.fn()}
+          onEditScene={vi.fn()}
+        />
+      </I18nextProvider>
+    );
+
+    const renderedSceneOrder = Array.from(
+      container.querySelectorAll('[data-scene-card]')
+    ).map((el: Element) => el.textContent?.trim());
+
+    expect(renderedSceneOrder).toEqual(['Flashback', 'Present']);
+  });
+
+  it('falls back to prose position for scenes without valid scene_time', () => {
+    const scenes: Scene[] = [
+      makeScene({
+        id: 'timed',
+        summary: 'Timed',
+        prose_link: {
+          scope_type: 'story',
+          chapter_id: null,
+          book_id: null,
+          start_offset: 5,
+          end_offset: 8,
+          content_hash: 'hash',
+          is_stale: false,
+        },
+        scene_time: {
+          temporal_zoned_datetime: '2024-03-01T10:00:00+00:00[UTC][u-ca=gregory]',
+        },
+      }),
+      makeScene({
+        id: 'untimed-2',
+        summary: 'Untimed B',
+        prose_link: {
+          scope_type: 'story',
+          chapter_id: null,
+          book_id: null,
+          start_offset: 70,
+          end_offset: 80,
+          content_hash: 'hash',
+          is_stale: false,
+        },
+      }),
+      makeScene({
+        id: 'untimed-1',
+        summary: 'Untimed A',
+        prose_link: {
+          scope_type: 'story',
+          chapter_id: null,
+          book_id: null,
+          start_offset: 30,
+          end_offset: 40,
+          content_hash: 'hash',
+          is_stale: false,
+        },
+      }),
+      makeScene({
+        id: 'invalid-time',
+        summary: 'Invalid Time',
+        prose_link: {
+          scope_type: 'story',
+          chapter_id: null,
+          book_id: null,
+          start_offset: 50,
+          end_offset: 60,
+          content_hash: 'hash',
+          is_stale: false,
+        },
+        scene_time: { temporal_zoned_datetime: 'not-a-valid-temporal-value' },
+      }),
+    ];
+
+    const { container } = render(
+      <I18nextProvider i18n={i18n}>
+        <NarrativeView
+          scenes={scenes}
+          projectType="novel"
+          chapters={[]}
+          books={[]}
+          sortMode="chronological"
+          primarySelectedSceneId={null}
+          onSelectScene={vi.fn()}
+          onSelectionChange={vi.fn()}
+          onEditScene={vi.fn()}
+        />
+      </I18nextProvider>
+    );
+
+    const renderedSceneOrder = Array.from(
+      container.querySelectorAll('[data-scene-card]')
+    ).map((el: Element) => el.textContent?.trim());
+
+    expect(renderedSceneOrder).toEqual([
+      'Timed',
+      'Untimed A',
+      'Invalid Time',
+      'Untimed B',
+    ]);
+  });
+
+  it('keeps only unlinked and untimed scenes in the Not yet linked section', () => {
+    const scenes: Scene[] = [
+      makeScene({
+        id: 'linked-untimed',
+        summary: 'Linked Untimed',
+        prose_link: {
+          scope_type: 'story',
+          chapter_id: null,
+          book_id: null,
+          start_offset: 10,
+          end_offset: 20,
+          content_hash: 'hash',
+          is_stale: false,
+        },
+      }),
+      makeScene({
+        id: 'unlinked-timed',
+        summary: 'Unlinked Timed',
+        prose_link: null,
+        scene_time: {
+          temporal_zoned_datetime: '2024-02-01T10:00:00+00:00[UTC][u-ca=gregory]',
+        },
+      }),
+      makeScene({
+        id: 'unlinked-untimed',
+        summary: 'Unlinked Untimed',
+        prose_link: null,
+      }),
+    ];
+
+    const { container } = render(
+      <I18nextProvider i18n={i18n}>
+        <NarrativeView
+          scenes={scenes}
+          projectType="novel"
+          chapters={[]}
+          books={[]}
+          sortMode="chronological"
+          primarySelectedSceneId={null}
+          onSelectScene={vi.fn()}
+          onSelectionChange={vi.fn()}
+          onEditScene={vi.fn()}
+        />
+      </I18nextProvider>
+    );
+
+    const renderSequence = Array.from(
+      container.querySelectorAll('[data-scene-card], [role="separator"]')
+    ).map((el: Element) => {
+      const separatorLabel = el.getAttribute('aria-label');
+      return separatorLabel || el.textContent?.trim() || '';
+    });
+
+    const headerIndex = renderSequence.indexOf('Scenes not yet linked to prose');
+    expect(headerIndex).toBeGreaterThan(-1);
+
+    const unlinkedTimedIndex = renderSequence.indexOf('Unlinked Timed');
+    const unlinkedUntimedIndex = renderSequence.indexOf('Unlinked Untimed');
+
+    expect(unlinkedTimedIndex).toBeGreaterThan(-1);
+    expect(unlinkedUntimedIndex).toBeGreaterThan(-1);
+    expect(unlinkedTimedIndex).toBeLessThan(headerIndex);
+    expect(unlinkedUntimedIndex).toBeGreaterThan(headerIndex);
+  });
+
+  it('interleaves a linked untimed scene between timed scenes using prose order', () => {
+    const scenes: Scene[] = [
+      makeScene({
+        id: 'timed-early',
+        summary: 'Timed Early',
+        prose_link: {
+          scope_type: 'story',
+          chapter_id: null,
+          book_id: null,
+          start_offset: 10,
+          end_offset: 20,
+          content_hash: 'hash',
+          is_stale: false,
+        },
+        scene_time: {
+          temporal_zoned_datetime: '2024-02-01T10:00:00+00:00[UTC][u-ca=gregory]',
+        },
+      }),
+      makeScene({
+        id: 'untimed-middle',
+        summary: 'Untimed Middle',
+        prose_link: {
+          scope_type: 'story',
+          chapter_id: null,
+          book_id: null,
+          start_offset: 50,
+          end_offset: 60,
+          content_hash: 'hash',
+          is_stale: false,
+        },
+      }),
+      makeScene({
+        id: 'timed-late',
+        summary: 'Timed Late',
+        prose_link: {
+          scope_type: 'story',
+          chapter_id: null,
+          book_id: null,
+          start_offset: 90,
+          end_offset: 100,
+          content_hash: 'hash',
+          is_stale: false,
+        },
+        scene_time: {
+          temporal_zoned_datetime: '2024-02-01T12:00:00+00:00[UTC][u-ca=gregory]',
+        },
+      }),
+    ];
+
+    const { container } = render(
+      <I18nextProvider i18n={i18n}>
+        <NarrativeView
+          scenes={scenes}
+          projectType="novel"
+          chapters={[]}
+          books={[]}
+          sortMode="chronological"
+          primarySelectedSceneId={null}
+          onSelectScene={vi.fn()}
+          onSelectionChange={vi.fn()}
+          onEditScene={vi.fn()}
+        />
+      </I18nextProvider>
+    );
+
+    const renderedSceneOrder = Array.from(
+      container.querySelectorAll('[data-scene-card]')
+    ).map((el: Element) => el.textContent?.trim());
+
+    expect(renderedSceneOrder).toEqual(['Timed Early', 'Untimed Middle', 'Timed Late']);
+  });
+
+  it('treats invalid scene_time like untimed and places it by prose position', () => {
+    const scenes: Scene[] = [
+      makeScene({
+        id: 'timed-early',
+        summary: 'Timed Early',
+        prose_link: {
+          scope_type: 'story',
+          chapter_id: null,
+          book_id: null,
+          start_offset: 10,
+          end_offset: 20,
+          content_hash: 'hash',
+          is_stale: false,
+        },
+        scene_time: {
+          temporal_zoned_datetime: '2024-02-01T10:00:00+00:00[UTC][u-ca=gregory]',
+        },
+      }),
+      makeScene({
+        id: 'invalid-middle',
+        summary: 'Invalid Middle',
+        prose_link: {
+          scope_type: 'story',
+          chapter_id: null,
+          book_id: null,
+          start_offset: 50,
+          end_offset: 60,
+          content_hash: 'hash',
+          is_stale: false,
+        },
+        scene_time: { temporal_zoned_datetime: 'not-a-valid-temporal-value' },
+      }),
+      makeScene({
+        id: 'timed-late',
+        summary: 'Timed Late',
+        prose_link: {
+          scope_type: 'story',
+          chapter_id: null,
+          book_id: null,
+          start_offset: 90,
+          end_offset: 100,
+          content_hash: 'hash',
+          is_stale: false,
+        },
+        scene_time: {
+          temporal_zoned_datetime: '2024-02-01T12:00:00+00:00[UTC][u-ca=gregory]',
+        },
+      }),
+    ];
+
+    const { container } = render(
+      <I18nextProvider i18n={i18n}>
+        <NarrativeView
+          scenes={scenes}
+          projectType="novel"
+          chapters={[]}
+          books={[]}
+          sortMode="chronological"
+          primarySelectedSceneId={null}
+          onSelectScene={vi.fn()}
+          onSelectionChange={vi.fn()}
+          onEditScene={vi.fn()}
+        />
+      </I18nextProvider>
+    );
+
+    const renderedSceneOrder = Array.from(
+      container.querySelectorAll('[data-scene-card]')
+    ).map((el: Element) => el.textContent?.trim());
+
+    expect(renderedSceneOrder).toEqual(['Timed Early', 'Invalid Middle', 'Timed Late']);
+  });
+
+  it('keeps an unlinked timed scene out of the Not yet linked section', () => {
+    const scenes: Scene[] = [
+      makeScene({
+        id: 'zz-unlinked-timed',
+        summary: 'Unlinked Timed',
+        prose_link: null,
+        scene_time: {
+          temporal_zoned_datetime: '2024-02-01T09:00:00+00:00[UTC][u-ca=gregory]',
+        },
+      }),
+      makeScene({
+        id: 'aa-unlinked-untimed',
+        summary: 'Unlinked Untimed',
+        prose_link: null,
+      }),
+    ];
+
+    const { container } = render(
+      <I18nextProvider i18n={i18n}>
+        <NarrativeView
+          scenes={scenes}
+          projectType="novel"
+          chapters={[]}
+          books={[]}
+          sortMode="chronological"
+          primarySelectedSceneId={null}
+          onSelectScene={vi.fn()}
+          onSelectionChange={vi.fn()}
+          onEditScene={vi.fn()}
+        />
+      </I18nextProvider>
+    );
+
+    const renderSequence = Array.from(
+      container.querySelectorAll('[data-scene-card], [role="separator"]')
+    ).map((el: Element) => {
+      const separatorLabel = el.getAttribute('aria-label');
+      return separatorLabel || el.textContent?.trim() || '';
+    });
+
+    const headerIndex = renderSequence.indexOf('Scenes not yet linked to prose');
+    const timedIndex = renderSequence.indexOf('Unlinked Timed');
+    const untimedIndex = renderSequence.indexOf('Unlinked Untimed');
+
+    expect(headerIndex).toBeGreaterThan(-1);
+    expect(timedIndex).toBeGreaterThan(-1);
+    expect(untimedIndex).toBeGreaterThan(-1);
+    expect(timedIndex).toBeLessThan(headerIndex);
+    expect(untimedIndex).toBeGreaterThan(headerIndex);
+  });
+});
