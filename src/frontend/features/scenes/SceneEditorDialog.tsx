@@ -102,7 +102,7 @@ export const SceneEditorDialog: React.FC<SceneEditorDialogProps> = ({
 }: SceneEditorDialogProps) => {
   const { t, i18n } = useTranslation();
   const tc = useThemeClasses();
-  const isLight = !tc.bg.includes('dark');
+  const { isLight } = tc;
   const storyLanguage = useStoryLanguage();
   const allScenes = useScenes();
   const sourcebookEntriesMaybe = useStoryStore(
@@ -264,6 +264,7 @@ export const SceneEditorDialog: React.FC<SceneEditorDialogProps> = ({
   const activeSuggestions = sourcebookEntries.filter(
     (entry: SourcebookEntry): boolean => {
       if (!activeInput.trim()) return false;
+      if (normalizeToken(entry.category ?? '') !== 'character') return false;
       const query = normalizeToken(activeInput);
       const inName = normalizeToken(entry.name).includes(query);
       const inSyn = (entry.synonyms ?? []).some((synonym: string): boolean =>
@@ -276,6 +277,7 @@ export const SceneEditorDialog: React.FC<SceneEditorDialogProps> = ({
   const passiveSuggestions = sourcebookEntries.filter(
     (entry: SourcebookEntry): boolean => {
       if (!passiveInput.trim()) return false;
+      if (normalizeToken(entry.category ?? '') !== 'character') return false;
       const query = normalizeToken(passiveInput);
       const inName = normalizeToken(entry.name).includes(query);
       const inSyn = (entry.synonyms ?? []).some((synonym: string): boolean =>
@@ -493,13 +495,6 @@ export const SceneEditorDialog: React.FC<SceneEditorDialogProps> = ({
                         }
                       >
                         <span className={tc.text}>{token}</span>
-                        {matched && (
-                          <span
-                            className={`px-1 py-0.5 rounded text-[10px] border ${tc.border} ${tc.muted}`}
-                          >
-                            {mapCategoryLabel(matched.category)}
-                          </span>
-                        )}
                         <button
                           type="button"
                           className={tc.muted}
@@ -601,13 +596,6 @@ export const SceneEditorDialog: React.FC<SceneEditorDialogProps> = ({
                         }
                       >
                         <span className={tc.text}>{token}</span>
-                        {matched && (
-                          <span
-                            className={`px-1 py-0.5 rounded text-[10px] border ${tc.border} ${tc.muted}`}
-                          >
-                            {mapCategoryLabel(matched.category)}
-                          </span>
-                        )}
                         <button
                           type="button"
                           className={tc.muted}
@@ -1089,7 +1077,7 @@ export const SceneEditorDialog: React.FC<SceneEditorDialogProps> = ({
         <SourcebookHoverCard
           entry={hoveredEntry}
           position={hoverPos}
-          isLight={isLight}
+          bgClass={tc.bg}
           borderClass={tc.border}
           textClass={tc.text}
           subTextClass={tc.muted}
