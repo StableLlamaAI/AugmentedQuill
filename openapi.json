@@ -6506,6 +6506,14 @@
             "title": "Passive Characters",
             "default": []
           },
+          "sourcebook_entry_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Sourcebook Entry Ids",
+            "default": []
+          },
           "location": {
             "anyOf": [
               {
@@ -6527,6 +6535,16 @@
               }
             ],
             "title": "Time"
+          },
+          "scene_time": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SceneChronologyTime"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "color_tag": {
             "anyOf": [
@@ -6612,6 +6630,18 @@
         "title": "SceneBeat",
         "description": "A single beat within a scene \u2013 a discrete micro-action or plot step."
       },
+      "SceneChronologyTime": {
+        "properties": {
+          "temporal_zoned_datetime": {
+            "type": "string",
+            "title": "Temporal Zoned Datetime"
+          }
+        },
+        "type": "object",
+        "required": ["temporal_zoned_datetime"],
+        "title": "SceneChronologyTime",
+        "description": "Scene-local timeline point represented as a Temporal ZonedDateTime string."
+      },
       "SceneCreateRequest": {
         "properties": {
           "summary": {
@@ -6643,6 +6673,14 @@
             "title": "Passive Characters",
             "default": []
           },
+          "sourcebook_entry_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Sourcebook Entry Ids",
+            "default": []
+          },
           "location": {
             "anyOf": [
               {
@@ -6664,6 +6702,16 @@
               }
             ],
             "title": "Time"
+          },
+          "scene_time": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SceneChronologyTime"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "color_tag": {
             "anyOf": [
@@ -6972,6 +7020,20 @@
             ],
             "title": "Passive Characters"
           },
+          "sourcebook_entry_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sourcebook Entry Ids"
+          },
           "location": {
             "anyOf": [
               {
@@ -6993,6 +7055,16 @@
               }
             ],
             "title": "Time"
+          },
+          "scene_time": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SceneChronologyTime"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "color_tag": {
             "anyOf": [

@@ -92,6 +92,7 @@ interface SourcebookEntryDialogViewProps {
   onSaveRelation: (relation: SourcebookRelation) => void;
   onCloseRelationDialog: () => void;
   onCloseImagePicker: () => void;
+  sceneReferences: Array<{ id: string; summary: string; roles: string[] }>;
 }
 
 export const SourcebookEntryDialogView: React.FC<SourcebookEntryDialogViewProps> = (
@@ -164,6 +165,7 @@ export const SourcebookEntryDialogView: React.FC<SourcebookEntryDialogViewProps>
     onSaveRelation,
     onCloseRelationDialog,
     onCloseImagePicker,
+    sceneReferences,
   } = props;
   return createPortal(
     <>
@@ -262,6 +264,45 @@ export const SourcebookEntryDialogView: React.FC<SourcebookEntryDialogViewProps>
               onDescriptionChange={onDescriptionChange}
               onToggleKeywordsPanel={onToggleKeywordsPanel}
             />
+
+            <div className="space-y-2">
+              <label
+                className={`text-xs font-semibold uppercase tracking-wider ${labelClass}`}
+              >
+                {t('Scenes')}
+              </label>
+              <div
+                className={`rounded-md border ${inputBorderClass} ${inputBgClass} p-3 space-y-2`}
+              >
+                {sceneReferences.length === 0 ? (
+                  <p className={`text-xs ${descriptionTextClass}`}>
+                    {t('This entry is not linked to any scene.')}
+                  </p>
+                ) : (
+                  sceneReferences.map(
+                    (sceneReference: {
+                      id: string;
+                      summary: string;
+                      roles: string[];
+                    }) => (
+                      <div
+                        key={sceneReference.id}
+                        className="text-xs flex items-center justify-between gap-2"
+                      >
+                        <span className={descriptionTextClass}>
+                          {sceneReference.summary || sceneReference.id}
+                        </span>
+                        <span
+                          className={`text-[10px] px-1.5 py-0.5 rounded border ${inputBorderClass} ${labelClass}`}
+                        >
+                          {sceneReference.roles.join(', ')}
+                        </span>
+                      </div>
+                    )
+                  )
+                )}
+              </div>
+            </div>
           </div>
 
           <SourcebookEntryFooter

@@ -256,6 +256,8 @@ def _normalise_scene(raw: dict[str, Any]) -> dict[str, Any]:
     raw.setdefault("beats", [])
     raw.setdefault("active_characters", [])
     raw.setdefault("passive_characters", [])
+    raw.setdefault("sourcebook_entry_ids", [])
+    raw.setdefault("scene_time", None)
     raw.setdefault("order_before", [])
     raw.setdefault("order_after", [])
     raw.setdefault("pinboard_x", 100.0)
@@ -373,7 +375,7 @@ def update_scene(
         return None
 
     existing = scenes_dict[scene_id]
-    updates = payload.model_dump(exclude_none=True)
+    updates = payload.model_dump(exclude_unset=True)
     existing.update(updates)
     scenes_dict[scene_id] = existing
     story["scenes"] = scenes_dict

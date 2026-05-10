@@ -34,6 +34,8 @@ import { SceneEditorDialog } from './SceneEditorDialog';
 import type { SceneUpdatePayload } from '../../services/apiClients/scenes';
 import type { ProseDropData } from './types';
 import { useSceneProseSync } from './useSceneProseSync';
+import { uiStoreActions, useUIStore } from '../../stores/uiStore';
+import type { UIStoreState } from '../../stores/uiStore';
 
 type ViewMode = 'pinboard' | 'narrative';
 
@@ -124,6 +126,9 @@ export const ScenesPanelContainer: React.FC<ScenesPanelContainerProps> = ({
 }: ScenesPanelContainerProps) => {
   const { t } = useTranslation();
   const tc = useThemeClasses();
+  const setIsSidebarOpen = useUIStore(
+    (s: UIStoreState): UIStoreState['setIsSidebarOpen'] => s.setIsSidebarOpen
+  );
   const scenes = useScenes();
   const story = useStoryStore((s: StoryStoreState) => s.story);
   const patchScene = useStoryStore((s: StoryStoreState) => s.patchScene);
@@ -604,6 +609,10 @@ export const ScenesPanelContainer: React.FC<ScenesPanelContainerProps> = ({
           onDeleteCause={handleDeleteCause}
           getLinkedProseText={editorRef ? getLinkedProseText : undefined}
           onSaveProseContent={editorRef ? handleSaveProseContent : undefined}
+          onOpenSourcebookEntry={(entryId: string): void => {
+            setIsSidebarOpen(true);
+            uiStoreActions.openSourcebookDialog(entryId);
+          }}
         />
       )}
     </div>

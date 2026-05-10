@@ -122,14 +122,21 @@ export interface SceneBeat {
   prose_link?: SceneProseLink | null;
 }
 
+export interface SceneChronologyTime {
+  /** RFC9557/Temporal ZonedDateTime string including time zone + calendar. */
+  temporal_zoned_datetime: string;
+}
+
 export interface Scene {
   id: string;
   summary: string;
   beats: SceneBeat[];
   active_characters: string[];
   passive_characters: string[];
+  sourcebook_entry_ids?: string[];
   location?: string | null;
   time?: string | null;
+  scene_time?: SceneChronologyTime | null;
   color_tag?: string | null;
   prose_link?: SceneProseLink | null;
   order_before: string[];

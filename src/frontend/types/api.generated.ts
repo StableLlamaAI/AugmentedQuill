@@ -2733,10 +2733,16 @@ export interface components {
        * @default []
        */
       passive_characters: string[];
+      /**
+       * Sourcebook Entry Ids
+       * @default []
+       */
+      sourcebook_entry_ids: string[];
       /** Location */
       location?: string | null;
       /** Time */
       time?: string | null;
+      scene_time?: components['schemas']['SceneChronologyTime'] | null;
       /** Color Tag */
       color_tag?: string | null;
       prose_link?: components['schemas']['SceneProseLink'] | null;
@@ -2778,6 +2784,14 @@ export interface components {
       prose_link?: components['schemas']['SceneProseLink'] | null;
     };
     /**
+     * SceneChronologyTime
+     * @description Scene-local timeline point represented as a Temporal ZonedDateTime string.
+     */
+    SceneChronologyTime: {
+      /** Temporal Zoned Datetime */
+      temporal_zoned_datetime: string;
+    };
+    /**
      * SceneCreateRequest
      * @description Payload for creating a new scene.
      */
@@ -2802,10 +2816,16 @@ export interface components {
        * @default []
        */
       passive_characters: string[];
+      /**
+       * Sourcebook Entry Ids
+       * @default []
+       */
+      sourcebook_entry_ids: string[];
       /** Location */
       location?: string | null;
       /** Time */
       time?: string | null;
+      scene_time?: components['schemas']['SceneChronologyTime'] | null;
       /** Color Tag */
       color_tag?: string | null;
       prose_link?: components['schemas']['SceneProseLink'] | null;
@@ -2954,10 +2974,13 @@ export interface components {
       active_characters?: string[] | null;
       /** Passive Characters */
       passive_characters?: string[] | null;
+      /** Sourcebook Entry Ids */
+      sourcebook_entry_ids?: string[] | null;
       /** Location */
       location?: string | null;
       /** Time */
       time?: string | null;
+      scene_time?: components['schemas']['SceneChronologyTime'] | null;
       /** Color Tag */
       color_tag?: string | null;
       prose_link?: components['schemas']['SceneProseLink'] | null;

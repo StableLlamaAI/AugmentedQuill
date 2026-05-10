@@ -9,7 +9,7 @@
  * HTTP client for the scenes endpoints. Keeps transport concerns isolated from UI logic.
  */
 
-import type { Scene, SceneProseLink } from '../../types';
+import type { Scene, SceneChronologyTime, SceneProseLink } from '../../types';
 import {
   fetchJson,
   postJson,
@@ -28,8 +28,10 @@ export interface SceneCreatePayload {
   beats?: Array<{ id: string; text: string; prose_link?: SceneProseLink | null }>;
   active_characters?: string[];
   passive_characters?: string[];
+  sourcebook_entry_ids?: string[];
   location?: string | null;
   time?: string | null;
+  scene_time?: SceneChronologyTime | null;
   color_tag?: string | null;
   prose_link?: SceneProseLink | null;
   order_before?: string[];

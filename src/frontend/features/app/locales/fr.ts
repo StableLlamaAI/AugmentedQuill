@@ -551,5 +551,93 @@ export const fr = {
     'Not yet linked': 'Pas encore liée',
     'Scenes not yet linked to prose': 'Scènes pas encore liées au texte',
     'No scenes yet': 'Pas encore de scènes',
+    'Choose the scene moment, how the builder should interpret your input, and how the scene should display that time.':
+      'Choisissez le moment de la scène, la manière dont le constructeur doit interpréter votre saisie, et la manière dont la scène doit afficher cette heure.',
+    'Close scene time dialog': "Fermer la boîte de dialogue de l'heure de scène",
+    'Selected Time Preview': 'Aperçu de l’heure sélectionnée',
+    'Preview the same moment in the scene calendar and in a Gregorian/ISO reference format.':
+      'Prévisualise le même instant dans le calendrier de la scène et dans un format de référence grégorien/ISO.',
+    'Gregorian / International': 'Grégorien / International',
+    'ISO / Temporal': 'ISO / Temporal',
+    'No scene time set.': 'Aucune heure de scène définie.',
+    'Not available until the date is valid.':
+      "Indisponible tant que la date n'est pas valide.",
+    'Use Current Moment': 'Utiliser le moment actuel',
+    'Use Previous Scene Time': 'Utiliser l’heure de la scène précédente',
+    'Previous +15m': 'Précédente +15 min',
+    'Previous +1h': 'Précédente +1 h',
+    'Previous +1d': 'Précédente +1 j',
+    'Story Date Builder': 'Constructeur de date du récit',
+    'Step 1: enter the date and time values you think in. Step 2: choose how the scene should represent that same moment.':
+      'Étape 1 : saisissez les valeurs de date et d’heure telles que vous les pensez. Étape 2 : choisissez comment la scène doit représenter ce même instant.',
+    'Interpret Builder As': 'Interpréter le constructeur comme',
+    'Gregorian (default)': 'Grégorien (par défaut)',
+    'Builder fields are interpreted as Gregorian date/time. Calendar Style still controls representation.':
+      'Les champs du constructeur sont interprétés comme une date/heure grégorienne. Le style de calendrier contrôle toujours la représentation.',
+    'Builder fields are interpreted in the selected Calendar Style and stored with that representation.':
+      'Les champs du constructeur sont interprétés dans le style de calendrier sélectionné et enregistrés avec cette représentation.',
+    'Calendar Year': 'Année du calendrier',
+    'Use signed year numbering. Example: -122 means 123 BCE. There is no year 0.':
+      'Utilisez une numérotation des années signée. Exemple : -122 signifie 123 av. J.-C. Il n’existe pas d’année 0.',
+    'World Context': 'Contexte du monde',
+    'Calendar Style controls how this scene time is represented and displayed.':
+      'Le style de calendrier contrôle la manière dont cette heure de scène est représentée et affichée.',
+    'Common Regions': 'Régions courantes',
+    'Select a city/region': 'Sélectionnez une ville/région',
+    'Exact Time Zone': 'Fuseau horaire exact',
+    'Use a city above, or type any valid region (example: Europe/Paris).':
+      'Utilisez une ville ci-dessus ou saisissez une région valide (exemple : Europe/Paris).',
+    'Apply Scene Time': 'Appliquer l’heure de scène',
+    'Advanced Temporal String': 'Chaîne Temporal avancée',
+    'Paste a complete Temporal.ZonedDateTime value for expert workflows.':
+      'Collez une valeur complète Temporal.ZonedDateTime pour les flux de travail experts.',
+    'Apply Advanced Time': 'Appliquer l’heure avancée',
+    'Clear Time': 'Effacer l’heure',
+    'Please check the date, time, calendar, and region values.':
+      'Veuillez vérifier les valeurs de date, d’heure, de calendrier et de région.',
+    'The advanced time format is invalid.': 'Le format horaire avancé est invalide.',
+    'Western (Gregorian)': 'Occidental (grégorien)',
+    'Most modern historical and contemporary fiction.':
+      'Convient à la plupart des fictions modernes, historiques et contemporaines.',
+    'ISO / International': 'ISO / International',
+    'Technical standard date style.': 'Style de date standard technique.',
+    'Japanese Imperial': 'Japonais impérial',
+    'Era-based Japanese calendar system.':
+      'Système calendaire japonais fondé sur les ères.',
+    'Thai Buddhist': 'Bouddhiste thaï',
+    'Common in Thai and Buddhist historical contexts.':
+      'Fréquent dans les contextes historiques thaïs et bouddhistes.',
+    'Minguo (Taiwan)': 'Minguo (Taïwan)',
+    'Republic of China calendar system.':
+      'Système calendaire de la République de Chine.',
+    Persian: 'Persan',
+    'Solar Hijri calendar tradition.': 'Tradition du calendrier hégirien solaire.',
+    Islamic: 'Islamique',
+    'Lunar Hijri calendar tradition.': 'Tradition du calendrier hégirien lunaire.',
+    Hebrew: 'Hébreu',
+    'Traditional Hebrew lunisolar calendar.':
+      'Calendrier hébraïque luni-solaire traditionnel.',
+    Chinese: 'Chinois',
+    'Traditional lunisolar Chinese calendar.':
+      'Calendrier chinois luni-solaire traditionnel.',
+    'Indian National': 'Indien national',
+    'Saka calendar system.': 'Système calendaire saka.',
+    'Custom calendar system.': 'Système calendaire personnalisé.',
+    'Global reference (UTC)': 'Référence globale (UTC)',
+    London: 'Londres',
+    Paris: 'Paris',
+    Berlin: 'Berlin',
+    Rome: 'Rome',
+    Athens: 'Athènes',
+    Cairo: 'Le Caire',
+    Jerusalem: 'Jérusalem',
+    Dubai: 'Dubaï',
+    'Delhi / Kolkata': 'Delhi / Kolkata',
+    Tokyo: 'Tokyo',
+    Sydney: 'Sydney',
+    'New York': 'New York',
+    Chicago: 'Chicago',
+    'Los Angeles': 'Los Angeles',
+    'Sao Paulo': 'São Paulo',
   },
 };

@@ -22,7 +22,12 @@ import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import i18n from '../app/i18n';
 import { SceneEditorDialog } from './SceneEditorDialog';
 import { useScenes } from '../../stores/storyStore';
-import type { Scene, SceneProseLink } from '../../types';
+import type { Scene, SceneProseLink, SourcebookEntry } from '../../types';
+import { TemporalApi } from '../../utils/temporal';
+
+const { sourcebookEntriesState } = vi.hoisted(() => ({
+  sourcebookEntriesState: [] as SourcebookEntry[],
+}));
 
 // ---------------------------------------------------------------------------
 // Store mock — SceneEditorDialog reads useScenes() for ordering display
@@ -30,7 +35,11 @@ import type { Scene, SceneProseLink } from '../../types';
 
 vi.mock('../../stores/storyStore', () => ({
   useScenes: vi.fn(() => [] as Scene[]),
-  useStoryStore: vi.fn(() => vi.fn()),
+  useStoryLanguage: vi.fn(() => 'en'),
+  useStoryStore: vi.fn(
+    (selector: (state: { story: { sourcebook: SourcebookEntry[] } }) => unknown) =>
+      selector({ story: { sourcebook: sourcebookEntriesState } })
+  ),
 }));
 
 // ThemeContext mock
@@ -59,6 +68,8 @@ function makeScene(overrides: Partial<Scene> = {}): Scene {
     prose_link: null,
     active_characters: [],
     passive_characters: [],
+    sourcebook_entry_ids: [],
+    scene_time: null,
     location: null,
     time: null,
     color_tag: null,
@@ -71,13 +82,18 @@ function makeScene(overrides: Partial<Scene> = {}): Scene {
   };
 }
 
-const NOOP_SAVE = vi.fn(async () => undefined);
+type SceneSaveHandler = (updates: Partial<Omit<Scene, 'id'>>) => Promise<void>;
+
+const NOOP_SAVE = vi.fn<SceneSaveHandler>(
+  async (_updates: Partial<Omit<Scene, 'id'>>) => undefined
+);
 const NOOP_DELETE = vi.fn(async () => undefined);
 const NOOP_CLOSE = vi.fn();
 
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  sourcebookEntriesState.splice(0, sourcebookEntriesState.length);
 });
 
 // ---------------------------------------------------------------------------
@@ -132,7 +148,9 @@ describe('SceneEditorDialog rendering', () => {
 
 describe('SceneEditorDialog save flow', () => {
   it('calls onSave with updated values and then onClose', async () => {
-    const onSave = vi.fn(async () => undefined);
+    const onSave = vi.fn<SceneSaveHandler>(
+      async (_updates: Partial<Omit<Scene, 'id'>>) => undefined
+    );
     const onClose = vi.fn();
 
     wrap(
@@ -198,9 +216,11 @@ describe('SceneEditorDialog save flow', () => {
     const onSaveProseContent = vi.fn(async () => {
       callOrder.push('prose');
     });
-    const onSave = vi.fn(async () => {
-      callOrder.push('save');
-    });
+    const onSave = vi.fn<SceneSaveHandler>(
+      async (_updates: Partial<Omit<Scene, 'id'>>) => {
+        callOrder.push('save');
+      }
+    );
     const proseLink: SceneProseLink = {
       scope_type: 'story',
       start_offset: 0,
@@ -421,8 +441,10 @@ describe('SceneEditorDialog state reset', () => {
 // ---------------------------------------------------------------------------
 
 describe('SceneEditorDialog character parsing', () => {
-  it('splits comma-separated characters into an array on save', async () => {
-    const onSave = vi.fn(async () => undefined);
+  it('adds typed active-character tags and saves them as an array', async () => {
+    const onSave = vi.fn<SceneSaveHandler>(
+      async (_updates: Partial<Omit<Scene, 'id'>>) => undefined
+    );
 
     wrap(
       <SceneEditorDialog
@@ -434,8 +456,13 @@ describe('SceneEditorDialog character parsing', () => {
       />
     );
 
-    const activeInput = screen.getByPlaceholderText(/Alice, Bob/i);
-    fireEvent.change(activeInput, { target: { value: 'Alice, Bob, Charlie' } });
+    const activeInput = screen.getAllByPlaceholderText(/Type and press Enter/i)[0];
+    fireEvent.change(activeInput, { target: { value: 'Alice' } });
+    fireEvent.keyDown(activeInput, { key: 'Enter' });
+    fireEvent.change(activeInput, { target: { value: 'Bob' } });
+    fireEvent.keyDown(activeInput, { key: 'Enter' });
+    fireEvent.change(activeInput, { target: { value: 'Charlie' } });
+    fireEvent.keyDown(activeInput, { key: 'Enter' });
 
     const saveBtn = screen.getByRole('button', { name: /Save/i });
     await act(async () => {
@@ -447,7 +474,9 @@ describe('SceneEditorDialog character parsing', () => {
   });
 
   it('produces an empty array when the character field is blank', async () => {
-    const onSave = vi.fn(async () => undefined);
+    const onSave = vi.fn<SceneSaveHandler>(
+      async (_updates: Partial<Omit<Scene, 'id'>>) => undefined
+    );
 
     wrap(
       <SceneEditorDialog
@@ -459,8 +488,8 @@ describe('SceneEditorDialog character parsing', () => {
       />
     );
 
-    const activeInput = screen.getByDisplayValue('Old') as HTMLInputElement;
-    fireEvent.change(activeInput, { target: { value: '' } });
+    const activeInput = screen.getAllByPlaceholderText(/Type and press Enter/i)[0];
+    fireEvent.keyDown(activeInput, { key: 'Backspace' });
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: /Save/i }));
@@ -468,6 +497,138 @@ describe('SceneEditorDialog character parsing', () => {
 
     const arg = onSave.mock.calls[0][0] as Partial<Scene>;
     expect(arg.active_characters).toEqual([]);
+  });
+});
+
+describe('SceneEditorDialog sourcebook navigation safety', () => {
+  it('asks for save/discard/abort before opening sourcebook when there are unsaved edits', async () => {
+    sourcebookEntriesState.push({
+      id: 'sb-1',
+      name: 'Aether',
+      category: 'world',
+      aliases: [],
+      synonyms: [],
+      description: '',
+      tags: [],
+      relations: [],
+      image_ids: [],
+      image_notes: {},
+      color_tag: null,
+      role_in_story: null,
+      statuses: [],
+      chapters_featured: [],
+      appears_in_locations: [],
+      timeline_hint: null,
+      first_appearance: null,
+      visibility_scope: 'project',
+      links: [],
+      metadata: {},
+      keywords: [],
+      notes: [],
+      events: [],
+      project_language: 'en',
+    } as unknown as SourcebookEntry);
+
+    const onOpenSourcebookEntry = vi.fn();
+    const onClose = vi.fn();
+
+    wrap(
+      <SceneEditorDialog
+        scene={makeScene({ sourcebook_entry_ids: ['sb-1'] })}
+        isOpen
+        onClose={onClose}
+        onSave={NOOP_SAVE}
+        onDelete={NOOP_DELETE}
+        onOpenSourcebookEntry={onOpenSourcebookEntry}
+      />
+    );
+
+    fireEvent.change(screen.getByDisplayValue('Test scene'), {
+      target: { value: 'Changed summary' },
+    });
+    fireEvent.doubleClick(screen.getByText('Aether'));
+
+    expect(screen.getByText(/You have unsaved scene changes/i)).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /^Discard$/i }));
+    });
+
+    expect(onOpenSourcebookEntry).toHaveBeenCalledWith('sb-1');
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+});
+
+describe('SceneEditorDialog Temporal time payload', () => {
+  it('renders safely even when temporal locale formatting throws', () => {
+    const temporalValue = '0044-03-15T12:00:00+00:00[UTC][u-ca=gregory]';
+    const sample = TemporalApi.ZonedDateTime.from(temporalValue);
+    const proto = Object.getPrototypeOf(sample) as {
+      toLocaleString: (
+        locales?: string | string[] | undefined,
+        options?: Intl.DateTimeFormatOptions | undefined
+      ) => string;
+    };
+    const spy = vi.spyOn(proto, 'toLocaleString').mockImplementation((): never => {
+      throw new RangeError('Mismatched calendars.');
+    });
+
+    wrap(
+      <SceneEditorDialog
+        scene={makeScene({
+          scene_time: { temporal_zoned_datetime: temporalValue },
+        })}
+        isOpen
+        onClose={NOOP_CLOSE}
+        onSave={NOOP_SAVE}
+        onDelete={NOOP_DELETE}
+      />
+    );
+
+    expect(screen.getByRole('dialog')).toBeTruthy();
+    expect(screen.getByText(/International format:/i)).toBeTruthy();
+    expect(screen.getAllByText(/UTC/i).length).toBeGreaterThan(0);
+    spy.mockRestore();
+  });
+
+  it('saves scene_time via Temporal payload and does not send legacy location/time fields', async () => {
+    const onSave = vi.fn<SceneSaveHandler>(
+      async (_updates: Partial<Omit<Scene, 'id'>>) => undefined
+    );
+
+    wrap(
+      <SceneEditorDialog
+        scene={makeScene()}
+        isOpen
+        onClose={NOOP_CLOSE}
+        onSave={onSave}
+        onDelete={NOOP_DELETE}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Set Time/i }));
+    fireEvent.change(screen.getByLabelText(/Year/i), { target: { value: '44' } });
+    fireEvent.change(screen.getByLabelText(/Era/i), { target: { value: 'BCE' } });
+    fireEvent.change(screen.getByLabelText(/Common Regions/i), {
+      target: { value: 'Europe/Rome' },
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Apply Scene Time/i }));
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Save/i }));
+    });
+
+    const payload = onSave.mock.calls[0][0] as Record<string, unknown>;
+    expect(payload.scene_time).toBeTruthy();
+    expect(
+      (payload.scene_time as { temporal_zoned_datetime: string })
+        .temporal_zoned_datetime
+    ).toContain('[Europe/Rome]');
+    expect('location' in payload).toBe(false);
+    expect('time' in payload).toBe(false);
   });
 });
 
@@ -496,7 +657,9 @@ describe('SceneEditorDialog beat management', () => {
   });
 
   it('includes beats in the onSave payload', async () => {
-    const onSave = vi.fn(async () => undefined);
+    const onSave = vi.fn<SceneSaveHandler>(
+      async (_updates: Partial<Omit<Scene, 'id'>>) => undefined
+    );
 
     wrap(
       <SceneEditorDialog
@@ -544,7 +707,7 @@ describe('SceneEditorDialog delete cause', () => {
     onDeleteCause: (fromId: string, toId: string) => Promise<void> = vi.fn(
       async () => undefined
     )
-  ) =>
+  ): ReturnType<typeof wrap> =>
     wrap(
       <SceneEditorDialog
         scene={sceneB}

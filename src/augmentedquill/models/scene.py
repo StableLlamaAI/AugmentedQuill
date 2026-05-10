@@ -58,6 +58,12 @@ class SceneBeat(BaseModel):
     prose_link: Optional[SceneProseLink] = None
 
 
+class SceneChronologyTime(BaseModel):
+    """Scene-local timeline point represented as a Temporal ZonedDateTime string."""
+
+    temporal_zoned_datetime: str
+
+
 class Scene(BaseModel):
     """A narrative scene used for structural story planning.
 
@@ -77,8 +83,10 @@ class Scene(BaseModel):
     beats: list[SceneBeat] = []
     active_characters: list[str] = []
     passive_characters: list[str] = []
+    sourcebook_entry_ids: list[str] = []
     location: Optional[str] = None
     time: Optional[str] = None
+    scene_time: Optional[SceneChronologyTime] = None
     color_tag: Optional[str] = None  # hex color, e.g. "#a855f7"
     prose_link: Optional[SceneProseLink] = None  # used when beats is empty
     order_before: list[str] = []  # scene IDs this scene must precede
@@ -100,8 +108,10 @@ class SceneCreateRequest(BaseModel):
     beats: list[SceneBeat] = []
     active_characters: list[str] = []
     passive_characters: list[str] = []
+    sourcebook_entry_ids: list[str] = []
     location: Optional[str] = None
     time: Optional[str] = None
+    scene_time: Optional[SceneChronologyTime] = None
     color_tag: Optional[str] = None
     prose_link: Optional[SceneProseLink] = None
     order_before: list[str] = []
@@ -118,8 +128,10 @@ class SceneUpdateRequest(BaseModel):
     beats: Optional[list[SceneBeat]] = None
     active_characters: Optional[list[str]] = None
     passive_characters: Optional[list[str]] = None
+    sourcebook_entry_ids: Optional[list[str]] = None
     location: Optional[str] = None
     time: Optional[str] = None
+    scene_time: Optional[SceneChronologyTime] = None
     color_tag: Optional[str] = None
     prose_link: Optional[SceneProseLink] = None
     order_before: Optional[list[str]] = None

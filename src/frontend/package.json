@@ -21,6 +21,7 @@
     "node": ">=24"
   },
   "dependencies": {
+    "@js-temporal/polyfill": "^0.5.1",
     "@codemirror/lang-markdown": "^6.5.0",
     "@google/genai": "^1.50.1",
     "@lezer/highlight": "^1.2.3",
