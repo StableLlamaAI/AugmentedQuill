@@ -18,7 +18,7 @@ import { describe, it, expect, vi, beforeAll, afterEach } from 'vitest';
 import i18n from '../app/i18n';
 import { NarrativeView } from './NarrativeView';
 import type { Scene } from '../../types';
-import type { Book, Chapter } from '../../types/domain';
+import type { Book, Chapter, SourcebookEntry } from '../../types/domain';
 
 const { selectionState } = vi.hoisted(() => ({
   selectionState: {
@@ -806,5 +806,176 @@ describe('NarrativeView chronological sorting', () => {
     expect(untimedIndex).toBeGreaterThan(-1);
     expect(timedIndex).toBeLessThan(headerIndex);
     expect(untimedIndex).toBeGreaterThan(headerIndex);
+  });
+});
+
+describe('NarrativeView sourcebook lanes', () => {
+  it('shows referenced character lanes and filters scenes by selected entries', () => {
+    const sourcebookEntries: SourcebookEntry[] = [
+      {
+        id: 'alice',
+        name: 'Alice',
+        synonyms: [],
+        category: 'Character',
+        description: '',
+        images: [],
+      },
+      {
+        id: 'bob',
+        name: 'Bob',
+        synonyms: [],
+        category: 'character',
+        description: '',
+        images: [],
+      },
+      {
+        id: 'harbor',
+        name: 'Harbor',
+        synonyms: [],
+        category: 'Location',
+        description: '',
+        images: [],
+      },
+    ];
+
+    const scenes: Scene[] = [
+      makeScene({
+        id: 'scene-a',
+        summary: 'Alice Active',
+        active_characters: ['Alice'],
+        sourcebook_entry_ids: ['harbor'],
+      }),
+      makeScene({
+        id: 'scene-b',
+        summary: 'Alice Passive',
+        passive_characters: ['Alice'],
+      }),
+      makeScene({
+        id: 'scene-c',
+        summary: 'Bob Active',
+        active_characters: ['Bob'],
+      }),
+    ];
+
+    const { container, getByRole, queryByText } = render(
+      <I18nextProvider i18n={i18n}>
+        <NarrativeView
+          scenes={scenes}
+          sourcebookEntries={sourcebookEntries}
+          projectType="novel"
+          chapters={[]}
+          books={[]}
+          primarySelectedSceneId={null}
+          onSelectScene={vi.fn()}
+          onSelectionChange={vi.fn()}
+          onEditScene={vi.fn()}
+        />
+      </I18nextProvider>
+    );
+
+    const laneLabels = Array.from(
+      container.querySelectorAll('[data-sourcebook-lane-label]')
+    ).map((element: Element) => element.textContent?.trim());
+
+    expect(laneLabels).toEqual(['Alice', 'Bob']);
+    expect(queryByText('Harbor')).toBeNull();
+
+    fireEvent.click(getByRole('button', { name: 'Alice' }));
+
+    expect(queryByText('Alice Active')).not.toBeNull();
+    expect(queryByText('Alice Passive')).not.toBeNull();
+    expect(queryByText('Bob Active')).toBeNull();
+
+    fireEvent.click(getByRole('button', { name: 'Bob' }), { ctrlKey: true });
+
+    expect(queryByText('Bob Active')).not.toBeNull();
+
+    expect(
+      container
+        .querySelector('[data-scene-link-marker="scene-a:alice"]')
+        ?.getAttribute('data-link-style')
+    ).toBe('solid');
+    expect(
+      container
+        .querySelector('[data-scene-link-marker="scene-b:alice"]')
+        ?.getAttribute('data-link-style')
+    ).toBe('hollow');
+    expect(container.querySelector('[data-sourcebook-line="alice"]')).not.toBeNull();
+  });
+
+  it('allows removing and adding sourcebook lanes', () => {
+    const sourcebookEntries: SourcebookEntry[] = [
+      {
+        id: 'alice',
+        name: 'Alice',
+        synonyms: [],
+        category: 'Character',
+        description: '',
+        images: [],
+      },
+      {
+        id: 'bob',
+        name: 'Bob',
+        synonyms: [],
+        category: 'Character',
+        description: '',
+        images: [],
+      },
+      {
+        id: 'harbor',
+        name: 'Harbor',
+        synonyms: [],
+        category: 'Location',
+        description: '',
+        images: [],
+      },
+    ];
+
+    const scenes: Scene[] = [
+      makeScene({
+        id: 'scene-a',
+        summary: 'Alice Scene',
+        active_characters: ['Alice'],
+      }),
+      makeScene({
+        id: 'scene-b',
+        summary: 'Bob Scene',
+        active_characters: ['Bob'],
+      }),
+    ];
+
+    const { container, getByRole, getByText, queryByRole } = render(
+      <I18nextProvider i18n={i18n}>
+        <NarrativeView
+          scenes={scenes}
+          sourcebookEntries={sourcebookEntries}
+          projectType="novel"
+          chapters={[]}
+          books={[]}
+          primarySelectedSceneId={null}
+          onSelectScene={vi.fn()}
+          onSelectionChange={vi.fn()}
+          onEditScene={vi.fn()}
+        />
+      </I18nextProvider>
+    );
+
+    fireEvent.click(getByRole('button', { name: 'Remove Bob' }));
+    expect(queryByRole('button', { name: 'Bob' })).toBeNull();
+
+    fireEvent.click(getByRole('button', { name: 'Add sourcebook lane' }));
+    fireEvent.click(getByText('Harbor'));
+
+    const laneLabelsAfterAdd = Array.from(
+      container.querySelectorAll('[data-sourcebook-lane-label]')
+    ).map((element: Element) => element.textContent?.trim());
+    expect(laneLabelsAfterAdd).toEqual(['Alice', 'Harbor']);
+
+    expect(
+      container.querySelector('[data-sourcebook-lane-item="alice"]')
+    ).not.toBeNull();
+    expect(
+      container.querySelector('[data-sourcebook-lane-item="harbor"]')
+    ).not.toBeNull();
   });
 });

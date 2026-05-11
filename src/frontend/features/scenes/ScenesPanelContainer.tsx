@@ -597,33 +597,22 @@ export const ScenesPanelContainer: React.FC<ScenesPanelContainerProps> = ({
             onDropProse={handleDropProse}
           />
         )}
-        {viewMode === 'narrative' && (
+        {(viewMode === 'narrative' || viewMode === 'chronological') && (
           <NarrativeView
             scenes={scenes}
+            sourcebookEntries={story.sourcebook ?? []}
             projectType={projectType}
             chapters={chapters}
             books={books}
-            sortMode="narrative"
+            sortMode={viewMode === 'chronological' ? 'chronological' : 'narrative'}
             primarySelectedSceneId={selectedSceneId}
             onSelectScene={handleSelectScene}
             onSelectionChange={handleMultipleSelectScenes}
             onEditScene={setEditingSceneId}
             onDropProse={handleDropProse}
-            onReorderScene={handleNarrativeReorder}
-          />
-        )}
-        {viewMode === 'chronological' && (
-          <NarrativeView
-            scenes={scenes}
-            projectType={projectType}
-            chapters={chapters}
-            books={books}
-            sortMode="chronological"
-            primarySelectedSceneId={selectedSceneId}
-            onSelectScene={handleSelectScene}
-            onSelectionChange={handleMultipleSelectScenes}
-            onEditScene={setEditingSceneId}
-            onDropProse={handleDropProse}
+            onReorderScene={
+              viewMode === 'narrative' ? handleNarrativeReorder : undefined
+            }
           />
         )}
       </div>

@@ -28,10 +28,14 @@ import React, {
   useLayoutEffect,
   useEffect,
 } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
+import { Plus, X } from 'lucide-react';
 import type { Scene } from '../../types';
-import type { Chapter, Book } from '../../types/domain';
+import type { Chapter, Book, SourcebookEntry } from '../../types/domain';
+import type { ProjectImage } from '../../services/apiTypes';
 import type { ProseDropData } from './types';
+import { listProjectImages } from '../sourcebook/sourcebookApi';
 import { SceneCard } from './SceneCard';
 import { CauseArrows } from './ConstraintArrows';
 import type { CardLayoutMap } from './ConstraintArrows';
@@ -47,6 +51,7 @@ type ProjectType = 'short-story' | 'novel' | 'series';
 
 interface NarrativeViewProps {
   scenes: Scene[];
+  sourcebookEntries?: SourcebookEntry[];
   projectType: ProjectType;
   chapters: Chapter[];
   books?: Book[];
@@ -61,6 +66,73 @@ interface NarrativeViewProps {
     targetSceneId: string,
     placeBefore: boolean
   ) => Promise<void>;
+}
+
+type LaneMarkerStyle = 'solid' | 'hollow';
+
+const CHARACTER_CATEGORY = 'character';
+const LANE_DRAG_MIME = 'application/x-augmentedquill-sourcebook-lane-id';
+
+function normalizeToken(value: string | null | undefined): string {
+  return (value ?? '').trim().toLowerCase();
+}
+
+function normalizeCategory(value: string | null | undefined): string {
+  return normalizeToken(value);
+}
+
+function arraysEqual(valuesA: string[], valuesB: string[]): boolean {
+  return (
+    valuesA.length === valuesB.length &&
+    valuesA.every((value: string, index: number): boolean => value === valuesB[index])
+  );
+}
+
+function reorderValues(
+  values: string[],
+  sourceId: string,
+  targetId: string,
+  placeBefore: boolean
+): string[] {
+  if (sourceId === targetId) return values;
+  const next = [...values];
+  const sourceIndex = next.indexOf(sourceId);
+  const targetIndex = next.indexOf(targetId);
+  if (sourceIndex < 0 || targetIndex < 0) return values;
+
+  next.splice(sourceIndex, 1);
+  const adjustedTargetIndex = next.indexOf(targetId);
+  const insertIndex = placeBefore ? adjustedTargetIndex : adjustedTargetIndex + 1;
+  next.splice(insertIndex, 0, sourceId);
+  return next;
+}
+
+function mergeMarkerStyle(
+  current: LaneMarkerStyle | undefined,
+  incoming: LaneMarkerStyle
+): LaneMarkerStyle {
+  if (current === 'solid' || incoming === 'solid') {
+    return 'solid';
+  }
+  return 'hollow';
+}
+
+function getHorizontalDropBoundary(element: HTMLElement): {
+  left: number;
+  width: number;
+} {
+  const rect = element.getBoundingClientRect();
+  if (rect.width > 0) {
+    return { left: rect.left, width: rect.width };
+  }
+
+  const button = element.querySelector('button');
+  if (button instanceof HTMLButtonElement) {
+    const buttonRect = button.getBoundingClientRect();
+    return { left: buttonRect.left, width: buttonRect.width };
+  }
+
+  return { left: rect.left, width: rect.width };
 }
 
 // ---------------------------------------------------------------------------
@@ -421,6 +493,7 @@ const UnlinkedHeader: React.FC<UnlinkedHeaderProps> = () => {
 
 export const NarrativeView: React.FC<NarrativeViewProps> = ({
   scenes,
+  sourcebookEntries = [],
   projectType,
   chapters,
   books = [],
@@ -435,6 +508,222 @@ export const NarrativeView: React.FC<NarrativeViewProps> = ({
   const DRAG_SCENE_MIME = 'application/x-augmentedquill-scene-id';
   const { t } = useTranslation();
   const { isLight } = useTheme();
+
+  const sourcebookEntriesById = useMemo(
+    () => new Map(sourcebookEntries.map((entry: SourcebookEntry) => [entry.id, entry])),
+    [sourcebookEntries]
+  );
+
+  const entryIdsByToken = useMemo(() => {
+    const map = new Map<string, string[]>();
+    sourcebookEntries.forEach((entry: SourcebookEntry): void => {
+      [entry.name, ...(entry.synonyms ?? [])].forEach((label: string): void => {
+        const normalized = normalizeToken(label);
+        if (!normalized) return;
+        const current = map.get(normalized) ?? [];
+        if (!current.includes(entry.id)) {
+          current.push(entry.id);
+          map.set(normalized, current);
+        }
+      });
+    });
+    return map;
+  }, [sourcebookEntries]);
+
+  const sceneEntryMarkerStyles = useMemo(() => {
+    const stylesBySceneId = new Map<string, Map<string, LaneMarkerStyle>>();
+
+    const register = (
+      sceneId: string,
+      entryId: string,
+      style: LaneMarkerStyle
+    ): void => {
+      const sceneStyles =
+        stylesBySceneId.get(sceneId) ?? new Map<string, LaneMarkerStyle>();
+      sceneStyles.set(entryId, mergeMarkerStyle(sceneStyles.get(entryId), style));
+      stylesBySceneId.set(sceneId, sceneStyles);
+    };
+
+    scenes.forEach((scene: Scene): void => {
+      scene.active_characters.forEach((name: string): void => {
+        (entryIdsByToken.get(normalizeToken(name)) ?? []).forEach(
+          (entryId: string): void => {
+            register(scene.id, entryId, 'solid');
+          }
+        );
+      });
+
+      scene.passive_characters.forEach((name: string): void => {
+        (entryIdsByToken.get(normalizeToken(name)) ?? []).forEach(
+          (entryId: string): void => {
+            register(scene.id, entryId, 'hollow');
+          }
+        );
+      });
+
+      (scene.sourcebook_entry_ids ?? []).forEach((entryId: string): void => {
+        if (sourcebookEntriesById.has(entryId)) {
+          register(scene.id, entryId, 'solid');
+        }
+      });
+
+      [scene.location, scene.time].forEach((label: string | null | undefined): void => {
+        (entryIdsByToken.get(normalizeToken(label)) ?? []).forEach(
+          (entryId: string): void => {
+            register(scene.id, entryId, 'solid');
+          }
+        );
+      });
+    });
+
+    return stylesBySceneId;
+  }, [entryIdsByToken, scenes, sourcebookEntriesById]);
+
+  const linkedSceneIdsByEntry = useMemo(() => {
+    const sceneIdsByEntry = new Map<string, Set<string>>();
+    sceneEntryMarkerStyles.forEach(
+      (stylesByEntryId: Map<string, LaneMarkerStyle>, sceneId: string): void => {
+        stylesByEntryId.forEach((_style: LaneMarkerStyle, entryId: string): void => {
+          const linkedSceneIds = sceneIdsByEntry.get(entryId) ?? new Set<string>();
+          linkedSceneIds.add(sceneId);
+          sceneIdsByEntry.set(entryId, linkedSceneIds);
+        });
+      }
+    );
+    return sceneIdsByEntry;
+  }, [sceneEntryMarkerStyles]);
+
+  const referencedCharacterEntryIds = useMemo(() => {
+    const orderedIds: string[] = [];
+    const seen = new Set<string>();
+
+    scenes.forEach((scene: Scene): void => {
+      const sceneStyles = sceneEntryMarkerStyles.get(scene.id);
+      if (!sceneStyles) return;
+      sceneStyles.forEach((_style: LaneMarkerStyle, entryId: string): void => {
+        const entry = sourcebookEntriesById.get(entryId);
+        if (!entry || normalizeCategory(entry.category) !== CHARACTER_CATEGORY) {
+          return;
+        }
+        if (!seen.has(entryId)) {
+          seen.add(entryId);
+          orderedIds.push(entryId);
+        }
+      });
+    });
+
+    return orderedIds;
+  }, [sceneEntryMarkerStyles, scenes, sourcebookEntriesById]);
+
+  const sourcebookEntryIds = useMemo(
+    () => new Set(sourcebookEntries.map((entry: SourcebookEntry): string => entry.id)),
+    [sourcebookEntries]
+  );
+
+  const [visibleLaneEntryIds, setVisibleLaneEntryIds] = useState<string[]>(
+    referencedCharacterEntryIds
+  );
+  const [removedReferencedLaneIds, setRemovedReferencedLaneIds] = useState<Set<string>>(
+    () => new Set<string>()
+  );
+  const [selectedLaneEntryIds, setSelectedLaneEntryIds] = useState<Set<string>>(
+    () => new Set<string>()
+  );
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerQuery, setPickerQuery] = useState('');
+  const [pickerPosition, setPickerPosition] = useState<{
+    top: number;
+    left: number;
+  } | null>(null);
+  const [projectImages, setProjectImages] = useState<ProjectImage[]>([]);
+  const [laneScrollLeft, setLaneScrollLeft] = useState(0);
+  const [lanePlaneWidth, setLanePlaneWidth] = useState(0);
+  const [lastSelectedLaneIndex, setLastSelectedLaneIndex] = useState<number | null>(
+    null
+  );
+
+  useEffect(() => {
+    setRemovedReferencedLaneIds((prev: Set<string>) => {
+      const next = new Set<string>();
+      prev.forEach((entryId: string): void => {
+        if (
+          sourcebookEntryIds.has(entryId) &&
+          referencedCharacterEntryIds.includes(entryId)
+        ) {
+          next.add(entryId);
+        }
+      });
+      return next.size === prev.size ? prev : next;
+    });
+  }, [referencedCharacterEntryIds, sourcebookEntryIds]);
+
+  useEffect(() => {
+    setVisibleLaneEntryIds((prev: string[]): string[] => {
+      const retained = prev.filter((entryId: string): boolean =>
+        sourcebookEntryIds.has(entryId)
+      );
+      const next = [...retained];
+      referencedCharacterEntryIds.forEach((entryId: string): void => {
+        if (!removedReferencedLaneIds.has(entryId) && !next.includes(entryId)) {
+          next.push(entryId);
+        }
+      });
+      return arraysEqual(prev, next) ? prev : next;
+    });
+  }, [referencedCharacterEntryIds, removedReferencedLaneIds, sourcebookEntryIds]);
+
+  useEffect(() => {
+    setSelectedLaneEntryIds((prev: Set<string>) => {
+      const next = new Set<string>();
+      prev.forEach((entryId: string): void => {
+        if (visibleLaneEntryIds.includes(entryId)) {
+          next.add(entryId);
+        }
+      });
+      if (
+        next.size === prev.size &&
+        [...next].every((entryId: string) => prev.has(entryId))
+      ) {
+        return prev;
+      }
+      return next;
+    });
+  }, [visibleLaneEntryIds]);
+
+  useEffect(() => {
+    let isMounted = true;
+    void listProjectImages()
+      .then((images: ProjectImage[]): void => {
+        if (isMounted) {
+          setProjectImages(images);
+        }
+      })
+      .catch((): void => {
+        // Ignore image-list failures so scene views keep rendering in tests
+        // and when project images are unavailable.
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const projectImageByFilename = useMemo(
+    () => new Map(projectImages.map((image: ProjectImage) => [image.filename, image])),
+    [projectImages]
+  );
+
+  const filteredScenes = useMemo(() => {
+    if (selectedLaneEntryIds.size === 0) {
+      return scenes;
+    }
+    return scenes.filter((scene: Scene): boolean => {
+      const sceneStyles = sceneEntryMarkerStyles.get(scene.id);
+      if (!sceneStyles) return false;
+      return [...selectedLaneEntryIds].some((entryId: string): boolean =>
+        sceneStyles.has(entryId)
+      );
+    });
+  }, [sceneEntryMarkerStyles, scenes, selectedLaneEntryIds]);
 
   // Build chapter order map for sorting (respects series book ordering).
   const chapterOrderMap = useMemo(
@@ -457,13 +746,13 @@ export const NarrativeView: React.FC<NarrativeViewProps> = ({
   // using prose order as deterministic fallback for ties and missing times.
   const sortedScenes = useMemo(
     () =>
-      [...scenes].sort((a: Scene, b: Scene) => {
+      [...filteredScenes].sort((a: Scene, b: Scene) => {
         if (sortMode === 'chronological') {
           return chronologicalSort(a, b, chapterOrderMap, sceneEpochNanosecondsById);
         }
         return proseSort(a, b, chapterOrderMap);
       }),
-    [scenes, chapterOrderMap, sortMode, sceneEpochNanosecondsById]
+    [filteredScenes, chapterOrderMap, sortMode, sceneEpochNanosecondsById]
   );
 
   // Multi-select state — identical semantics to PinboardView.
@@ -511,6 +800,13 @@ export const NarrativeView: React.FC<NarrativeViewProps> = ({
   }, [items]);
 
   const bgClass = isLight ? 'bg-brand-gray-50' : 'bg-brand-gray-950';
+  const lineClass = isLight ? 'bg-brand-gray-300/80' : 'bg-brand-gray-600/80';
+  const markerSolidClass = isLight
+    ? 'bg-brand-500 border-brand-500'
+    : 'bg-brand-300 border-brand-300';
+  const markerHollowClass = isLight
+    ? 'bg-white border-brand-500'
+    : 'bg-brand-gray-950 border-brand-300';
 
   // -------------------------------------------------------------------------
   // Card position tracking for SVG arrow overlay
@@ -518,9 +814,18 @@ export const NarrativeView: React.FC<NarrativeViewProps> = ({
 
   /** Refs to each scene card's wrapper div, keyed by scene id. */
   const cardWrapperRefs = useRef(new Map<string, HTMLDivElement>());
+  const laneButtonRefs = useRef(new Map<string, HTMLButtonElement>());
+  const narrativeRootRef = useRef<HTMLDivElement>(null);
+  const headerLaneViewportRef = useRef<HTMLDivElement>(null);
+  const laneTrackRef = useRef<HTMLDivElement>(null);
+  const bottomLaneScrollRef = useRef<HTMLDivElement>(null);
+  const addLaneButtonRef = useRef<HTMLButtonElement>(null);
 
   /** DOM-measured card layouts (x, y, w, h) relative to the inner container. */
   const [cardLayouts, setCardLayouts] = useState<CardLayoutMap>(new Map());
+  const [laneCenterXById, setLaneCenterXById] = useState<Map<string, number>>(
+    new Map()
+  );
 
   /** Ref to the inner positioned container (SVG coordinate origin). */
   const innerContainerRef = useRef<HTMLDivElement>(null);
@@ -585,6 +890,25 @@ export const NarrativeView: React.FC<NarrativeViewProps> = ({
     return map;
   }, [narrativeArrowKeys, sortedScenes, cardLayouts]);
 
+  const markerStyleBySceneId = useMemo(() => {
+    const stylesBySceneId = new Map<string, Map<string, LaneMarkerStyle>>();
+    sceneEntryMarkerStyles.forEach(
+      (styles: Map<string, LaneMarkerStyle>, sceneId: string): void => {
+        const filtered = new Map<string, LaneMarkerStyle>();
+        visibleLaneEntryIds.forEach((entryId: string): void => {
+          const style = styles.get(entryId);
+          if (style) {
+            filtered.set(entryId, style);
+          }
+        });
+        if (filtered.size > 0) {
+          stylesBySceneId.set(sceneId, filtered);
+        }
+      }
+    );
+    return stylesBySceneId;
+  }, [sceneEntryMarkerStyles, visibleLaneEntryIds]);
+
   /** Re-measure all tracked card divs and update layout state. */
   const measureLayouts = useCallback(() => {
     const next = new Map<string, { x: number; y: number; w: number; h: number }>();
@@ -597,13 +921,28 @@ export const NarrativeView: React.FC<NarrativeViewProps> = ({
       });
     });
     setCardLayouts(next);
+
+    const nextLaneCenters = new Map<string, number>();
+    const laneTrackRect = laneTrackRef.current?.getBoundingClientRect();
+    laneButtonRefs.current.forEach((el: HTMLButtonElement, id: string): void => {
+      if (laneTrackRect) {
+        const rect = el.getBoundingClientRect();
+        nextLaneCenters.set(id, rect.left - laneTrackRect.left + rect.width / 2);
+      } else {
+        nextLaneCenters.set(id, el.offsetLeft + el.offsetWidth / 2);
+      }
+    });
+    setLaneCenterXById(nextLaneCenters);
+    setLanePlaneWidth(
+      laneTrackRef.current?.scrollWidth ?? laneTrackRef.current?.offsetWidth ?? 0
+    );
   }, []);
 
   // Measure after each render that changes the item list (scenes added/removed
   // or card heights change due to content reflow).
   useLayoutEffect(() => {
     measureLayouts();
-  }, [items, measureLayouts]);
+  }, [items, visibleLaneEntryIds, measureLayouts]);
 
   // Also re-measure when the container is resized (window resize, panel drag).
   useEffect(() => {
@@ -623,16 +962,68 @@ export const NarrativeView: React.FC<NarrativeViewProps> = ({
   const [dropHint, setDropHint] = useState<{ id: string; placeBefore: boolean } | null>(
     null
   );
+  const [dragLaneEntryId, setDragLaneEntryId] = useState<string | null>(null);
+  const dragLaneEntryIdRef = useRef<string | null>(null);
+  const [laneDropHint, setLaneDropHint] = useState<{
+    id: string;
+    placeBefore: boolean;
+  } | null>(null);
 
   const handleNarrativeBackgroundMouseDown = useCallback(
     (e: React.MouseEvent<HTMLDivElement>): void => {
       const target = e.target as HTMLElement;
       if (target.closest('[data-scene-card]')) return;
+      if (target.closest('[data-sourcebook-lane-item]')) return;
+      if (target.closest('button, input, textarea, select, a, [role="button"]')) return;
+      setSelectedLaneEntryIds(new Set<string>());
       onSelectScene(null);
       onSelectionChange?.(new Set<string>());
     },
     [onSelectScene, onSelectionChange]
   );
+
+  const applyLaneScrollDelta = useCallback((delta: number): boolean => {
+    const scroller = bottomLaneScrollRef.current;
+    if (!scroller) return false;
+
+    const maxScrollLeft = Math.max(scroller.scrollWidth - scroller.clientWidth, 0);
+    if (maxScrollLeft <= 0) return false;
+
+    const nextScrollLeft = Math.min(
+      maxScrollLeft,
+      Math.max(0, scroller.scrollLeft + delta)
+    );
+    if (Math.abs(nextScrollLeft - scroller.scrollLeft) < 0.1) return false;
+
+    scroller.scrollLeft = nextScrollLeft;
+    setLaneScrollLeft(nextScrollLeft);
+    return true;
+  }, []);
+
+  const handleLaneWheelEvent = useCallback(
+    (event: WheelEvent): void => {
+      let delta = event.deltaX;
+      if (Math.abs(delta) < 0.1 && event.shiftKey) {
+        delta = event.deltaY;
+      }
+      if (Math.abs(delta) < 0.1) return;
+
+      if (applyLaneScrollDelta(delta)) {
+        event.preventDefault();
+      }
+    },
+    [applyLaneScrollDelta]
+  );
+
+  useEffect(() => {
+    const root = narrativeRootRef.current;
+    if (!root) return;
+
+    root.addEventListener('wheel', handleLaneWheelEvent, { passive: false });
+    return () => {
+      root.removeEventListener('wheel', handleLaneWheelEvent);
+    };
+  }, [handleLaneWheelEvent]);
 
   const handleSceneDragStart = useCallback(
     (e: React.DragEvent<HTMLDivElement>, sceneId: string): void => {
@@ -691,21 +1082,505 @@ export const NarrativeView: React.FC<NarrativeViewProps> = ({
     [DRAG_SCENE_MIME, dragSceneId, onReorderScene]
   );
 
+  const handleLaneSelect = useCallback(
+    (
+      event: React.MouseEvent<HTMLButtonElement>,
+      entryId: string,
+      index: number
+    ): void => {
+      setSelectedLaneEntryIds((prev: Set<string>) => {
+        if (event.shiftKey && lastSelectedLaneIndex !== null) {
+          const start = Math.min(lastSelectedLaneIndex, index);
+          const end = Math.max(lastSelectedLaneIndex, index);
+          const range = visibleLaneEntryIds.slice(start, end + 1);
+          return new Set<string>(
+            event.ctrlKey || event.metaKey ? [...prev, ...range] : range
+          );
+        }
+
+        if (event.ctrlKey || event.metaKey) {
+          const next = new Set<string>(prev);
+          if (next.has(entryId)) {
+            next.delete(entryId);
+          } else {
+            next.add(entryId);
+          }
+          return next;
+        }
+
+        if (prev.size === 1 && prev.has(entryId)) {
+          return new Set<string>();
+        }
+
+        return new Set<string>([entryId]);
+      });
+      setLastSelectedLaneIndex(index);
+    },
+    [lastSelectedLaneIndex, visibleLaneEntryIds]
+  );
+
+  const handleLaneRemove = useCallback(
+    (entryId: string): void => {
+      if (referencedCharacterEntryIds.includes(entryId)) {
+        setRemovedReferencedLaneIds((prev: Set<string>) => {
+          const next = new Set<string>(prev);
+          next.add(entryId);
+          return next;
+        });
+      }
+      setVisibleLaneEntryIds((prev: string[]): string[] =>
+        prev.filter((candidateId: string): boolean => candidateId !== entryId)
+      );
+      setSelectedLaneEntryIds((prev: Set<string>) => {
+        if (!prev.has(entryId)) return prev;
+        const next = new Set<string>(prev);
+        next.delete(entryId);
+        return next;
+      });
+    },
+    [referencedCharacterEntryIds]
+  );
+
+  const handleLaneAdd = useCallback((entryId: string): void => {
+    setVisibleLaneEntryIds((prev: string[]): string[] => {
+      if (prev.includes(entryId)) return prev;
+      return [...prev, entryId];
+    });
+    setRemovedReferencedLaneIds((prev: Set<string>) => {
+      if (!prev.has(entryId)) return prev;
+      const next = new Set<string>(prev);
+      next.delete(entryId);
+      return next;
+    });
+    setPickerOpen(false);
+    setPickerQuery('');
+  }, []);
+
+  const updatePickerAlignment = useCallback((): void => {
+    const rect = addLaneButtonRef.current?.getBoundingClientRect();
+    if (!rect) {
+      setPickerPosition(null);
+      return;
+    }
+
+    const menuWidth = 288;
+    const menuHeight = 320;
+    const viewportPadding = 8;
+    const maxLeft = Math.max(
+      viewportPadding,
+      window.innerWidth - menuWidth - viewportPadding
+    );
+    const preferredLeft = rect.left;
+    const left = Math.min(maxLeft, Math.max(viewportPadding, preferredLeft));
+    const preferredTop = rect.bottom + 8;
+    const maxTop = Math.max(
+      viewportPadding,
+      window.innerHeight - menuHeight - viewportPadding
+    );
+    const top = Math.min(maxTop, Math.max(viewportPadding, preferredTop));
+    setPickerPosition({ top, left });
+  }, []);
+
+  useEffect(() => {
+    if (!pickerOpen) return;
+
+    const handleViewportChange = (): void => {
+      updatePickerAlignment();
+    };
+
+    window.addEventListener('resize', handleViewportChange);
+    window.addEventListener('scroll', handleViewportChange, true);
+
+    return () => {
+      window.removeEventListener('resize', handleViewportChange);
+      window.removeEventListener('scroll', handleViewportChange, true);
+    };
+  }, [pickerOpen, updatePickerAlignment]);
+
+  useEffect(() => {
+    if (!bottomLaneScrollRef.current) return;
+    const current = bottomLaneScrollRef.current;
+    if (Math.abs(current.scrollLeft - laneScrollLeft) > 1) {
+      current.scrollLeft = laneScrollLeft;
+    }
+  }, [laneScrollLeft]);
+
+  const handleLaneDragStart = useCallback(
+    (event: React.DragEvent<HTMLElement>, entryId: string): void => {
+      dragLaneEntryIdRef.current = entryId;
+      setDragLaneEntryId(entryId);
+      setLaneDropHint(null);
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData(LANE_DRAG_MIME, entryId);
+      event.dataTransfer.setData('text/plain', entryId);
+    },
+    []
+  );
+
+  const handleLaneDragEnd = useCallback((): void => {
+    dragLaneEntryIdRef.current = null;
+    setDragLaneEntryId(null);
+    setLaneDropHint(null);
+  }, []);
+
+  const handleLaneDragOver = useCallback(
+    (event: React.DragEvent<HTMLElement>, entryId: string): void => {
+      const sourceId =
+        dragLaneEntryIdRef.current ||
+        event.dataTransfer.getData(LANE_DRAG_MIME) ||
+        dragLaneEntryId;
+      if (!sourceId || sourceId === entryId) return;
+      event.preventDefault();
+      const boundary = getHorizontalDropBoundary(event.currentTarget);
+      const placeBefore = event.clientX < boundary.left + boundary.width / 2;
+      setLaneDropHint((prev: { id: string; placeBefore: boolean } | null) => {
+        if (prev && prev.id === entryId && prev.placeBefore === placeBefore) {
+          return prev;
+        }
+        return { id: entryId, placeBefore };
+      });
+    },
+    [dragLaneEntryId]
+  );
+
+  const handleLaneDrop = useCallback(
+    (event: React.DragEvent<HTMLElement>, targetId: string): void => {
+      event.preventDefault();
+      const sourceId =
+        dragLaneEntryIdRef.current ||
+        event.dataTransfer.getData(LANE_DRAG_MIME) ||
+        dragLaneEntryId;
+      if (!sourceId || sourceId === targetId) return;
+      const boundary = getHorizontalDropBoundary(event.currentTarget);
+      const placeBefore = event.clientX < boundary.left + boundary.width / 2;
+      setVisibleLaneEntryIds((prev: string[]): string[] =>
+        reorderValues(prev, sourceId, targetId, placeBefore)
+      );
+      dragLaneEntryIdRef.current = null;
+      setDragLaneEntryId(null);
+      setLaneDropHint(null);
+    },
+    [dragLaneEntryId]
+  );
+
+  const availableSourcebookEntries = useMemo(() => {
+    const visibleIds = new Set<string>(visibleLaneEntryIds);
+    const query = normalizeToken(pickerQuery);
+    return sourcebookEntries
+      .filter((entry: SourcebookEntry): boolean => !visibleIds.has(entry.id))
+      .filter((entry: SourcebookEntry): boolean => {
+        if (!query) return true;
+        return [entry.name, ...(entry.synonyms ?? []), entry.category ?? ''].some(
+          (value: string): boolean => normalizeToken(value).includes(query)
+        );
+      })
+      .sort((entryA: SourcebookEntry, entryB: SourcebookEntry): number =>
+        entryA.name.localeCompare(entryB.name)
+      );
+  }, [pickerQuery, sourcebookEntries, visibleLaneEntryIds]);
+
+  const handleBottomLaneScroll = useCallback(
+    (event: React.UIEvent<HTMLDivElement>): void => {
+      setLaneScrollLeft(event.currentTarget.scrollLeft);
+    },
+    []
+  );
+
   // -------------------------------------------------------------------------
   // Render
   // -------------------------------------------------------------------------
 
   return (
     <div
-      className={`w-full h-full overflow-y-auto ${bgClass}`}
+      ref={narrativeRootRef}
+      className={`w-full h-full flex flex-col ${bgClass}`}
       role="region"
       aria-label={t(sortMode === 'chronological' ? 'Chronological' : 'Narrative')}
-      onMouseDown={handleNarrativeBackgroundMouseDown}
     >
-      {/* Inner container is position:relative so the SVG overlay and card
-          wrapper offsetTop values share the same coordinate origin. */}
-      <div ref={innerContainerRef} className="relative">
-        <div className="flex flex-col gap-2 p-3">
+      <div
+        className={`sticky top-0 z-30 border-b ${isLight ? 'border-brand-gray-200 bg-brand-gray-50' : 'border-brand-gray-800 bg-brand-gray-950'}`}
+      >
+        <div ref={headerLaneViewportRef} className="overflow-hidden px-3 pt-2 pb-2">
+          <div
+            ref={laneTrackRef}
+            className="relative flex items-start gap-2 w-max min-w-full"
+            style={{ transform: `translateX(${-laneScrollLeft}px)` }}
+          >
+            {visibleLaneEntryIds.map((entryId: string, index: number) => {
+              const entry = sourcebookEntriesById.get(entryId);
+              if (!entry) return null;
+              const isSelected = selectedLaneEntryIds.has(entryId);
+              const dropLeft =
+                laneDropHint &&
+                laneDropHint.id === entryId &&
+                laneDropHint.placeBefore &&
+                dragLaneEntryId;
+              const dropRight =
+                laneDropHint &&
+                laneDropHint.id === entryId &&
+                !laneDropHint.placeBefore &&
+                dragLaneEntryId;
+
+              return (
+                <div
+                  key={entryId}
+                  data-sourcebook-lane-item={entryId}
+                  draggable
+                  onDragStart={(event: React.DragEvent<HTMLDivElement>) =>
+                    handleLaneDragStart(event, entryId)
+                  }
+                  onDragEnd={handleLaneDragEnd}
+                  onDragOver={(event: React.DragEvent<HTMLDivElement>) =>
+                    handleLaneDragOver(event, entryId)
+                  }
+                  onDrop={(event: React.DragEvent<HTMLDivElement>) =>
+                    handleLaneDrop(event, entryId)
+                  }
+                  className={[
+                    'relative w-auto',
+                    dropLeft
+                      ? 'before:absolute before:-left-1 before:top-2 before:bottom-2 before:w-0.5 before:bg-brand-500 before:rounded'
+                      : '',
+                    dropRight
+                      ? 'after:absolute after:-right-1 after:top-2 after:bottom-2 after:w-0.5 after:bg-brand-500 after:rounded'
+                      : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                >
+                  <button
+                    draggable
+                    ref={(element: HTMLButtonElement | null) => {
+                      if (element) {
+                        laneButtonRefs.current.set(entryId, element);
+                      } else {
+                        laneButtonRefs.current.delete(entryId);
+                      }
+                    }}
+                    type="button"
+                    aria-pressed={isSelected}
+                    aria-label={entry.name}
+                    onDragStart={(event: React.DragEvent<HTMLButtonElement>) =>
+                      handleLaneDragStart(event, entryId)
+                    }
+                    onDragEnd={handleLaneDragEnd}
+                    onDragOver={(event: React.DragEvent<HTMLButtonElement>) =>
+                      handleLaneDragOver(event, entryId)
+                    }
+                    onDrop={(event: React.DragEvent<HTMLButtonElement>) =>
+                      handleLaneDrop(event, entryId)
+                    }
+                    onClick={(event: React.MouseEvent<HTMLButtonElement>): void =>
+                      handleLaneSelect(event, entryId, index)
+                    }
+                    className={[
+                      'inline-flex w-36 flex-col items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium shadow-sm transition-colors',
+                      isSelected
+                        ? isLight
+                          ? 'border-brand-500 bg-brand-100 text-brand-gray-900'
+                          : 'border-brand-300 bg-brand-gray-800 text-brand-gray-50'
+                        : isLight
+                          ? 'border-brand-gray-200 bg-white text-brand-gray-800 hover:border-brand-300'
+                          : 'border-brand-gray-700 bg-brand-gray-900 text-brand-gray-100 hover:border-brand-gray-500',
+                    ].join(' ')}
+                  >
+                    <span
+                      data-sourcebook-lane-label
+                      className="block w-full truncate text-center"
+                    >
+                      {entry.name}
+                    </span>
+                    {(() => {
+                      const firstImageFilename = entry.images?.[0];
+                      const portrait = firstImageFilename
+                        ? projectImageByFilename.get(firstImageFilename)
+                        : undefined;
+                      const portraitUrl = portrait?.url ?? null;
+                      if (portraitUrl) {
+                        return (
+                          <img
+                            src={portraitUrl}
+                            alt=""
+                            className="h-12 w-12 rounded-md object-cover border border-brand-gray-300/60 flex-shrink-0"
+                          />
+                        );
+                      }
+                      return (
+                        <span className="h-12 w-12 rounded-md border border-brand-gray-300/60 bg-brand-gray-100/60 flex-shrink-0" />
+                      );
+                    })()}
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={t('Remove {{name}}', { name: entry.name })}
+                    onClick={(event: React.MouseEvent<HTMLButtonElement>): void => {
+                      event.stopPropagation();
+                      handleLaneRemove(entryId);
+                    }}
+                    className={[
+                      'absolute -top-1.5 -right-1.5 rounded-full border p-0.5 shadow-sm',
+                      isLight
+                        ? 'border-brand-gray-200 bg-white text-brand-gray-500 hover:text-brand-gray-800'
+                        : 'border-brand-gray-700 bg-brand-gray-900 text-brand-gray-300 hover:text-brand-gray-50',
+                    ].join(' ')}
+                  >
+                    <X size={12} aria-hidden="true" />
+                  </button>
+                </div>
+              );
+            })}
+
+            <div className="relative w-auto">
+              <button
+                ref={addLaneButtonRef}
+                type="button"
+                aria-label={t('Add sourcebook lane')}
+                onClick={(): void => {
+                  setPickerOpen((open: boolean): boolean => {
+                    const nextOpen = !open;
+                    if (nextOpen) {
+                      updatePickerAlignment();
+                    }
+                    return nextOpen;
+                  });
+                }}
+                className={[
+                  'inline-flex w-36 items-center justify-center gap-1 rounded-md border border-dashed px-2 py-1 text-xs font-medium whitespace-nowrap transition-colors',
+                  isLight
+                    ? 'border-brand-gray-300 bg-white text-brand-gray-600 hover:border-brand-500 hover:text-brand-gray-900'
+                    : 'border-brand-gray-600 bg-brand-gray-900 text-brand-gray-300 hover:border-brand-300 hover:text-brand-gray-50',
+                ].join(' ')}
+              >
+                <Plus size={14} aria-hidden="true" />
+                <span>{t('Add')}</span>
+              </button>
+
+              {pickerOpen &&
+                pickerPosition &&
+                createPortal(
+                  <div
+                    className={[
+                      'fixed z-[120] w-72 rounded-lg border shadow-xl',
+                      isLight
+                        ? 'border-brand-gray-200 bg-white'
+                        : 'border-brand-gray-700 bg-brand-gray-900',
+                    ].join(' ')}
+                    style={{
+                      top: pickerPosition.top,
+                      left: pickerPosition.left,
+                      maxWidth: 'calc(100vw - 1rem)',
+                    }}
+                  >
+                    <div className="p-3 border-b border-inherit">
+                      <input
+                        type="text"
+                        value={pickerQuery}
+                        onChange={(event: React.ChangeEvent<HTMLInputElement>): void =>
+                          setPickerQuery(event.target.value)
+                        }
+                        placeholder={t('Search sourcebook entries...')}
+                        className={[
+                          'w-full rounded-md border px-3 py-2 text-sm outline-none',
+                          isLight
+                            ? 'border-brand-gray-200 bg-white text-brand-gray-900'
+                            : 'border-brand-gray-700 bg-brand-gray-950 text-brand-gray-100',
+                        ].join(' ')}
+                      />
+                    </div>
+                    <div className="max-h-64 overflow-y-auto p-2">
+                      {availableSourcebookEntries.length > 0 ? (
+                        availableSourcebookEntries.map((entry: SourcebookEntry) => (
+                          <button
+                            key={entry.id}
+                            type="button"
+                            onClick={(): void => handleLaneAdd(entry.id)}
+                            className={[
+                              'flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm transition-colors',
+                              isLight
+                                ? 'hover:bg-brand-gray-100 text-brand-gray-900'
+                                : 'hover:bg-brand-gray-800 text-brand-gray-100',
+                            ].join(' ')}
+                          >
+                            <span>{entry.name}</span>
+                            <span
+                              className={`text-xs ${isLight ? 'text-brand-gray-500' : 'text-brand-gray-400'}`}
+                            >
+                              {t(entry.category || 'Sourcebook')}
+                            </span>
+                          </button>
+                        ))
+                      ) : (
+                        <p
+                          className={`px-3 py-2 text-sm ${isLight ? 'text-brand-gray-500' : 'text-brand-gray-400'}`}
+                        >
+                          {t('No matching sourcebook entries')}
+                        </p>
+                      )}
+                    </div>
+                  </div>,
+                  document.body
+                )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div
+        ref={innerContainerRef}
+        className="relative flex-1 overflow-y-auto"
+        onMouseDown={handleNarrativeBackgroundMouseDown}
+      >
+        <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
+          <div
+            className="relative h-full"
+            style={{
+              width: lanePlaneWidth > 0 ? `${lanePlaneWidth}px` : '100%',
+              transform: `translateX(${-laneScrollLeft}px)`,
+            }}
+          >
+            {visibleLaneEntryIds.map((entryId: string) => {
+              const centerX = laneCenterXById.get(entryId);
+              if (centerX === undefined) return null;
+              return (
+                <div
+                  key={`line-${entryId}`}
+                  data-sourcebook-line={entryId}
+                  className={`absolute w-px ${lineClass}`}
+                  style={{ left: centerX, top: 0, bottom: 0 }}
+                />
+              );
+            })}
+            {items.map((item: NarrativeItem) => {
+              if (item.kind !== 'scene') return null;
+              const laneMarkers = markerStyleBySceneId.get(item.scene.id);
+              const cardLayout = cardLayouts.get(item.scene.id);
+              if (!laneMarkers || !cardLayout) return null;
+
+              return visibleLaneEntryIds.map((entryId: string) => {
+                const markerStyle = laneMarkers.get(entryId);
+                const laneCenterX = laneCenterXById.get(entryId);
+                if (!markerStyle || laneCenterX === undefined) {
+                  return null;
+                }
+
+                return (
+                  <span
+                    key={`marker-${item.scene.id}-${entryId}`}
+                    data-scene-link-marker={`${item.scene.id}:${entryId}`}
+                    data-link-style={markerStyle}
+                    className={[
+                      'absolute z-20 h-3 w-3 -translate-x-1/2 rounded-full border-2',
+                      markerStyle === 'solid' ? markerSolidClass : markerHollowClass,
+                    ].join(' ')}
+                    style={{ left: laneCenterX, top: Math.max(cardLayout.y - 6, 0) }}
+                  />
+                );
+              });
+            })}
+          </div>
+        </div>
+
+        <div className="relative z-10 flex flex-col gap-2 p-3">
           {items.map((item: NarrativeItem, renderIdx: number) => {
             if (item.kind === 'book-break') {
               return (
@@ -726,6 +1601,7 @@ export const NarrativeView: React.FC<NarrativeViewProps> = ({
             if (item.kind === 'unlinked-header') {
               return <UnlinkedHeader key="unlinked-header" />;
             }
+
             const { scene } = item;
             const displayIndex = sceneIndexMap.get(scene.id) ?? 0;
             const dropTop =
@@ -791,11 +1667,13 @@ export const NarrativeView: React.FC<NarrativeViewProps> = ({
             <p
               className={`text-sm text-center py-8 ${isLight ? 'text-brand-gray-400' : 'text-brand-gray-500'}`}
             >
-              {t('No scenes yet')}
+              {selectedLaneEntryIds.size > 0
+                ? t('No scenes match the selected entries')
+                : t('No scenes yet')}
             </p>
           )}
         </div>
-        {/* Rendered after the card list so it paints on top of the cards. */}
+
         <CauseArrows
           scenes={scenes}
           livePositions={emptyPositions}
@@ -806,6 +1684,27 @@ export const NarrativeView: React.FC<NarrativeViewProps> = ({
           hideDefaultArrows
           activeSceneId={activeSceneId}
         />
+      </div>
+
+      <div
+        className={`border-t px-3 py-1 ${isLight ? 'border-brand-gray-200 bg-brand-gray-50' : 'border-brand-gray-800 bg-brand-gray-950'}`}
+      >
+        <div
+          ref={bottomLaneScrollRef}
+          className="overflow-x-auto overflow-y-hidden"
+          onScroll={handleBottomLaneScroll}
+          aria-label={t('Lane horizontal scrollbar')}
+        >
+          <div
+            style={{
+              width: Math.max(
+                lanePlaneWidth,
+                headerLaneViewportRef.current?.clientWidth ?? 0
+              ),
+              height: 1,
+            }}
+          />
+        </div>
       </div>
     </div>
   );
