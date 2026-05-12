@@ -45,6 +45,7 @@ import {
 import { useToast } from './components/ui/Toast';
 import { setErrorDispatcher } from './services/errorNotifier';
 import { useChatStore, ChatStoreState } from './stores/chatStore';
+import { uiStoreActions, useUIStore, UIStoreState } from './stores/uiStore';
 import type { SessionMutation } from './features/chat';
 
 const App: React.FC = () => {
@@ -180,6 +181,17 @@ const App: React.FC = () => {
     isMobileFormatMenuOpen,
     setIsMobileFormatMenuOpen,
   } = useEditorUIState();
+  const setWorkspaceMode = useUIStore(
+    (s: UIStoreState): UIStoreState['setWorkspaceMode'] => s.setWorkspaceMode
+  );
+
+  const openSceneEditorDialog = useCallback(
+    (sceneId: string): void => {
+      setWorkspaceMode('scenes');
+      uiStoreActions.openSceneEditorDialog(sceneId);
+    },
+    [setWorkspaceMode]
+  );
 
   const { editorSettings, setEditorSettings, currentTheme, isLight } =
     useEditorPreferences();
@@ -258,6 +270,7 @@ const App: React.FC = () => {
     requestToolCallLoopAccess,
     handleChapterSelect,
     openAndExpandStory,
+    openSceneEditorDialog,
     openSourcebookEntryDialog,
     openStoryMetadataDialog,
     openChapterMetadataDialog,

@@ -119,13 +119,19 @@ describe('project context refresh injection', () => {
         id: 'assistant-tool',
         role: 'model',
         text: '',
-        tool_calls: [{ id: 'call-1', name: 'get_story_metadata', args: {} }],
+        tool_calls: [
+          {
+            id: 'call-1',
+            name: 'manage_story_core',
+            args: { action: 'get_metadata' },
+          },
+        ],
       },
       {
         id: 'tool-result',
         role: 'tool',
         text: '{"title":"Old"}',
-        name: 'get_story_metadata',
+        name: 'manage_story_core',
         tool_call_id: 'call-1',
       },
       { id: 'user-1', role: 'user', text: 'Continue.' },
@@ -171,7 +177,7 @@ describe('project context refresh injection', () => {
     expect(result.injected).toBe(true);
     expect(
       result.history.some(
-        (message: ChatMessage) => message.name === 'get_story_metadata'
+        (message: ChatMessage) => message.name === 'manage_story_core'
       )
     ).toBe(false);
 
@@ -212,13 +218,19 @@ describe('project context refresh injection', () => {
         id: 'assistant-tool',
         role: 'model',
         text: '',
-        tool_calls: [{ id: 'call-1', name: 'get_story_metadata', args: {} }],
+        tool_calls: [
+          {
+            id: 'call-1',
+            name: 'manage_story_core',
+            args: { action: 'get_metadata' },
+          },
+        ],
       },
       {
         id: 'tool-result',
         role: 'tool',
         text: '{"summary":"Old"}',
-        name: 'get_story_metadata',
+        name: 'manage_story_core',
         tool_call_id: 'call-1',
       },
     ];

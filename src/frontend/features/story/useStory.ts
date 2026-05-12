@@ -367,6 +367,22 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
             };
           }
 
+          // Scenes are project-level data and are not embedded in the main story
+          // payload, so refresh must explicitly reload them to avoid losing the
+          // in-memory scene list after tool-driven mutations.
+          const refreshedScenes = await projectApi.scenes
+            .list()
+            .catch((e: unknown): Scene[] => {
+              console.error('Failed to refresh scenes', e);
+              return latestStoryRef.current.scenes ?? [];
+            });
+          newStory = {
+            ...newStory,
+            scenes: Array.isArray(refreshedScenes)
+              ? refreshedScenes
+              : (latestStoryRef.current.scenes ?? []),
+          };
+
           lastLoadedChapterId.current = null;
           useStoryStore.getState().incrementLoadChapterSignal();
           if (historyLabel) {

@@ -30,6 +30,23 @@ type ReplaceChangeLocation = {
   label: string;
 };
 
+/** Parse tool args that may arrive as { raw: '{...json...}' }. */
+function normalizeToolArgs(args: Record<string, unknown>): Record<string, unknown> {
+  const raw = args.raw;
+  if (typeof raw !== 'string') {
+    return args;
+  }
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object') {
+      return parsed as Record<string, unknown>;
+    }
+  } catch {
+    // Keep original args when raw is malformed.
+  }
+  return args;
+}
+
 /** Build sourcebook mutation. */
 function buildSourcebookMutation(
   args: Record<string, unknown>,
@@ -58,6 +75,29 @@ function buildChapterMutation(
     type: 'chapter',
     label: chapId ? `Chapter ${chapId}` : 'Chapter prose',
     targetId: chapId ? String(chapId) : undefined,
+  };
+}
+
+/** Build scene mutation. */
+function buildSceneMutation(
+  args: Record<string, unknown>,
+  result: Record<string, unknown>
+): SessionMutation {
+  const sceneId =
+    result.scene_id ||
+    result.id ||
+    (typeof result.scene === 'object' && result.scene
+      ? (result.scene as Record<string, unknown>).id
+      : undefined) ||
+    args.scene_id;
+  return {
+    id: `scene-${Date.now()}-${Math.random()}`,
+    type: 'scene',
+    label: 'Scene',
+    targetId:
+      typeof sceneId === 'string' || typeof sceneId === 'number'
+        ? String(sceneId)
+        : undefined,
   };
 }
 
@@ -133,6 +173,80 @@ export function buildMetadataFields(
  * `{ args, result }` pair into one or more `SessionMutation` objects.
  */
 export const MUTATION_TOOL_REGISTRY: Record<string, MutFactory> = {
+  manage_story_core: ({ args }: MutCallResult): SessionMutation[] | null => {
+    const normalizedArgs = normalizeToolArgs(args);
+    if (
+      normalizedArgs.action === 'update_metadata' ||
+      normalizedArgs.action === 'sync_summary'
+    ) {
+      const updateData =
+        typeof normalizedArgs.update_data === 'object' && normalizedArgs.update_data
+          ? (normalizedArgs.update_data as Record<string, unknown>)
+          : {};
+      return buildMetadataFields(
+        updateData,
+        normalizedArgs.action === 'sync_summary',
+        undefined,
+        undefined,
+        undefined
+      );
+    }
+    return null;
+  },
+  manage_sourcebook: ({ args, result }: MutCallResult): SessionMutation | null => {
+    const normalizedArgs = normalizeToolArgs(args);
+    const action = normalizedArgs.action;
+    if (
+      action === 'create' ||
+      action === 'update' ||
+      action === 'delete' ||
+      action === 'add_relation' ||
+      action === 'remove_relation'
+    ) {
+      return buildSourcebookMutation(normalizedArgs, result);
+    }
+    return null;
+  },
+  manage_images: ({ args }: MutCallResult): SessionMutation | null => {
+    const normalizedArgs = normalizeToolArgs(args);
+    if (
+      normalizedArgs.action === 'generate_description' ||
+      normalizedArgs.action === 'create_placeholder' ||
+      normalizedArgs.action === 'set_metadata'
+    ) {
+      return {
+        id: `img-${Date.now()}-${Math.random()}`,
+        type: 'story',
+        label: 'Images',
+      };
+    }
+    return null;
+  },
+  search_and_replace: ({
+    args,
+    result,
+  }: MutCallResult): SessionMutation | SessionMutation[] | null => {
+    const normalizedArgs = normalizeToolArgs(args);
+    if (normalizedArgs.action === 'replace') {
+      return MUTATION_TOOL_REGISTRY.replace_in_project({
+        args: normalizedArgs,
+        result,
+      });
+    }
+    return null;
+  },
+  manage_scenes: ({ args, result }: MutCallResult): SessionMutation | null => {
+    const normalizedArgs = normalizeToolArgs(args);
+    if (
+      normalizedArgs.action === 'create' ||
+      normalizedArgs.action === 'update' ||
+      normalizedArgs.action === 'delete'
+    ) {
+      return buildSceneMutation(normalizedArgs, result);
+    }
+    return null;
+  },
+
   // --- Sourcebook tools ---
   create_sourcebook_entry: ({ args, result }: MutCallResult): SessionMutation =>
     buildSourcebookMutation(args, result),
@@ -311,6 +425,13 @@ export const MUTATION_TOOL_REGISTRY: Record<string, MutFactory> = {
             subType,
           };
         }
+        case 'scene':
+          return {
+            id: `scene-replace-${targetId ?? 'unknown'}-${Date.now()}-${Math.random()}`,
+            type: 'scene' as const,
+            label: location.label,
+            targetId: targetId as string | undefined,
+          };
         case 'story':
           return {
             id: `story-replace-${Date.now()}-${Math.random()}`,
@@ -358,6 +479,16 @@ export const MUTATION_TOOL_REGISTRY: Record<string, MutFactory> = {
           type: 'book' as const,
           label: section,
           targetId: bookMatch[1],
+        };
+      }
+
+      const sceneMatch = section.match(/Scene\s+([^\s:]+)/i);
+      if (sceneMatch) {
+        return {
+          id: `scene-replace-${sceneMatch[1]}-${Date.now()}-${Math.random()}`,
+          type: 'scene' as const,
+          label: section,
+          targetId: sceneMatch[1],
         };
       }
 

@@ -130,6 +130,9 @@ export const ScenesPanelContainer: React.FC<ScenesPanelContainerProps> = ({
   const setIsSidebarOpen = useUIStore(
     (s: UIStoreState): UIStoreState['setIsSidebarOpen'] => s.setIsSidebarOpen
   );
+  const sceneEditorDialog = useUIStore(
+    (s: UIStoreState): UIStoreState['sceneEditorDialog'] => s.sceneEditorDialog
+  );
   const scenes = useScenes();
   const story = useStoryStore((s: StoryStoreState) => s.story);
   const patchScene = useStoryStore((s: StoryStoreState) => s.patchScene);
@@ -139,6 +142,7 @@ export const ScenesPanelContainer: React.FC<ScenesPanelContainerProps> = ({
 
   const [viewMode, setViewMode] = useState<ViewMode>('pinboard');
   const [editingSceneId, setEditingSceneId] = useState<string | null>(null);
+  const lastHandledSceneIntentVersionRef = React.useRef(0);
 
   const storyRef = React.useRef(story);
   storyRef.current = story;
@@ -164,6 +168,23 @@ export const ScenesPanelContainer: React.FC<ScenesPanelContainerProps> = ({
   const editingScene = editingSceneId
     ? (scenes.find((s: Scene) => s.id === editingSceneId) ?? null)
     : null;
+
+  useEffect((): void => {
+    if (!sceneEditorDialog.isOpen || !sceneEditorDialog.sceneId) {
+      return;
+    }
+    if (sceneEditorDialog.version === lastHandledSceneIntentVersionRef.current) {
+      return;
+    }
+    lastHandledSceneIntentVersionRef.current = sceneEditorDialog.version;
+    setEditingSceneId(sceneEditorDialog.sceneId);
+    handleSelectScene(sceneEditorDialog.sceneId);
+  }, [
+    sceneEditorDialog.isOpen,
+    sceneEditorDialog.sceneId,
+    sceneEditorDialog.version,
+    handleSelectScene,
+  ]);
 
   // ---- Create ----
   const handleAddScene = useCallback(async (): Promise<void> => {

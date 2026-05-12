@@ -48,8 +48,8 @@ async def test_stream_unified_chat_content_multi_round():
                     "index": 0,
                     "id": "call_1",
                     "function": {
-                        "name": "update_story_metadata",
-                        "arguments": '{"title": "New Title"}',
+                        "name": "manage_story_core",
+                        "arguments": '{"action":"update_metadata","update_data":{"title":"New Title"}}',
                     },
                 }
             ]
@@ -95,8 +95,11 @@ async def test_stream_unified_chat_content_multi_round():
         # Verify tool was executed
         mock_exec.assert_called_once()
         args, kwargs = mock_exec.call_args
-        assert args[0] == "update_story_metadata"
-        assert args[1] == {"title": "New Title"}
+        assert args[0] == "manage_story_core"
+        assert args[1] == {
+            "action": "update_metadata",
+            "update_data": {"title": "New Title"},
+        }
 
 
 @pytest.mark.anyio

@@ -168,6 +168,39 @@ class TestSceneCRUD:
         assert scenes[1]["summary"] == "Top-right"
         assert scenes[2]["summary"] == "Bottom-right"
 
+    def test_list_normalizes_legacy_null_list_fields(self, project_dir: Path) -> None:
+        """Scenes with legacy null list fields are coerced to valid list defaults."""
+        story = load_story_config(project_dir / "story.json") or {}
+        story["scenes"] = {
+            "legacy-null": {
+                "summary": "Legacy",
+                "beats": None,
+                "active_characters": None,
+                "passive_characters": None,
+                "sourcebook_entry_ids": None,
+                "order_before": None,
+                "order_after": None,
+                "pinboard_x": None,
+                "pinboard_y": None,
+                "status": None,
+            }
+        }
+        save_story_config(project_dir / "story.json", story)
+
+        scenes = list_scenes(project_dir)
+        assert len(scenes) == 1
+        scene = scenes[0]
+        assert scene["id"] == "legacy-null"
+        assert scene["beats"] == []
+        assert scene["active_characters"] == []
+        assert scene["passive_characters"] == []
+        assert scene["sourcebook_entry_ids"] == []
+        assert scene["order_before"] == []
+        assert scene["order_after"] == []
+        assert scene["pinboard_x"] == 100.0
+        assert scene["pinboard_y"] == 100.0
+        assert scene["status"] == "active"
+
 
 # ---------------------------------------------------------------------------
 # Prose stale detection tests

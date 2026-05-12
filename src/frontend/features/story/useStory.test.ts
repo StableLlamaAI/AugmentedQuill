@@ -1221,4 +1221,48 @@ describe('fetchStory: scene loading on project open', () => {
     // Each project open must trigger exactly one scenes.list call.
     expect(scenesListMock).toHaveBeenCalledTimes(1);
   });
+
+  it('keeps scenes populated after refreshStory (no full reload required)', async () => {
+    const scenes = buildScenes();
+    setupForFetch(scenes);
+
+    const { result } = renderHook(() => useStory());
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(result.current.story.scenes).toHaveLength(2);
+
+    await act(async () => {
+      await result.current.refreshStory();
+    });
+
+    expect(result.current.story.scenes).toHaveLength(2);
+    expect(result.current.story.scenes[0].id).toBe('scene-1');
+    expect(result.current.story.scenes[1].id).toBe('scene-2');
+  });
+
+  it('preserves existing scenes when refreshStory scenes.list fails', async () => {
+    const scenes = buildScenes();
+    const { scenesListMock } = setupForFetch(scenes);
+
+    const { result } = renderHook(() => useStory());
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(result.current.story.scenes).toHaveLength(2);
+
+    scenesListMock.mockRejectedValueOnce(new Error('refresh failed'));
+
+    await act(async () => {
+      await result.current.refreshStory();
+    });
+
+    expect(result.current.story.scenes).toHaveLength(2);
+    expect(result.current.story.scenes[0].id).toBe('scene-1');
+    expect(result.current.story.scenes[1].id).toBe('scene-2');
+  });
 });

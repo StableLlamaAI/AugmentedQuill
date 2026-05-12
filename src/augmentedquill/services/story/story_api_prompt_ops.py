@@ -38,14 +38,14 @@ def _get_read_only_tool_schemas(project_type: str | None = None) -> list[dict]:
     """Return a filtered tool schema list with only read-only story/chapter context tools."""
     tools = get_tool_schemas(EDITING_ROLE, project_type=project_type) or []
     relevant_names = {
-        "get_project_overview",
-        "get_story_metadata",
+        "manage_project",
+        "manage_story_core",
         "get_chapter_metadata",
         "get_chapter_content",
         "get_chapter_summary",
         "get_chapter_summaries",
-        "search_in_project",
-        "get_sourcebook_entry",
+        "search_and_replace",
+        "manage_sourcebook",
     }
     return [t for t in tools if t.get("function", {}).get("name") in relevant_names]
 

@@ -246,12 +246,12 @@ class SourcebookValidationTest(TestCase):
 
     def test_pydantic_schema_validates_images_on_create_tool(self):
         from augmentedquill.services.chat.chat_tools.sourcebook_tools import (
-            CreateSourcebookEntryParams,
+            ManageSourcebookEntryData,
         )
         from pydantic import ValidationError
 
         # Valid
-        params = CreateSourcebookEntryParams(
+        params = ManageSourcebookEntryData(
             name="Valid Model",
             description="Valid",
             category="Character",
@@ -260,14 +260,14 @@ class SourcebookValidationTest(TestCase):
         self.assertEqual(params.images, ["img1", "img2"])
 
         # Default is empty list
-        params2 = CreateSourcebookEntryParams(
+        params2 = ManageSourcebookEntryData(
             name="Valid Model 2", description="Valid", category="Character"
         )
         self.assertEqual(params2.images, [])
 
         # Invalid
         with self.assertRaises(ValidationError):
-            CreateSourcebookEntryParams(
+            ManageSourcebookEntryData(
                 name="Invalid Model",
                 description="Valid",
                 category="Character",
@@ -276,30 +276,30 @@ class SourcebookValidationTest(TestCase):
 
     def test_pydantic_schema_validates_images_on_update_tool(self):
         from augmentedquill.services.chat.chat_tools.sourcebook_tools import (
-            UpdateSourcebookEntryParams,
+            ManageSourcebookUpdateData,
         )
         from pydantic import ValidationError
 
         # Valid
-        params = UpdateSourcebookEntryParams(name_or_id="id1", images=["img1"])
+        params = ManageSourcebookUpdateData(images=["img1"])
         self.assertEqual(params.images, ["img1"])
 
         # Default is None
-        params2 = UpdateSourcebookEntryParams(name_or_id="id1")
+        params2 = ManageSourcebookUpdateData()
         self.assertIsNone(params2.images)
 
         # Invalid
         with self.assertRaises(ValidationError):
-            UpdateSourcebookEntryParams(name_or_id="id1", images="not a list")
+            ManageSourcebookUpdateData(images="not a list")
 
     def test_chat_tool_update_without_fields_returns_error(self):
         ensure_tool_registry_loaded()
-        tool = get_tool_function("update_sourcebook_entry")
+        tool = get_tool_function("manage_sourcebook")
         self.assertIsNotNone(tool)
 
         response = self._run_async(
             tool(
-                {"name_or_id": "id1"},
+                {"action": "update", "name_or_id": "id1", "update_data": {}},
                 "call_test",
                 payload={},
                 mutations={},
@@ -307,7 +307,7 @@ class SourcebookValidationTest(TestCase):
         )
 
         self.assertIsInstance(response, dict)
-        self.assertEqual(response.get("name"), "update_sourcebook_entry")
+        self.assertEqual(response.get("name"), "manage_sourcebook")
         self.assertEqual(response.get("tool_call_id"), "call_test")
 
         content = response.get("content")

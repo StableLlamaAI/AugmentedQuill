@@ -36,10 +36,14 @@ class TestChatStreamRoleAndSanitization(ChatStreamTestBase):
                 {"choices": [{"delta": {"content": "Let me check."}}]}
             ) + "\n\n"
             yield "data: " + json.dumps(
-                {"choices": [{"delta": {"content": " [TOOL_CALL]list_"}}]}
+                {"choices": [{"delta": {"content": " [TOOL_CALL]manage_"}}]}
             ) + "\n\n"
             yield "data: " + json.dumps(
-                {"choices": [{"delta": {"content": "images()[/TOOL_CALL] "}}]}
+                {
+                    "choices": [
+                        {"delta": {"content": 'images(action="list")[/TOOL_CALL] '}}
+                    ]
+                }
             ) + "\n\n"
             yield "data: " + json.dumps(
                 {"choices": [{"delta": {"content": "Done."}}]}
@@ -67,14 +71,14 @@ class TestChatStreamRoleAndSanitization(ChatStreamTestBase):
             if "tool_calls" in evt:
                 tool_calls.extend(evt["tool_calls"])
 
-        self.assertNotIn("list_images", content_text)
+        self.assertNotIn("manage_images", content_text)
         self.assertNotIn("[TOOL_CALL]", content_text)
         self.assertIn("Let me check.", content_text)
         self.assertIn("Done.", content_text)
 
         self.assertTrue(len(tool_calls) > 0)
-        found_tool = any(tc["function"]["name"] == "list_images" for tc in tool_calls)
-        self.assertTrue(found_tool, "Did not find list_images tool call")
+        found_tool = any(tc["function"]["name"] == "manage_images" for tc in tool_calls)
+        self.assertTrue(found_tool, "Did not find manage_images tool call")
 
     def test_stream_advertises_role_filtered_tools(self):
         captured: dict = {}
@@ -101,8 +105,8 @@ class TestChatStreamRoleAndSanitization(ChatStreamTestBase):
         }
         self.assertIn("replace_text_in_chapter", tool_names)
         self.assertIn("recommend_metadata_updates", tool_names)
-        self.assertIn("update_story_metadata", tool_names)
-        self.assertNotIn("create_sourcebook_entry", tool_names)
+        self.assertIn("manage_story_core", tool_names)
+        self.assertNotIn("manage_scratchpad", tool_names)
 
     def test_writing_stream_has_no_tools(self):
         captured: dict = {}
@@ -150,7 +154,11 @@ class TestChatStreamRoleAndSanitization(ChatStreamTestBase):
             yield "data: " + json.dumps(
                 {
                     "choices": [
-                        {"delta": {"content": "[TOOL_CALL]list_images()[/TOOL_CALL]"}}
+                        {
+                            "delta": {
+                                "content": '[TOOL_CALL]manage_images(action="list")[/TOOL_CALL]'
+                            }
+                        }
                     ]
                 }
             ) + "\n\n"
@@ -180,7 +188,7 @@ class TestChatStreamRoleAndSanitization(ChatStreamTestBase):
 
         self.assertNotIn("[TOOL_CALL]", content_text)
         self.assertTrue(
-            any(tc["function"]["name"] == "list_images" for tc in tool_calls)
+            any(tc["function"]["name"] == "manage_images" for tc in tool_calls)
         )
         self.assertIn("Edit start", content_text)
         self.assertIn("Edit end", content_text)

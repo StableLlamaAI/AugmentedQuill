@@ -360,6 +360,26 @@ def get_tool_schemas(
                 properties.pop("start_book", None)
                 properties.pop("end_book", None)
 
+        # Manager tools can expose role-scoped subsets of actions while remaining
+        # a single canonical function at runtime.
+        if normalized_role == EDITING_ROLE and properties is not None:
+            action_prop = properties.get("action")
+            if isinstance(action_prop, dict):
+                allowed_actions_by_tool = {
+                    "manage_project": ["get_overview"],
+                    "manage_sourcebook": ["list", "get"],
+                    "manage_images": ["list", "create_placeholder"],
+                }
+                allowed_actions = allowed_actions_by_tool.get(func_name)
+                if allowed_actions is not None:
+                    enum_values = action_prop.get("enum")
+                    if isinstance(enum_values, list):
+                        filtered = [
+                            value for value in enum_values if value in allowed_actions
+                        ]
+                        if filtered:
+                            action_prop["enum"] = filtered
+
         schemas.append(schema)
     return schemas
 

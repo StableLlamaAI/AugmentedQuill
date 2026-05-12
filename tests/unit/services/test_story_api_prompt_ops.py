@@ -45,7 +45,7 @@ class StoryApiPromptOpsTest(TestCase):
         self.assertNotIn("{tool_instructions}", system_msg["content"])
 
         # Regression guard: ensure at least one tool is listed in the system prompt.
-        self.assertIn("get_story_metadata", system_msg["content"])
+        self.assertIn("manage_story_core", system_msg["content"])
 
         user_msg = next((m for m in messages if m["role"] == "user"), None)
         self.assertIsNotNone(user_msg)
@@ -103,7 +103,7 @@ class StoryApiPromptOpsTest(TestCase):
     def test_read_only_tool_schema_filter_excludes_editing_functions(self):
         tools = _get_read_only_tool_schemas(project_type="series")
         names = {t["function"]["name"] for t in tools}
-        self.assertIn("get_story_metadata", names)
+        self.assertIn("manage_story_core", names)
         self.assertNotIn("sync_story_summary", names)
         self.assertNotIn("write_story_content", names)
         self.assertNotIn("replace_text_in_chapter", names)

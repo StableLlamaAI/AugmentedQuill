@@ -73,8 +73,8 @@ class ScratchpadTest(TestCase):
                                 "id": "call_1",
                                 "type": "function",
                                 "function": {
-                                    "name": "read_scratchpad",
-                                    "arguments": '{"chat_id": "chat-1"}',
+                                    "name": "manage_scratchpad",
+                                    "arguments": '{"action": "read", "chat_id": "chat-1"}',
                                 },
                             }
                         ],
@@ -104,9 +104,15 @@ class ScratchpadTest(TestCase):
                                 "id": "call_2",
                                 "type": "function",
                                 "function": {
-                                    "name": "write_scratchpad",
+                                    "name": "manage_scratchpad",
                                     "arguments": json.dumps(
-                                        {"content": test_content, "chat_id": "chat-1"}
+                                        {
+                                            "action": "write",
+                                            "write_data": {
+                                                "content": test_content,
+                                                "chat_id": "chat-1",
+                                            },
+                                        }
                                     ),
                                 },
                             }
@@ -143,8 +149,8 @@ class ScratchpadTest(TestCase):
                                 "id": "call_3",
                                 "type": "function",
                                 "function": {
-                                    "name": "read_scratchpad",
-                                    "arguments": '{"chat_id": "chat-1"}',
+                                    "name": "manage_scratchpad",
+                                    "arguments": '{"action": "read", "chat_id": "chat-1"}',
                                 },
                             }
                         ],
@@ -176,9 +182,15 @@ class ScratchpadTest(TestCase):
                                     "id": "write",
                                     "type": "function",
                                     "function": {
-                                        "name": "write_scratchpad",
+                                        "name": "manage_scratchpad",
                                         "arguments": json.dumps(
-                                            {"content": content, "chat_id": chat_id}
+                                            {
+                                                "action": "write",
+                                                "write_data": {
+                                                    "content": content,
+                                                    "chat_id": chat_id,
+                                                },
+                                            }
                                         ),
                                     },
                                 }
@@ -204,8 +216,10 @@ class ScratchpadTest(TestCase):
                                     "id": "read",
                                     "type": "function",
                                     "function": {
-                                        "name": "read_scratchpad",
-                                        "arguments": json.dumps({"chat_id": chat_id}),
+                                        "name": "manage_scratchpad",
+                                        "arguments": json.dumps(
+                                            {"action": "read", "chat_id": chat_id}
+                                        ),
                                     },
                                 }
                             ],
@@ -239,8 +253,13 @@ class ScratchpadTest(TestCase):
                                 "id": "call_4",
                                 "type": "function",
                                 "function": {
-                                    "name": "write_scratchpad",
-                                    "arguments": json.dumps({"content": new_content}),
+                                    "name": "manage_scratchpad",
+                                    "arguments": json.dumps(
+                                        {
+                                            "action": "write",
+                                            "write_data": {"content": new_content},
+                                        }
+                                    ),
                                 },
                             }
                         ],

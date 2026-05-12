@@ -97,13 +97,111 @@ class ChatToolsTest(TestCase):
     def _post_single_tool(self, name: str, arguments: dict | str):
         return self._post_single_tool_for_role("CHAT", name, arguments)
 
+    @staticmethod
+    def _normalize_manager_tool_call(name: str, arguments: dict) -> tuple[str, dict]:
+        """Translate legacy per-action tool invocations to manager tool actions."""
+        if name == "get_project_overview":
+            return "manage_project", {"action": "get_overview", **arguments}
+        if name == "create_project":
+            return "manage_project", {"action": "create", "create_data": arguments}
+        if name == "list_projects":
+            return "manage_project", {"action": "list"}
+        if name == "delete_project":
+            return "manage_project", {"action": "delete", "delete_data": arguments}
+        if name == "change_project_type":
+            return (
+                "manage_project",
+                {
+                    "action": "change_type",
+                    "type_data": {"new_type": arguments.get("new_type")},
+                },
+            )
+
+        if name == "get_story_metadata":
+            return "manage_story_core", {"action": "get_metadata"}
+        if name == "update_story_metadata":
+            return "manage_story_core", {
+                "action": "update_metadata",
+                "update_data": arguments,
+            }
+        if name == "read_story_content":
+            return "manage_story_core", {
+                "action": "read_content",
+                "read_data": arguments,
+            }
+        if name == "sync_story_summary":
+            return "manage_story_core", {
+                "action": "sync_summary",
+                "sync_data": arguments,
+            }
+
+        if name == "read_scratchpad":
+            req = {"action": "read"}
+            if "chat_id" in arguments:
+                req["chat_id"] = arguments["chat_id"]
+            return "manage_scratchpad", req
+        if name == "write_scratchpad":
+            return "manage_scratchpad", {"action": "write", "write_data": arguments}
+
+        if name == "get_sourcebook_entry":
+            return "manage_sourcebook", {"action": "get", **arguments}
+        if name == "create_sourcebook_entry":
+            return "manage_sourcebook", {"action": "create", "entry_data": arguments}
+        if name == "update_sourcebook_entry":
+            payload = dict(arguments)
+            name_or_id = payload.pop("name_or_id", None)
+            return (
+                "manage_sourcebook",
+                {"action": "update", "name_or_id": name_or_id, "update_data": payload},
+            )
+        if name == "delete_sourcebook_entry":
+            return "manage_sourcebook", {"action": "delete", **arguments}
+        if name == "list_sourcebook_entries":
+            return "manage_sourcebook", {"action": "list", **arguments}
+        if name == "add_sourcebook_relation":
+            return "manage_sourcebook", {
+                "action": "add_relation",
+                "relation_data": arguments,
+            }
+        if name == "remove_sourcebook_relation":
+            return "manage_sourcebook", {
+                "action": "remove_relation",
+                "relation_data": arguments,
+            }
+
+        if name == "list_images":
+            return "manage_images", {"action": "list"}
+        if name == "generate_image_description":
+            return "manage_images", {"action": "generate_description", **arguments}
+        if name == "create_image_placeholder":
+            return "manage_images", {
+                "action": "create_placeholder",
+                "create_data": arguments,
+            }
+        if name == "set_image_metadata":
+            return "manage_images", {
+                "action": "set_metadata",
+                "metadata_data": arguments,
+            }
+
+        if name == "search_in_project":
+            return "search_and_replace", {"action": "search", **arguments}
+        if name == "replace_in_project":
+            return "search_and_replace", {"action": "replace", **arguments}
+
+        return name, arguments
+
     def _post_single_tool_for_role(
         self, model_type: str, name: str, arguments: dict | str
     ):
         if isinstance(arguments, str):
             args = arguments
+            normalized_name = name
         else:
-            args = json.dumps(arguments)
+            normalized_name, normalized_args = self._normalize_manager_tool_call(
+                name, arguments
+            )
+            args = json.dumps(normalized_args)
 
         body = {
             "model_type": model_type,
@@ -116,7 +214,7 @@ class ChatToolsTest(TestCase):
                             "id": f"call_{name}",
                             "type": "function",
                             "function": {
-                                "name": name,
+                                "name": normalized_name,
                                 "arguments": args,
                             },
                         }
@@ -181,8 +279,8 @@ class ChatToolsTest(TestCase):
                             "id": "a1",
                             "type": "function",
                             "function": {
-                                "name": "get_story_metadata",
-                                "arguments": "{}",
+                                "name": "manage_story_core",
+                                "arguments": '{"action":"get_metadata"}',
                             },
                         }
                     ],

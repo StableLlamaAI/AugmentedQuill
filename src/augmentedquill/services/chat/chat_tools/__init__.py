@@ -19,6 +19,7 @@ from augmentedquill.services.chat.chat_tools import chapter_prose_tools  # noqa:
 from augmentedquill.services.chat.chat_tools import image_tools  # noqa: F401
 from augmentedquill.services.chat.chat_tools import order_tools  # noqa: F401
 from augmentedquill.services.chat.chat_tools import project_tools  # noqa: F401
+from augmentedquill.services.chat.chat_tools import scene_tools  # noqa: F401
 from augmentedquill.services.chat.chat_tools import sourcebook_tools  # noqa: F401
 from augmentedquill.services.chat.chat_tools import story_tools  # noqa: F401
 from augmentedquill.services.chat.chat_tools import web_search_tools  # noqa: F401
@@ -31,6 +32,7 @@ __all__ = [
     "image_tools",
     "order_tools",
     "project_tools",
+    "scene_tools",
     "sourcebook_tools",
     "story_tools",
     "web_search_tools",

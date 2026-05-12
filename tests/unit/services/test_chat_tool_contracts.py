@@ -58,17 +58,16 @@ class ChatToolContractsTest(TestCase):
         "get_chapter_metadata",
         "get_chapter_summaries",
         "get_current_chapter_id",
-        "get_project_overview",
-        "get_sourcebook_entry",
-        "get_story_metadata",
-        "list_images",
-        "list_projects",
-        "list_sourcebook_entries",
+        "manage_images",
+        "manage_project",
+        "manage_scenes",
+        "manage_scratchpad",
+        "manage_sourcebook",
+        "manage_story_core",
         "read_book_content",
         "read_editing_scratchpad",
-        "read_story_content",
         "recommend_metadata_updates",
-        "search_in_project",
+        "search_and_replace",
     }
 
     _EDITING_ONLY_TOOLS = {
@@ -208,73 +207,172 @@ class ChatToolContractsTest(TestCase):
         self.assertIn("call_writing_llm", names)
         self.assertIn("call_editing_assistant", names)
 
-    def test_update_story_metadata_hides_conflicts_for_chapter_based_projects(self):
+    def test_manage_story_core_exists_for_all_project_types(self):
         for project_type in ("novel", "series"):
             tools = get_registered_tool_schemas(
                 model_type="CHAT", project_type=project_type
             )
             metadata_tool = next(
-                (t for t in tools if t["function"]["name"] == "update_story_metadata"),
+                (t for t in tools if t["function"]["name"] == "manage_story_core"),
                 None,
             )
-            self.assertIsNotNone(
-                metadata_tool, "update_story_metadata schema should exist"
-            )
+            self.assertIsNotNone(metadata_tool, "manage_story_core schema should exist")
             properties = (
                 metadata_tool.get("function", {})
                 .get("parameters", {})
                 .get("properties", {})
             )
             self.assertIsInstance(properties, dict)
-            self.assertNotIn(
-                "conflicts",
-                properties,
-                "chapter-based projects should not expose story-level conflicts in update_story_metadata schema",
-            )
+            self.assertIn("action", properties)
 
-    def test_add_sourcebook_relation_schema_filters_chapter_and_book_fields_by_project_type(
-        self,
-    ):
-        expected = {
-            "short-story": {"source_id", "relation_type", "target_id"},
-            "novel": {
-                "source_id",
-                "relation_type",
-                "target_id",
-                "start_chapter",
-                "end_chapter",
-            },
-            "series": {
-                "source_id",
-                "relation_type",
-                "target_id",
-                "start_chapter",
-                "end_chapter",
-                "start_book",
-                "end_book",
-            },
-        }
-        for project_type, expected_props in expected.items():
+    def test_manage_sourcebook_schema_exists_by_project_type(self):
+        for project_type in ("short-story", "novel", "series"):
             tools = get_registered_tool_schemas(
                 model_type="CHAT", project_type=project_type
             )
             tool = next(
-                (
-                    t
-                    for t in tools
-                    if t["function"]["name"] == "add_sourcebook_relation"
-                ),
+                (t for t in tools if t["function"]["name"] == "manage_sourcebook"),
                 None,
             )
-            self.assertIsNotNone(tool, "add_sourcebook_relation schema should exist")
+            self.assertIsNotNone(tool, "manage_sourcebook schema should exist")
             properties = (
                 tool.get("function", {}).get("parameters", {}).get("properties", {})
             )
-            self.assertEqual(
-                set(properties.keys()),
-                expected_props,
-                f"Unexpected schema properties for add_sourcebook_relation in {project_type}",
-            )
+            self.assertIn("action", properties)
+            self.assertIn("relation_data", properties)
+
+    def test_manage_scenes_update_schema_exposes_patch_fields(self):
+        tools = get_registered_tool_schemas(model_type="CHAT", project_type="series")
+        tool = next(
+            (t for t in tools if t["function"]["name"] == "manage_scenes"),
+            None,
+        )
+        self.assertIsNotNone(tool, "manage_scenes schema should exist")
+
+        update_ref = (
+            tool.get("function", {})
+            .get("parameters", {})
+            .get("properties", {})
+            .get("update_data", {})
+            .get("$ref")
+        )
+        self.assertTrue(update_ref)
+
+        defs = tool.get("function", {}).get("parameters", {}).get("$defs", {})
+        update_schema = defs.get("ManageScenesUpdateData", {})
+        update_props = update_schema.get("properties", {})
+        self.assertIn("summary_patch", update_props)
+        self.assertIn("active_characters_patch", update_props)
+        self.assertIn("passive_characters_patch", update_props)
+        self.assertIn("sourcebook_entry_ids_patch", update_props)
+        self.assertIn("order_before_patch", update_props)
+        self.assertIn("order_after_patch", update_props)
+
+    def test_manage_scenes_update_applies_partial_patches(self):
+        created = self._call_tool(
+            "manage_scenes",
+            {
+                "action": "create",
+                "create_data": {
+                    "summary": "Opening",
+                    "active_characters": ["hero"],
+                },
+            },
+            model_type="CHAT",
+        )
+        scene_id = created.get("id")
+        self.assertTrue(scene_id)
+
+        updated = self._call_tool(
+            "manage_scenes",
+            {
+                "action": "update",
+                "scene_id": scene_id,
+                "update_data": {
+                    "summary_patch": {"operation": "append", "value": " continues"},
+                    "active_characters_patch": {"add": ["guide"]},
+                },
+            },
+            model_type="CHAT",
+        )
+
+        self.assertEqual(updated.get("summary"), "Opening continues")
+        self.assertEqual(updated.get("active_characters"), ["hero", "guide"])
+
+    def test_manage_scenes_update_null_lists_are_sanitized(self):
+        created = self._call_tool(
+            "manage_scenes",
+            {
+                "action": "create",
+                "create_data": {
+                    "summary": "Opening",
+                    "beats": [{"id": "beat-1", "text": "Beat"}],
+                    "active_characters": ["hero"],
+                    "passive_characters": ["guide"],
+                    "sourcebook_entry_ids": ["Hero Entry"],
+                    "order_before": ["scene-x"],
+                    "order_after": ["scene-y"],
+                    "status": "active",
+                },
+            },
+            model_type="CHAT",
+        )
+        scene_id = created.get("id")
+        self.assertTrue(scene_id)
+
+        updated = self._call_tool(
+            "manage_scenes",
+            {
+                "action": "update",
+                "scene_id": scene_id,
+                "update_data": {
+                    "beats": None,
+                    "active_characters": None,
+                    "passive_characters": None,
+                    "sourcebook_entry_ids": None,
+                    "order_before": None,
+                    "order_after": None,
+                    "status": None,
+                },
+            },
+            model_type="CHAT",
+        )
+
+        self.assertEqual(updated.get("beats"), [])
+        self.assertEqual(updated.get("active_characters"), [])
+        self.assertEqual(updated.get("passive_characters"), [])
+        self.assertEqual(updated.get("sourcebook_entry_ids"), [])
+        self.assertEqual(updated.get("order_before"), [])
+        self.assertEqual(updated.get("order_after"), [])
+        self.assertEqual(updated.get("status"), "active")
+
+        listed = self._call_tool(
+            "manage_scenes",
+            {"action": "list"},
+            model_type="CHAT",
+        )
+        self.assertTrue(any(scene.get("id") == scene_id for scene in listed))
+
+    def test_manager_action_enums_are_role_filtered_for_editing(self):
+        tools = {
+            t["function"]["name"]: t
+            for t in get_registered_tool_schemas(model_type="EDITING")
+        }
+
+        manage_project_actions = tools["manage_project"]["function"]["parameters"][
+            "properties"
+        ]["action"]["enum"]
+        self.assertEqual(manage_project_actions, ["get_overview"])
+
+        manage_sourcebook_actions = tools["manage_sourcebook"]["function"][
+            "parameters"
+        ]["properties"]["action"]["enum"]
+        self.assertEqual(manage_sourcebook_actions, ["get", "list"])
+
+        manage_images_actions = tools["manage_images"]["function"]["parameters"][
+            "properties"
+        ]["action"]["enum"]
+        self.assertEqual(manage_images_actions, ["list", "create_placeholder"])
 
     def test_call_writing_llm_chap_id_description_matches_active_project_type(self):
         tools = get_registered_tool_schemas(
@@ -400,6 +498,21 @@ class ChatToolContractsTest(TestCase):
         if tool_name == "delete_chapter":
             args["chap_id"] = 1
             args["confirm"] = False
+
+        if tool_name == "manage_project":
+            args = {"action": "list"}
+        if tool_name == "manage_story_core":
+            args = {"action": "get_metadata"}
+        if tool_name == "manage_sourcebook":
+            args = {"action": "list"}
+        if tool_name == "manage_images":
+            args = {"action": "list"}
+        if tool_name == "manage_scratchpad":
+            args = {"action": "read"}
+        if tool_name == "search_and_replace":
+            args = {"action": "search", "query": "Hero"}
+        if tool_name == "manage_scenes":
+            args = {"action": "list"}
 
         return args
 
@@ -552,18 +665,26 @@ class ChatToolContractsTest(TestCase):
             )
             self._assert_invalid_parameters(tool_name, content)
 
-    def test_get_project_overview_include_notes_contract(self):
-        content = self._call_tool("get_project_overview", {"include_notes": True})
+    def test_manage_project_get_overview_include_notes_contract(self):
+        content = self._call_tool(
+            "manage_project", {"action": "get_overview", "include_notes": True}
+        )
         self.assertIsInstance(content, dict)
         self.assertNotIn("Execution error", json.dumps(content))
 
         invalid = self._call_tool(
-            "get_project_overview", {"include_notes": {"unexpected": True}}
+            "manage_project",
+            {
+                "action": "get_overview",
+                "include_notes": {"unexpected": True},
+            },
         )
-        self._assert_invalid_parameters("get_project_overview", invalid)
+        self._assert_invalid_parameters("manage_project", invalid)
 
-    def test_get_project_overview_hides_chapter_filenames(self):
-        content = self._call_tool("get_project_overview", {"include_notes": True})
+    def test_manage_project_hides_chapter_filenames(self):
+        content = self._call_tool(
+            "manage_project", {"action": "get_overview", "include_notes": True}
+        )
 
         def _assert_no_storage_file_keys(value):
             if isinstance(value, dict):
@@ -598,14 +719,13 @@ class ChatToolContractsTest(TestCase):
 
         self.assertEqual(writing_tools, {"write_chapter", "continue_chapter"})
         self.assertIn("call_editing_assistant", chat_tools)
-        self.assertIn("update_story_metadata", chat_tools)
+        self.assertIn("manage_story_core", chat_tools)
         self.assertNotIn("write_chapter", chat_tools)
         self.assertNotIn("continue_chapter", chat_tools)
         self.assertNotIn("replace_text_in_chapter", chat_tools)
         self.assertIn("replace_text_in_chapter", editing_tools)
         self.assertIn("recommend_metadata_updates", editing_tools)
-        self.assertIn("update_story_metadata", editing_tools)
-        self.assertNotIn("create_sourcebook_entry", editing_tools)
+        self.assertIn("manage_story_core", editing_tools)
 
     def test_project_tool_descriptions_cover_all_project_types(self):
         schemas = {
@@ -615,21 +735,47 @@ class ChatToolContractsTest(TestCase):
 
         self.assertIn(
             "short story",
-            schemas["get_project_overview"]["description"].lower(),
+            schemas["manage_project"]["description"].lower(),
         )
-        self.assertIn("short-story", schemas["create_project"]["description"])
-        self.assertIn(
-            "short-story",
-            schemas["change_project_type"]["description"],
-        )
+        self.assertIn("change_type", schemas["manage_project"]["description"])
 
     def test_tools_reject_wrong_model_role(self):
         content = self._call_tool(
-            "create_sourcebook_entry",
+            "manage_project",
             {
-                "name": "Test Entry",
-                "description": "A test entry",
-                "category": "Other",
+                "action": "create",
+                "create_data": {"name": "x", "project_type": "novel"},
+            },
+            model_type="EDITING",
+        )
+        self.assertEqual(content.get("error"), "Action unavailable for model role")
+
+        content = self._call_tool(
+            "manage_sourcebook",
+            {
+                "action": "create",
+                "entry_data": {
+                    "name": "RoleTest",
+                    "description": "x",
+                    "category": "character",
+                },
+            },
+            model_type="EDITING",
+        )
+        self.assertEqual(content.get("error"), "Action unavailable for model role")
+
+        content = self._call_tool(
+            "manage_images",
+            {"action": "set_metadata", "metadata_data": {"filename": "sample.png"}},
+            model_type="EDITING",
+        )
+        self.assertEqual(content.get("error"), "Action unavailable for model role")
+
+        content = self._call_tool(
+            "manage_scratchpad",
+            {
+                "action": "write",
+                "write_data": {"content": "test"},
             },
             model_type="EDITING",
         )
@@ -709,15 +855,18 @@ class ChatToolContractsTest(TestCase):
 
                 if name in ("call_writing_llm", "call_editing_assistant"):
                     self._call_tool(
-                        "update_story_metadata",
+                        "manage_story_core",
                         {
-                            "conflicts": [
-                                {
-                                    "id": "c1",
-                                    "description": "Auto conflict guard for test",
-                                    "resolution": "Auto resolution",
-                                }
-                            ]
+                            "action": "update_metadata",
+                            "update_data": {
+                                "conflicts": [
+                                    {
+                                        "id": "c1",
+                                        "description": "Auto conflict guard for test",
+                                        "resolution": "Auto resolution",
+                                    }
+                                ]
+                            },
                         },
                         model_type="CHAT",
                     )
@@ -734,13 +883,11 @@ class ChatToolContractsTest(TestCase):
 
     def test_all_project_mutation_tools_emit_story_changed_and_batch(self):
         expected_mutation_tools = {
-            "create_project",
-            "delete_project",
-            "update_story_metadata",
+            "manage_project",
+            "manage_story_core",
             "write_story_content",
             "update_book_metadata",
             "write_book_content",
-            "sync_story_summary",
             "update_chapter_metadata",
             "write_chapter_content",
             "replace_text_in_chapter",
@@ -755,20 +902,13 @@ class ChatToolContractsTest(TestCase):
             "delete_chapter",
             "delete_book",
             "create_new_book",
-            "change_project_type",
-            "create_sourcebook_entry",
-            "update_sourcebook_entry",
-            "delete_sourcebook_entry",
-            "add_sourcebook_relation",
-            "remove_sourcebook_relation",
-            "generate_image_description",
-            "create_image_placeholder",
-            "set_image_metadata",
+            "manage_sourcebook",
+            "manage_images",
             "insert_image_in_chapter",
-            "read_scratchpad",
-            "write_scratchpad",
+            "manage_scratchpad",
+            "manage_scenes",
             "write_editing_scratchpad",
-            "replace_in_project",
+            "search_and_replace",
         }
 
         tool_names = set(self._tool_names())
@@ -804,10 +944,22 @@ class ChatToolContractsTest(TestCase):
 
         mutation_calls = [
             (
-                "create_project",
-                {"name": "chat_tools_mutation_tmp", "project_type": "novel"},
+                "manage_project",
+                {
+                    "action": "create",
+                    "create_data": {
+                        "name": "chat_tools_mutation_tmp",
+                        "project_type": "novel",
+                    },
+                },
             ),
-            ("update_story_metadata", {"title": "Mutated Title"}),
+            (
+                "manage_story_core",
+                {
+                    "action": "update_metadata",
+                    "update_data": {"title": "Mutated Title"},
+                },
+            ),
             ("write_story_content", {"content": "Mutated story content"}),
             (
                 "update_book_metadata",
@@ -817,7 +969,10 @@ class ChatToolContractsTest(TestCase):
                 "write_book_content",
                 {"book_id": self.book_id, "content": "Mutated book content"},
             ),
-            ("sync_story_summary", {"mode": "update"}),
+            (
+                "manage_story_core",
+                {"action": "sync_summary", "sync_data": {"mode": "update"}},
+            ),
             (
                 "update_chapter_metadata",
                 {"chap_id": 1, "title": "Mutated Chapter Title"},
@@ -842,55 +997,128 @@ class ChatToolContractsTest(TestCase):
             ),
             ("delete_chapter", {"chap_id": 2, "confirm": True}),
             (
-                "create_sourcebook_entry",
+                "manage_sourcebook",
                 {
-                    "name": "Mutation Entry",
-                    "description": "created by mutation test",
-                    "category": "character",
+                    "action": "create",
+                    "entry_data": {
+                        "name": "Mutation Entry",
+                        "description": "created by mutation test",
+                        "category": "character",
+                    },
                 },
             ),
             (
-                "update_sourcebook_entry",
+                "manage_sourcebook",
                 {
+                    "action": "update",
                     "name_or_id": "Mutation Entry",
-                    "description": "updated by mutation test",
+                    "update_data": {"description": "updated by mutation test"},
                 },
             ),
-            ("delete_sourcebook_entry", {"name_or_id": "Mutation Entry"}),
             (
-                "add_sourcebook_relation",
+                "manage_sourcebook",
+                {"action": "delete", "name_or_id": "Mutation Entry"},
+            ),
+            (
+                "manage_sourcebook",
                 {
-                    "source_id": "Hero Entry",
-                    "relation_type": "ally",
-                    "target_id": "Hero Entry",
+                    "action": "add_relation",
+                    "relation_data": {
+                        "source_id": "Hero Entry",
+                        "relation_type": "ally",
+                        "target_id": "Hero Entry",
+                    },
                 },
             ),
             (
-                "remove_sourcebook_relation",
+                "manage_sourcebook",
                 {
-                    "source_id": "Hero Entry",
-                    "relation_type": "ally",
-                    "target_id": "Hero Entry",
+                    "action": "remove_relation",
+                    "relation_data": {
+                        "source_id": "Hero Entry",
+                        "relation_type": "ally",
+                        "target_id": "Hero Entry",
+                    },
                 },
             ),
             (
-                "create_image_placeholder",
-                {"description": "placeholder mutation", "title": "ph"},
-            ),
-            (
-                "set_image_metadata",
+                "manage_images",
                 {
-                    "filename": "sample.png",
-                    "title": "mutated",
-                    "description": "mutated",
+                    "action": "create_placeholder",
+                    "create_data": {
+                        "description": "placeholder mutation",
+                        "title": "ph",
+                    },
                 },
             ),
-            ("generate_image_description", {"filename": "sample.png"}),
+            (
+                "manage_images",
+                {
+                    "action": "set_metadata",
+                    "metadata_data": {
+                        "filename": "sample.png",
+                        "title": "mutated",
+                        "description": "mutated",
+                    },
+                },
+            ),
+            (
+                "manage_images",
+                {"action": "generate_description", "filename": "sample.png"},
+            ),
+            (
+                "manage_scratchpad",
+                {
+                    "action": "write",
+                    "write_data": {"content": "scratch mutation"},
+                },
+            ),
+            (
+                "search_and_replace",
+                {
+                    "action": "replace",
+                    "query": "Mutated chapter replaced",
+                    "replacement": "Mutated chapter rewritten",
+                    "scope": "all_chapters",
+                },
+            ),
+            (
+                "manage_scenes",
+                {
+                    "action": "create",
+                    "create_data": {
+                        "summary": "Mutation scene",
+                        "beats": [],
+                        "active_characters": [],
+                        "passive_characters": [],
+                        "sourcebook_entry_ids": [],
+                        "location": None,
+                        "time": None,
+                        "scene_time": None,
+                        "color_tag": None,
+                        "prose_link": None,
+                        "order_before": [],
+                        "order_after": [],
+                        "pinboard_x": 100.0,
+                        "pinboard_y": 100.0,
+                        "status": "active",
+                    },
+                },
+            ),
             (
                 "insert_image_in_chapter",
                 {"chap_id": 1, "filename": "sample.png", "position": "end"},
             ),
-            ("delete_project", {"name": "chat_tools_mutation_tmp", "confirm": True}),
+            (
+                "manage_project",
+                {
+                    "action": "delete",
+                    "delete_data": {
+                        "name": "chat_tools_mutation_tmp",
+                        "confirm": True,
+                    },
+                },
+            ),
         ]
 
         with (
@@ -953,7 +1181,12 @@ class ChatToolContractsTest(TestCase):
             )
 
             change_payload, _ = self._call_tool_with_payload(
-                "change_project_type", {"new_type": "novel"}, model_type="CHAT"
+                "manage_project",
+                {
+                    "action": "change_type",
+                    "type_data": {"new_type": "novel"},
+                },
+                model_type="CHAT",
             )
             self.assertTrue(
                 (change_payload.get("mutations") or {}).get("story_changed")
@@ -975,34 +1208,11 @@ class ChatToolContractsTest(TestCase):
             ).keys()
         )
 
-    def test_patch_parameters_present_in_update_story_metadata_schema(self):
+    def test_patch_parameters_present_in_manage_story_core_schema(self):
         for project_type in ("short-story", "novel", "series"):
-            props = self._get_tool_properties("update_story_metadata", project_type)
-            for field in ("summary_patch", "notes_patch", "tags_patch"):
-                self.assertIn(
-                    field,
-                    props,
-                    f"update_story_metadata should expose {field} for {project_type}",
-                )
-
-        # conflicts_patch only exposed for short-story (chapter-based projects filter it out)
-        self.assertIn(
-            "conflicts_patch",
-            self._get_tool_properties("update_story_metadata", "short-story"),
-            "update_story_metadata should expose conflicts_patch for short-story",
-        )
-        for project_type in ("novel", "series"):
-            props = self._get_tool_properties("update_story_metadata", project_type)
-            self.assertNotIn(
-                "conflicts_patch",
-                props,
-                f"update_story_metadata should NOT expose conflicts_patch for {project_type}",
-            )
-            self.assertNotIn(
-                "conflicts",
-                props,
-                f"update_story_metadata should NOT expose conflicts for {project_type}",
-            )
+            props = self._get_tool_properties("manage_story_core", project_type)
+            self.assertIn("update_data", props)
+            self.assertIn("action", props)
 
     def test_patch_parameters_present_in_update_chapter_metadata_schema(self):
         # update_chapter_metadata is only available for chapter-based project types
@@ -1036,15 +1246,11 @@ class ChatToolContractsTest(TestCase):
                 f"update_book_metadata should expose {field}",
             )
 
-    def test_patch_parameters_present_in_update_sourcebook_entry_schema(self):
+    def test_patch_parameters_present_in_manage_sourcebook_schema(self):
         for project_type in ("short-story", "novel", "series"):
-            props = self._get_tool_properties("update_sourcebook_entry", project_type)
-            for field in ("description_patch", "synonyms_patch", "images_patch"):
-                self.assertIn(
-                    field,
-                    props,
-                    f"update_sourcebook_entry should expose {field} for {project_type}",
-                )
+            props = self._get_tool_properties("manage_sourcebook", project_type)
+            self.assertIn("action", props)
+            self.assertIn("update_data", props)
 
     def test_tool_parameter_refs_are_resolvable(self):
         def _collect_refs(node: object) -> list[str]:

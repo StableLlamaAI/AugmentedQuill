@@ -252,17 +252,36 @@ def _write_text_atomic(path: Path, content: str) -> None:
 
 def _normalise_scene(raw: dict[str, Any]) -> dict[str, Any]:
     """Ensure default fields exist on a raw scene dict read from disk."""
-    raw.setdefault("summary", "")
-    raw.setdefault("beats", [])
-    raw.setdefault("active_characters", [])
-    raw.setdefault("passive_characters", [])
-    raw.setdefault("sourcebook_entry_ids", [])
+    summary = raw.get("summary")
+    if not isinstance(summary, str):
+        raw["summary"] = ""
+
+    for key in (
+        "beats",
+        "active_characters",
+        "passive_characters",
+        "sourcebook_entry_ids",
+        "order_before",
+        "order_after",
+    ):
+        value = raw.get(key)
+        if not isinstance(value, list):
+            raw[key] = []
+
     raw.setdefault("scene_time", None)
-    raw.setdefault("order_before", [])
-    raw.setdefault("order_after", [])
-    raw.setdefault("pinboard_x", 100.0)
-    raw.setdefault("pinboard_y", 100.0)
-    raw.setdefault("status", "active")
+
+    pinboard_x = raw.get("pinboard_x")
+    if not isinstance(pinboard_x, (int, float)):
+        raw["pinboard_x"] = 100.0
+
+    pinboard_y = raw.get("pinboard_y")
+    if not isinstance(pinboard_y, (int, float)):
+        raw["pinboard_y"] = 100.0
+
+    status = raw.get("status")
+    if not isinstance(status, str) or not status.strip():
+        raw["status"] = "active"
+
     return raw
 
 

@@ -128,6 +128,31 @@ class ScenesApiTest(ApiTestCase):
         fetched = self.client.get(self._url(f"/{scene['id']}")).json()
         self.assertTrue(fetched["prose_link"]["is_stale"])
 
+    def test_list_tolerates_legacy_null_list_fields(self) -> None:
+        """Legacy scene rows with null list fields must still be listable."""
+        pdir = self.projects_root / self.pname
+        story_path = pdir / "story.json"
+        story = json.loads(story_path.read_text(encoding="utf-8"))
+        story["scenes"] = {
+            "legacy": {
+                "summary": "Legacy",
+                "beats": None,
+                "active_characters": None,
+                "passive_characters": None,
+                "sourcebook_entry_ids": None,
+                "order_before": None,
+                "order_after": None,
+            }
+        }
+        story_path.write_text(json.dumps(story), encoding="utf-8")
+
+        resp = self.client.get(self._url())
+        self.assertEqual(resp.status_code, 200, resp.text)
+        payload = resp.json()
+        self.assertEqual(len(payload), 1)
+        self.assertEqual(payload[0]["id"], "legacy")
+        self.assertEqual(payload[0]["active_characters"], [])
+
     def test_refresh_hash_endpoint(self) -> None:
         """Refresh-hash endpoint responds with a SceneProseLink object."""
         pdir = self.projects_root / self.pname

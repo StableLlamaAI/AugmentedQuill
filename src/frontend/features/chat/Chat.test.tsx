@@ -238,6 +238,26 @@ describe('Chat scratchpad dialog', () => {
     });
   });
 
+  it('renders scene mutation tags and invokes click handler', () => {
+    const onMutationClick = vi.fn();
+    renderWithI18n({
+      sessionMutations: [
+        { id: 'm2', type: 'scene', label: 'Scene 4 summary', targetId: '4' },
+      ],
+      onMutationClick,
+    });
+
+    const tagButton = screen.getByRole('button', { name: /Scene 4 summary/i });
+    fireEvent.click(tagButton);
+
+    expect(onMutationClick).toHaveBeenCalledWith({
+      id: 'm2',
+      type: 'scene',
+      label: 'Scene 4 summary',
+      targetId: '4',
+    });
+  });
+
   it('allows file attachments to be added, previewed, and sent', async () => {
     const onSendMessage = vi.fn();
     const file = new File(['story'], 'example.txt', { type: 'text/plain' });
