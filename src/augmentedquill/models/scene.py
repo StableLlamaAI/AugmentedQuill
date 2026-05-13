@@ -19,10 +19,55 @@ offset may be stale.
 
 from __future__ import annotations
 
+import re
 import uuid
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
+
+_BRACKET_TOKEN_RE = re.compile(r"\[[^\]]+\]")
+_DATE_ONLY_RE = re.compile(r"^[+-]?\d{4,}-\d{2}-\d{2}$")
+_DATE_TIME_MINUTE_RE = re.compile(
+    r"^(?P<prefix>[+-]?\d{4,}-\d{2}-\d{2}[T ]\d{2}:\d{2})(?P<suffix>Z|[+-]\d{2}:?\d{2})?$"
+)
+_OFFSET_NO_COLON_RE = re.compile(r"([+-]\d{2})(\d{2})$")
+
+
+def _normalize_scene_temporal_value(raw_value: str) -> str:
+    """Normalize common date/time shorthand into a stable ISO-like string.
+
+    Accepted shorthand examples:
+    - ``1985-11-05`` -> ``1985-11-05T12:00:00Z``
+    - ``1985-11-05T20:00`` -> ``1985-11-05T20:00:00Z``
+    - ``1985-11-05 20:00`` -> ``1985-11-05T20:00:00Z``
+    - ``1985-11-05T20:00:00`` -> ``1985-11-05T20:00:00Z``
+    """
+    value = raw_value.strip()
+    if not value:
+        raise ValueError("scene_time value cannot be empty")
+
+    if _DATE_ONLY_RE.fullmatch(value):
+        return f"{value}T12:00:00Z"
+
+    normalized = value.replace(" ", "T", 1)
+    minute_match = _DATE_TIME_MINUTE_RE.fullmatch(normalized)
+    if minute_match:
+        prefix = minute_match.group("prefix")
+        suffix = minute_match.group("suffix") or "Z"
+        normalized = f"{prefix}:00{suffix}"
+
+    if normalized.endswith("z"):
+        normalized = f"{normalized[:-1]}Z"
+
+    if _OFFSET_NO_COLON_RE.search(normalized):
+        normalized = _OFFSET_NO_COLON_RE.sub(r"\1:\2", normalized)
+
+    base_no_brackets = _BRACKET_TOKEN_RE.sub("", normalized)
+    has_offset_or_z = bool(re.search(r"(Z|[+-]\d{2}:\d{2})$", base_no_brackets))
+    if "T" in base_no_brackets and not has_offset_or_z:
+        normalized = f"{normalized}Z"
+
+    return normalized
 
 
 class SceneProseLink(BaseModel):
@@ -62,6 +107,27 @@ class SceneChronologyTime(BaseModel):
     """Scene-local timeline point represented as a Temporal ZonedDateTime string."""
 
     temporal_zoned_datetime: str
+
+    @model_validator(mode="before")
+    @classmethod
+    def _coerce_and_normalize_input(cls, data: object) -> object:
+        """Accept shorthand scene_time payloads from tools and normalize them."""
+        if isinstance(data, str):
+            return {"temporal_zoned_datetime": _normalize_scene_temporal_value(data)}
+
+        if isinstance(data, dict):
+            raw = data.get("temporal_zoned_datetime")
+            if raw is None and "value" in data:
+                raw = data.get("value")
+
+            if isinstance(raw, str):
+                normalized = _normalize_scene_temporal_value(raw)
+                merged = dict(data)
+                merged["temporal_zoned_datetime"] = normalized
+                merged.pop("value", None)
+                return merged
+
+        return data
 
 
 class Scene(BaseModel):

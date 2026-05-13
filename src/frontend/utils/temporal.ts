@@ -171,6 +171,57 @@ const FALLBACK_TIME_ZONES: readonly string[] = [
   'America/Argentina/Buenos_Aires',
 ];
 
+const DATE_ONLY_RE = /^[+-]?\d{4,}-\d{2}-\d{2}$/;
+const DATE_TIME_MINUTE_RE =
+  /^(?<prefix>[+-]?\d{4,}-\d{2}-\d{2}[T ]\d{2}:\d{2})(?<suffix>Z|[+-]\d{2}:?\d{2})?$/;
+const OFFSET_NO_COLON_RE = /([+-]\d{2})(\d{2})$/;
+
+const normalizeLooseSceneTime = (rawValue: string): string => {
+  let value = rawValue.trim();
+  if (!value) return '';
+
+  if (DATE_ONLY_RE.test(value)) {
+    return `${value}T12:00:00Z`;
+  }
+
+  value = value.replace(' ', 'T');
+  const minuteMatch = DATE_TIME_MINUTE_RE.exec(value);
+  if (minuteMatch?.groups) {
+    const prefix = minuteMatch.groups.prefix;
+    const suffix = minuteMatch.groups.suffix ?? 'Z';
+    value = `${prefix}:00${suffix}`;
+  }
+
+  if (value.endsWith('z')) {
+    value = `${value.slice(0, -1)}Z`;
+  }
+
+  if (OFFSET_NO_COLON_RE.test(value)) {
+    value = value.replace(OFFSET_NO_COLON_RE, '$1:$2');
+  }
+
+  const valueWithoutBrackets = value.replace(/\[[^\]]+\]/g, '');
+  const hasOffsetOrZulu = /(Z|[+-]\d{2}:\d{2})$/.test(valueWithoutBrackets);
+  if (valueWithoutBrackets.includes('T') && !hasOffsetOrZulu) {
+    value = `${value}Z`;
+  }
+
+  return value;
+};
+
+const parseLooseAsZonedDateTime = (value: string): ZonedDateTimeValue | null => {
+  const normalized = normalizeLooseSceneTime(value);
+  if (!normalized) return null;
+  const isoInstantLike = normalized.replace(/\[[^\]]+\]/g, '');
+
+  try {
+    const instant = TemporalApi.Instant.from(isoInstantLike);
+    return instant.toZonedDateTimeISO('UTC');
+  } catch {
+    return null;
+  }
+};
+
 export const parseZonedDateTime = (
   value: string | null | undefined
 ): ZonedDateTimeValue | null => {
@@ -178,7 +229,7 @@ export const parseZonedDateTime = (
   try {
     return TemporalApi.ZonedDateTime.from(value);
   } catch {
-    return null;
+    return parseLooseAsZonedDateTime(value);
   }
 };
 

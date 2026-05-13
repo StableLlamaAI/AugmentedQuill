@@ -49,7 +49,10 @@ from augmentedquill.services.projects.project_snapshots import (
     capture_project_snapshot,
     restore_project_snapshot,
 )
-from augmentedquill.services.projects.projects import use_project_context
+from augmentedquill.services.projects.projects import (
+    get_active_project_dir,
+    use_project_context,
+)
 from augmentedquill.services.chat.chat_api_session_ops import (
     list_active_chats,
     load_active_chat,
@@ -105,27 +108,26 @@ async def _run_tool_calls(
         story_cfg = load_story_config(active_dir / "story.json") or {}
         project_language = str(story_cfg.get("language", "en") or "en")
 
-    with use_project_context(active_dir):
-        for call in tool_calls:
-            if not isinstance(call, dict):
-                continue
-            call_id = str(call.get("id") or "")
-            func = call.get("function") or {}
-            name = (func.get("name") if isinstance(func, dict) else None) or ""
-            args_raw = (
-                func.get("arguments") if isinstance(func, dict) else None
-            ) or "{}"
-            try:
-                args_obj = (
-                    try_parse_json_robust(args_raw, language=project_language)
-                    if isinstance(args_raw, str)
-                    else (args_raw or {})
-                )
-            except (ValueError, TypeError):
-                args_obj = {}
-            if not name or not call_id:
-                continue
-            tool_names.append(name)
+    current_active_dir = active_dir
+    for call in tool_calls:
+        if not isinstance(call, dict):
+            continue
+        call_id = str(call.get("id") or "")
+        func = call.get("function") or {}
+        name = (func.get("name") if isinstance(func, dict) else None) or ""
+        args_raw = (func.get("arguments") if isinstance(func, dict) else None) or "{}"
+        try:
+            args_obj = (
+                try_parse_json_robust(args_raw, language=project_language)
+                if isinstance(args_raw, str)
+                else (args_raw or {})
+            )
+        except (ValueError, TypeError):
+            args_obj = {}
+        if not name or not call_id:
+            continue
+        tool_names.append(name)
+        with use_project_context(current_active_dir):
             msg = await execute_registered_tool(
                 name,
                 args_obj,
@@ -134,9 +136,15 @@ async def _run_tool_calls(
                 mutations,
                 tool_role=model_type,
             )
-            if isinstance(msg, dict) and "role" not in msg:
-                msg = tool_message(name, call_id, msg)
-            appended.append(msg)
+        if isinstance(msg, dict) and "role" not in msg:
+            msg = tool_message(name, call_id, msg)
+        appended.append(msg)
+
+        # Follow project switches initiated by tools (e.g., manage_project/create)
+        # so subsequent tool calls in the same batch operate on the new project.
+        switched_project_dir = get_active_project_dir()
+        if switched_project_dir is not None:
+            current_active_dir = switched_project_dir
 
     return appended, mutations, tool_names
 

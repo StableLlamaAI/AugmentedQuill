@@ -135,6 +135,74 @@ describe('Chat', () => {
     );
     expect(screen.getByText('first streaming content')).toBeTruthy();
   });
+
+  it('does not auto-switch project when loading historical manage_project tool messages', async () => {
+    const onSwitchProject = vi.fn();
+    const historicalToolMessage = {
+      id: 'tool-1',
+      role: 'tool' as const,
+      name: 'manage_project',
+      text: JSON.stringify({
+        ok: true,
+        message: 'Project created: Back to the Future_ The Chronological Saga',
+        project_name: 'Back to the Future_ The Chronological Saga',
+      }),
+    };
+
+    renderWithI18n({
+      isLoading: false,
+      messages: [historicalToolMessage],
+      onSwitchProject,
+    });
+
+    await waitFor(() => {
+      expect(onSwitchProject).not.toHaveBeenCalled();
+    });
+  });
+
+  it('auto-switches project exactly once for live manage_project tool message', async () => {
+    const onSwitchProject = vi.fn();
+    const liveToolMessage = {
+      id: 'tool-2',
+      role: 'tool' as const,
+      name: 'manage_project',
+      text: JSON.stringify({
+        ok: true,
+        message: 'Project created: Arbor_1',
+        project_name: 'Arbor_1',
+      }),
+    };
+
+    const { rerender } = renderWithI18n({
+      isLoading: true,
+      messages: [liveToolMessage],
+      onSwitchProject,
+    });
+
+    await waitFor(() => {
+      expect(onSwitchProject).toHaveBeenCalledTimes(1);
+      expect(onSwitchProject).toHaveBeenCalledWith('Arbor_1', {
+        preserveActiveChatSession: true,
+      });
+    });
+
+    rerender(
+      <I18nextProvider i18n={i18n}>
+        <ChatProvider
+          value={{
+            ...defaultContext,
+            isLoading: true,
+            messages: [liveToolMessage],
+            onSwitchProject,
+          }}
+        >
+          <Chat />
+        </ChatProvider>
+      </I18nextProvider>
+    );
+
+    expect(onSwitchProject).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('Chat scratchpad dialog', () => {

@@ -268,6 +268,11 @@ class ChatToolContractsTest(TestCase):
         self.assertIn("order_before_patch", update_props)
         self.assertIn("order_after_patch", update_props)
 
+        scene_time_schema = update_props.get("scene_time", {})
+        scene_time_description = scene_time_schema.get("description", "")
+        self.assertIn("plain string", scene_time_description)
+        self.assertIn("Missing pieces are normalized", scene_time_description)
+
     def test_manage_scenes_update_applies_partial_patches(self):
         created = self._call_tool(
             "manage_scenes",
@@ -352,6 +357,68 @@ class ChatToolContractsTest(TestCase):
             model_type="CHAT",
         )
         self.assertTrue(any(scene.get("id") == scene_id for scene in listed))
+
+    def test_manage_scenes_update_accepts_scene_time_shorthand_string(self):
+        created = self._call_tool(
+            "manage_scenes",
+            {
+                "action": "create",
+                "create_data": {
+                    "summary": "Time shorthand update",
+                },
+            },
+            model_type="CHAT",
+        )
+        scene_id = created.get("id")
+        self.assertTrue(scene_id)
+
+        updated = self._call_tool(
+            "manage_scenes",
+            {
+                "action": "update",
+                "scene_id": scene_id,
+                "update_data": {
+                    "scene_time": "1985-11-05T20:00",
+                },
+            },
+            model_type="CHAT",
+        )
+
+        scene_time = updated.get("scene_time") or {}
+        self.assertEqual(
+            scene_time.get("temporal_zoned_datetime"), "1985-11-05T20:00:00Z"
+        )
+
+    def test_manage_scenes_update_accepts_scene_time_value_alias(self):
+        created = self._call_tool(
+            "manage_scenes",
+            {
+                "action": "create",
+                "create_data": {
+                    "summary": "Time alias update",
+                },
+            },
+            model_type="CHAT",
+        )
+        scene_id = created.get("id")
+        self.assertTrue(scene_id)
+
+        updated = self._call_tool(
+            "manage_scenes",
+            {
+                "action": "update",
+                "scene_id": scene_id,
+                "update_data": {
+                    "scene_time": {"value": "1985-11-05"},
+                },
+            },
+            model_type="CHAT",
+        )
+
+        scene_time = updated.get("scene_time") or {}
+        self.assertEqual(
+            scene_time.get("temporal_zoned_datetime"), "1985-11-05T12:00:00Z"
+        )
 
     def test_manager_action_enums_are_role_filtered_for_editing(self):
         tools = {

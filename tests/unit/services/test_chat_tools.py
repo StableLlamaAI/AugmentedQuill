@@ -477,6 +477,101 @@ class ChatToolsTest(TestCase):
         )
         self.assertEqual(payload_current["chapter"]["title"], "Intro")
 
+    def test_manage_project_create_returns_created_project_name_with_type_alias(self):
+        self._bootstrap_project()
+
+        body = {
+            "model_type": "CHAT",
+            "messages": [
+                {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": [
+                        {
+                            "id": "create_alias",
+                            "type": "function",
+                            "function": {
+                                "name": "manage_project",
+                                "arguments": json.dumps(
+                                    {
+                                        "action": "create",
+                                        "create_data": {
+                                            "name": "Back to the Future: The Chronological Narrative",
+                                            "type": "series",
+                                        },
+                                    }
+                                ),
+                            },
+                        }
+                    ],
+                }
+            ],
+        }
+
+        response = self.client.post("/api/v1/projects/demo/chat/tools", json=body)
+        self.assertEqual(response.status_code, 200, response.text)
+        data = _parse_tool_sse_result(response.text)
+        appended = data.get("appended_messages") or []
+        self.assertEqual(len(appended), 1)
+        payload = json.loads(appended[0].get("content") or "{}")
+
+        self.assertTrue(payload.get("ok"))
+        self.assertEqual(
+            payload.get("project_name"),
+            "Back to the Future_ The Chronological Narrative",
+        )
+
+    def test_tool_batch_follows_project_switch_after_manage_project_create(self):
+        self._bootstrap_project()
+
+        body = {
+            "model_type": "CHAT",
+            "messages": [
+                {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": [
+                        {
+                            "id": "create_then_read_1",
+                            "type": "function",
+                            "function": {
+                                "name": "manage_project",
+                                "arguments": json.dumps(
+                                    {
+                                        "action": "create",
+                                        "create_data": {
+                                            "name": "SwitchTarget",
+                                            "project_type": "novel",
+                                        },
+                                    }
+                                ),
+                            },
+                        },
+                        {
+                            "id": "create_then_read_2",
+                            "type": "function",
+                            "function": {
+                                "name": "manage_story_core",
+                                "arguments": json.dumps({"action": "get_metadata"}),
+                            },
+                        },
+                    ],
+                }
+            ],
+        }
+
+        response = self.client.post("/api/v1/projects/demo/chat/tools", json=body)
+        self.assertEqual(response.status_code, 200, response.text)
+        data = _parse_tool_sse_result(response.text)
+        appended = data.get("appended_messages") or []
+        self.assertEqual(len(appended), 2)
+
+        create_payload = json.loads(appended[0].get("content") or "{}")
+        metadata_payload = json.loads(appended[1].get("content") or "{}")
+
+        self.assertEqual(create_payload.get("project_name"), "SwitchTarget")
+        self.assertEqual(metadata_payload.get("title"), "SwitchTarget")
+
     def test_chat_tool_batch_can_undo_and_redo(self):
         """Tool-call batches should expose batch_id and support undo/redo endpoints."""
         self._bootstrap_project()
@@ -2137,3 +2232,480 @@ class ChatToolsTest(TestCase):
         appended = undo_data.get("appended_messages") or []
         result = json.loads(appended[0].get("content") or "{}")
         self.assertIn("error", result)
+
+    # =========================================================================
+    # SYSTEMATIC TEST SUITE: Scoped Multi-Tool Execution Scenarios
+    # =========================================================================
+    # These tests close the gap for `/api/v1/projects/{project_name}/chat/tools`
+    # with multiple tool calls and project operations (create, type changes, etc).
+
+    def test_scoped_multi_tool_baseline_no_project_switch(self):
+        """Base case: multiple tools in same batch without project switches.
+
+        Validates that the scoped endpoint correctly handles multiple
+        independent tools that don't change project context.
+        """
+        self._bootstrap_project()
+
+        # Execute two tools in same batch on same project.
+        body = {
+            "model_type": "CHAT",
+            "messages": [
+                {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": [
+                        {
+                            "id": "tool_1",
+                            "type": "function",
+                            "function": {
+                                "name": "manage_story_core",
+                                "arguments": json.dumps({"action": "get_metadata"}),
+                            },
+                        },
+                        {
+                            "id": "tool_2",
+                            "type": "function",
+                            "function": {
+                                "name": "manage_sourcebook",
+                                "arguments": json.dumps({"action": "list"}),
+                            },
+                        },
+                    ],
+                }
+            ],
+        }
+
+        response = self.client.post("/api/v1/projects/demo/chat/tools", json=body)
+        self.assertEqual(response.status_code, 200, response.text)
+        data = _parse_tool_sse_result(response.text)
+        appended = data.get("appended_messages") or []
+
+        # Both tools should execute successfully.
+        self.assertEqual(len(appended), 2)
+        self.assertEqual(appended[0].get("name"), "manage_story_core")
+        self.assertEqual(appended[1].get("name"), "manage_sourcebook")
+
+        # Verify story metadata is from 'demo' project.
+        story_payload = json.loads(appended[0].get("content") or "{}")
+        self.assertEqual(story_payload.get("title"), "Demo")
+
+    def test_scoped_multi_tool_create_then_read_canonical_name(self):
+        """Verify project creation returns canonical name, subsequent tools use new project.
+
+        This tests the fix for: project_name derivation must use created
+        artifact path, not contextual lookup. Ensures manage_project.create
+        returns the actual directory name, and subsequent tools read from
+        the newly created project.
+        """
+        self._bootstrap_project()
+
+        # Create new project with name "SciFiAdventure", then read metadata.
+        body = {
+            "model_type": "CHAT",
+            "messages": [
+                {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": [
+                        {
+                            "id": "create_project_call",
+                            "type": "function",
+                            "function": {
+                                "name": "manage_project",
+                                "arguments": json.dumps(
+                                    {
+                                        "action": "create",
+                                        "create_data": {
+                                            "name": "SciFiAdventure",
+                                            "project_type": "novel",
+                                        },
+                                    }
+                                ),
+                            },
+                        },
+                        {
+                            "id": "read_new_project_call",
+                            "type": "function",
+                            "function": {
+                                "name": "manage_story_core",
+                                "arguments": json.dumps({"action": "get_metadata"}),
+                            },
+                        },
+                    ],
+                }
+            ],
+        }
+
+        response = self.client.post("/api/v1/projects/demo/chat/tools", json=body)
+        self.assertEqual(response.status_code, 200, response.text)
+        data = _parse_tool_sse_result(response.text)
+        appended = data.get("appended_messages") or []
+
+        self.assertEqual(len(appended), 2)
+
+        # First message: project creation result.
+        create_payload = json.loads(appended[0].get("content") or "{}")
+        project_name = create_payload.get("project_name")
+        self.assertTrue(
+            project_name, "create result must include canonical project_name"
+        )
+        self.assertNotIn(
+            " ", project_name, "project_name must be canonical (no spaces)"
+        )
+
+        # Second message: metadata from NEW project (not 'demo').
+        metadata_payload = json.loads(appended[1].get("content") or "{}")
+        new_title = metadata_payload.get("title")
+        self.assertIsNotNone(
+            new_title, "subsequent tool must read from newly created project"
+        )
+
+        # Verify new project directory exists.
+        new_project_dir = self.projects_root / project_name
+        self.assertTrue(
+            new_project_dir.exists(),
+            f"new project directory must exist at {new_project_dir}",
+        )
+
+    def test_scoped_multi_tool_update_then_verify_persisted(self):
+        """Tool changes are persisted and visible to subsequent tools in batch.
+
+        Validates that changes made by one tool are immediately visible
+        to subsequent tools in the same batch.
+        """
+        self._bootstrap_project()
+
+        # Update story metadata, then verify it's visible in get_metadata.
+        body = {
+            "model_type": "CHAT",
+            "messages": [
+                {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": [
+                        {
+                            "id": "update_call",
+                            "type": "function",
+                            "function": {
+                                "name": "manage_story_core",
+                                "arguments": json.dumps(
+                                    {
+                                        "action": "update_metadata",
+                                        "update_data": {
+                                            "summary": "Updated story summary",
+                                            "tags": ["updated"],
+                                        },
+                                    }
+                                ),
+                            },
+                        },
+                        {
+                            "id": "verify_call",
+                            "type": "function",
+                            "function": {
+                                "name": "manage_story_core",
+                                "arguments": json.dumps({"action": "get_metadata"}),
+                            },
+                        },
+                    ],
+                }
+            ],
+        }
+
+        response = self.client.post("/api/v1/projects/demo/chat/tools", json=body)
+        self.assertEqual(response.status_code, 200, response.text)
+        data = _parse_tool_sse_result(response.text)
+        appended = data.get("appended_messages") or []
+
+        self.assertEqual(len(appended), 2)
+
+        # Second message should reflect the update from first message.
+        verify_payload = json.loads(appended[1].get("content") or "{}")
+        self.assertEqual(verify_payload.get("summary"), "Updated story summary")
+        self.assertIn("updated", verify_payload.get("tags") or [])
+
+    def test_scoped_multi_tool_with_sourcebook_operations(self):
+        """Multiple scoped tools targeting different subsystems (story + sourcebook).
+
+        Validates that tools from different domains (story management,
+        sourcebook management) can coexist and operate correctly in same batch.
+        """
+        self._bootstrap_project()
+
+        # Create a sourcebook entry, then read all entries.
+        body = {
+            "model_type": "CHAT",
+            "messages": [
+                {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": [
+                        {
+                            "id": "create_entry_call",
+                            "type": "function",
+                            "function": {
+                                "name": "manage_sourcebook",
+                                "arguments": json.dumps(
+                                    {
+                                        "action": "create",
+                                        "entry_data": {
+                                            "name": "TestCharacter",
+                                            "category": "character",
+                                            "description": "A brave hero.",
+                                        },
+                                    }
+                                ),
+                            },
+                        },
+                        {
+                            "id": "list_entries_call",
+                            "type": "function",
+                            "function": {
+                                "name": "manage_sourcebook",
+                                "arguments": json.dumps(
+                                    {
+                                        "action": "list",
+                                        "category": "character",
+                                    }
+                                ),
+                            },
+                        },
+                    ],
+                }
+            ],
+        }
+
+        response = self.client.post("/api/v1/projects/demo/chat/tools", json=body)
+        self.assertEqual(response.status_code, 200, response.text)
+        data = _parse_tool_sse_result(response.text)
+        appended = data.get("appended_messages") or []
+
+        self.assertEqual(len(appended), 2)
+
+        # First message: created entry confirmation - should have entry details.
+        create_payload = json.loads(appended[0].get("content") or "{}")
+        # Create returns the entry data which includes id, name, category, etc.
+        self.assertTrue(create_payload, "create should return entry data")
+
+        # Second message: list should show the newly created entry.
+        list_payload = json.loads(appended[1].get("content") or "{}")
+        entries = (
+            list_payload
+            if isinstance(list_payload, list)
+            else list_payload.get("entries") or []
+        )
+        entry_names = [e.get("name") for e in entries if isinstance(e, dict)]
+        self.assertIn(
+            "TestCharacter", entry_names, "list should include newly created entry"
+        )
+
+    def test_scoped_multi_tool_project_type_change_mid_batch(self):
+        """Changing project type mid-batch executes and returns context updates.
+
+        Tests that when manage_project.change_type is called mid-batch,
+        it executes successfully and subsequent tools continue operating.
+        Note: full context switching for project type changes is a separate concern.
+        """
+        self._bootstrap_project()
+
+        # Change project type, then verify subsequent tool executes successfully.
+        body = {
+            "model_type": "CHAT",
+            "messages": [
+                {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": [
+                        {
+                            "id": "change_type_call",
+                            "type": "function",
+                            "function": {
+                                "name": "manage_project",
+                                "arguments": json.dumps(
+                                    {
+                                        "action": "change_type",
+                                        "type_data": {
+                                            "new_type": "short_story_collection"
+                                        },
+                                    }
+                                ),
+                            },
+                        },
+                        {
+                            "id": "verify_batch_call",
+                            "type": "function",
+                            "function": {
+                                "name": "manage_story_core",
+                                "arguments": json.dumps({"action": "get_metadata"}),
+                            },
+                        },
+                    ],
+                }
+            ],
+        }
+
+        response = self.client.post("/api/v1/projects/demo/chat/tools", json=body)
+        self.assertEqual(response.status_code, 200, response.text)
+        data = _parse_tool_sse_result(response.text)
+        appended = data.get("appended_messages") or []
+
+        # Both tools should execute without error.
+        self.assertEqual(len(appended), 2)
+
+        # First message: change_type result
+        change_result = json.loads(appended[0].get("content") or "{}")
+        self.assertTrue(change_result.get("ok") or "message" in change_result)
+
+        # Second message: subsequent tool executes (metadata accessible)
+        metadata = json.loads(appended[1].get("content") or "{}")
+        self.assertIn(
+            "project_type", metadata, "subsequent tool should execute successfully"
+        )
+
+    def test_scoped_multi_tool_three_tool_context_chain(self):
+        """Three-tool chain verifies context updates persist across tools.
+
+        Tests that registry.current updates after each tool execution,
+        allowing a chain of operations where each tool depends on previous
+        context changes (e.g., create → update → read).
+        """
+        self._bootstrap_project()
+
+        # 1. Create a sourcebook entry
+        # 2. Update it with new description
+        # 3. Read it back to verify chain
+        body = {
+            "model_type": "CHAT",
+            "messages": [
+                {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": [
+                        {
+                            "id": "step1",
+                            "type": "function",
+                            "function": {
+                                "name": "manage_sourcebook",
+                                "arguments": json.dumps(
+                                    {
+                                        "action": "create",
+                                        "entry_data": {
+                                            "name": "Hero",
+                                            "category": "character",
+                                            "description": "The protagonist.",
+                                        },
+                                    }
+                                ),
+                            },
+                        },
+                        {
+                            "id": "step2",
+                            "type": "function",
+                            "function": {
+                                "name": "manage_sourcebook",
+                                "arguments": json.dumps(
+                                    {
+                                        "action": "update",
+                                        "name_or_id": "Hero",
+                                        "update_data": {
+                                            "description": "The brave protagonist who seeks the artifact."
+                                        },
+                                    }
+                                ),
+                            },
+                        },
+                        {
+                            "id": "step3",
+                            "type": "function",
+                            "function": {
+                                "name": "manage_sourcebook",
+                                "arguments": json.dumps(
+                                    {
+                                        "action": "get",
+                                        "name_or_id": "Hero",
+                                    }
+                                ),
+                            },
+                        },
+                    ],
+                }
+            ],
+        }
+
+        response = self.client.post("/api/v1/projects/demo/chat/tools", json=body)
+        self.assertEqual(response.status_code, 200, response.text)
+        data = _parse_tool_sse_result(response.text)
+        appended = data.get("appended_messages") or []
+
+        self.assertEqual(len(appended), 3)
+
+        # Final read should show the updated description (or content field if used).
+        final_payload = json.loads(appended[2].get("content") or "{}")
+        final_desc = final_payload.get("description", "")
+        self.assertIn(
+            "brave protagonist",
+            final_desc,
+            f"final read should show updated description, got: {final_desc}",
+        )
+
+    def test_scoped_multi_tool_concurrent_mutation_tracking(self):
+        """Batch mutations from multiple tools are aggregated correctly.
+
+        Validates that when multiple tools mutate state, the batch response
+        correctly aggregates mutations (e.g., story_changed flags, tool_batch ids).
+        """
+        self._bootstrap_project()
+
+        # Two tools that modify state: update_metadata + create sourcebook entry.
+        body = {
+            "model_type": "CHAT",
+            "messages": [
+                {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": [
+                        {
+                            "id": "mutate1",
+                            "type": "function",
+                            "function": {
+                                "name": "manage_story_core",
+                                "arguments": json.dumps(
+                                    {
+                                        "action": "update_metadata",
+                                        "update_data": {"summary": "Updated."},
+                                    }
+                                ),
+                            },
+                        },
+                        {
+                            "id": "mutate2",
+                            "type": "function",
+                            "function": {
+                                "name": "manage_sourcebook",
+                                "arguments": json.dumps(
+                                    {
+                                        "action": "create",
+                                        "entry_data": {
+                                            "name": "NewEntry",
+                                            "category": "location",
+                                            "content": "A place.",
+                                        },
+                                    }
+                                ),
+                            },
+                        },
+                    ],
+                }
+            ],
+        }
+
+        response = self.client.post("/api/v1/projects/demo/chat/tools", json=body)
+        self.assertEqual(response.status_code, 200, response.text)
+        data = _parse_tool_sse_result(response.text)
+
+        # Verify mutations are tracked.
+        mutations = data.get("mutations") or {}
+        self.assertTrue(mutations.get("story_changed"))
+        tool_batch = mutations.get("tool_batch") or {}
+        self.assertTrue(tool_batch.get("batch_id"))

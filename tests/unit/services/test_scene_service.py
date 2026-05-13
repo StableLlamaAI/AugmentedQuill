@@ -14,6 +14,7 @@ import pytest
 
 from augmentedquill.core.config import load_story_config, save_story_config
 from augmentedquill.models.scene import (
+    SceneChronologyTime,
     SceneCreateRequest,
     SceneLinkProseRequest,
     SceneProseLink,
@@ -111,6 +112,39 @@ class TestSceneCRUD:
         assert updated["status"] == "inactive"
         # Unchanged fields survive
         assert updated["id"] == scene["id"]
+
+    def test_create_scene_normalizes_scene_time_date_only(
+        self, project_dir: Path
+    ) -> None:
+        payload = SceneCreateRequest(
+            summary="Dated scene",
+            scene_time=SceneChronologyTime.model_validate("1985-11-05"),
+        )
+
+        scene = create_scene(project_dir, payload)
+
+        assert scene.get("scene_time") is not None
+        assert scene["scene_time"].get("temporal_zoned_datetime") == (
+            "1985-11-05T12:00:00Z"
+        )
+
+    def test_update_scene_normalizes_scene_time_missing_seconds_and_timezone(
+        self, project_dir: Path
+    ) -> None:
+        scene = create_scene(project_dir, SceneCreateRequest(summary="Original"))
+        updated = update_scene(
+            project_dir,
+            scene["id"],
+            SceneUpdateRequest(
+                scene_time=SceneChronologyTime.model_validate("1985-11-05T20:00")
+            ),
+        )
+
+        assert updated is not None
+        assert updated.get("scene_time") is not None
+        assert updated["scene_time"].get("temporal_zoned_datetime") == (
+            "1985-11-05T20:00:00Z"
+        )
 
     def test_update_nonexistent_returns_none(self, project_dir: Path) -> None:
         result = update_scene(

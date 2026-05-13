@@ -263,7 +263,10 @@ export type MainChatControls = {
   handleRegenerate: () => Promise<void>;
   handleEditMessage: (id: string, newText: string) => void;
   handleDeleteMessage: (id: string) => void;
-  handleLoadProject: (projectId: string) => Promise<void>;
+  handleLoadProject: (
+    projectId: string,
+    options?: { preserveActiveChatSession?: boolean }
+  ) => Promise<void>;
   handleSelectChat: (chatId: string) => Promise<void>;
   handleNewChat: (incognito?: boolean) => void;
   handleDeleteChat: (chatId: string) => Promise<void>;

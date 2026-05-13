@@ -34,6 +34,30 @@ describe('temporal utils', () => {
     expect(toInternationalDisplayString('not-a-temporal-string')).toBe('');
   });
 
+  it('parses date-only scene times by assuming noon UTC', () => {
+    const parsed = parseZonedDateTime('1985-11-05');
+    expect(parsed).toBeTruthy();
+    expect(parsed?.timeZoneId).toBe('UTC');
+    expect(parsed?.hour).toBe(12);
+    expect(parsed?.minute).toBe(0);
+    expect(parsed?.second).toBe(0);
+  });
+
+  it('parses datetime scene times missing seconds and timezone', () => {
+    const parsed = parseZonedDateTime('1985-11-05T20:00');
+    expect(parsed).toBeTruthy();
+    expect(parsed?.timeZoneId).toBe('UTC');
+    expect(parsed?.hour).toBe(20);
+    expect(parsed?.minute).toBe(0);
+    expect(parsed?.second).toBe(0);
+  });
+
+  it('renders display strings for loose ISO-like values stored in story data', () => {
+    expect(toDisplayString('1985-11-05')).not.toBe('');
+    expect(toDisplayString('1985-11-05T20:00')).not.toBe('');
+    expect(toInternationalDisplayString('1985-11-05T20:00')).toContain('UTC');
+  });
+
   it('uses selected calendar style for primary display', () => {
     const japaneseValue = fromStoryDateParts({
       era: 'CE',

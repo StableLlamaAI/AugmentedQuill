@@ -79,9 +79,15 @@ class ManageScenesUpdateData(BaseModel):
         None, description="Optional full replacement location."
     )
     time: str | None = Field(None, description="Optional full replacement time.")
-    scene_time: SceneChronologyTime | None = Field(
+    scene_time: SceneChronologyTime | str | None = Field(
         None,
-        description="Optional full replacement scene chronology time.",
+        description=(
+            "Optional scene chronology time. Accepted forms: "
+            "{'temporal_zoned_datetime': '1985-11-05T20:00:00Z'}, "
+            "{'value': '1985-11-05T20:00'}, or plain string '1985-11-05'. "
+            "Missing pieces are normalized automatically: date-only uses 12:00:00, "
+            "missing seconds become :00, and missing timezone defaults to Z (UTC)."
+        ),
     )
     color_tag: str | None = Field(
         None,
@@ -142,7 +148,9 @@ class ManageScenesParams(BaseModel):
         "list scenes, action='get' with scene_id to retrieve one scene, "
         "action='create' with create_data to create a scene, action='update' with "
         "scene_id and update_data to modify a scene, and action='delete' with "
-        "scene_id to remove a scene."
+        "scene_id to remove a scene. For update_data.scene_time, you can pass "
+        "a Temporal object, {'value': ...}, or a plain ISO-like string such as "
+        "'1985-11-05', '1985-11-05T20:00', or '1985-11-05T20:00:00Z'."
     ),
     allowed_roles=(CHAT_ROLE, EDITING_ROLE),
     capability="metadata-write",

@@ -560,6 +560,23 @@ describe('SceneEditorDialog sourcebook navigation safety', () => {
 });
 
 describe('SceneEditorDialog Temporal time payload', () => {
+  it('displays scene_time when stored as a loose ISO date value', () => {
+    wrap(
+      <SceneEditorDialog
+        scene={makeScene({
+          scene_time: { temporal_zoned_datetime: '1985-11-05' },
+        })}
+        isOpen
+        onClose={NOOP_CLOSE}
+        onSave={NOOP_SAVE}
+        onDelete={NOOP_DELETE}
+      />
+    );
+
+    expect(screen.getAllByText(/1985/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/International format:/i)).toBeTruthy();
+  });
+
   it('renders safely even when temporal locale formatting throws', () => {
     const temporalValue = '0044-03-15T12:00:00+00:00[UTC][u-ca=gregory]';
     const sample = TemporalApi.ZonedDateTime.from(temporalValue);

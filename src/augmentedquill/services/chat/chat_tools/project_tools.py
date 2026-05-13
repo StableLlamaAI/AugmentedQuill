@@ -11,7 +11,7 @@ from typing import Any, Literal
 
 import json as _json
 
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, Field
 
 from augmentedquill.core.config import load_story_config
 from augmentedquill.services.chat.chat_tool_decorator import (
@@ -53,6 +53,7 @@ class ManageProjectCreateData(BaseModel):
     project_type: str = Field(
         "novel",
         description="The project type: 'short-story', 'novel', or 'series'",
+        validation_alias=AliasChoices("project_type", "type"),
     )
 
 
@@ -150,6 +151,19 @@ async def manage_project(
         )
         if ok:
             mutations["story_changed"] = True
+            created_name = ""
+            if isinstance(msg, str) and msg.startswith("Project created:"):
+                created_name = msg.split(":", 1)[1].strip()
+            if not created_name:
+                active = get_active_project_dir()
+                created_name = active.name if active else params.create_data.name
+            # Return the created directory name so clients can reliably switch
+            # even when the user provided title is sanitized for filesystem safety.
+            return {
+                "ok": True,
+                "message": msg,
+                "project_name": created_name,
+            }
         return {"ok": ok, "message": msg}
 
     if params.action == "delete":
