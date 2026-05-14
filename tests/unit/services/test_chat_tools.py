@@ -97,6 +97,9 @@ class ChatToolsTest(TestCase):
     def _post_single_tool(self, name: str, arguments: dict | str):
         return self._post_single_tool_for_role("CHAT", name, arguments)
 
+    def _post_tool_calls(self, calls: list[tuple[str, dict | str]]):
+        return self._post_tool_calls_for_role("CHAT", calls)
+
     @staticmethod
     def _normalize_manager_tool_call(name: str, arguments: dict) -> tuple[str, dict]:
         """Translate legacy per-action tool invocations to manager tool actions."""
@@ -219,6 +222,45 @@ class ChatToolsTest(TestCase):
                             },
                         }
                     ],
+                }
+            ],
+        }
+        response = self.client.post("/api/v1/chat/tools", json=body)
+        self.assertEqual(response.status_code, 200, response.text)
+        return _parse_tool_sse_result(response.text)
+
+    def _post_tool_calls_for_role(
+        self, model_type: str, calls: list[tuple[str, dict | str]]
+    ) -> dict:
+        tool_calls = []
+        for index, (name, arguments) in enumerate(calls, start=1):
+            if isinstance(arguments, str):
+                args = arguments
+                normalized_name = name
+            else:
+                normalized_name, normalized_args = self._normalize_manager_tool_call(
+                    name, arguments
+                )
+                args = json.dumps(normalized_args)
+
+            tool_calls.append(
+                {
+                    "id": f"call_{index}_{name}",
+                    "type": "function",
+                    "function": {
+                        "name": normalized_name,
+                        "arguments": args,
+                    },
+                }
+            )
+
+        body = {
+            "model_type": model_type,
+            "messages": [
+                {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": tool_calls,
                 }
             ],
         }
@@ -985,6 +1027,526 @@ class ChatToolsTest(TestCase):
         # Verify mutations for undo/redo support
         mutations = data.get("mutations") or {}
         self.assertTrue(mutations.get("story_changed"))
+
+    def test_call_writing_llm_two_append_calls_same_batch_preserve_both_writes(self):
+        """Two append-mode call_writing_llm calls in one tool batch must append cumulatively."""
+        self._bootstrap_project()
+        self._post_single_tool(
+            "update_story_metadata",
+            {
+                "conflicts": [
+                    {
+                        "id": "c1",
+                        "description": "Test conflict",
+                        "resolution": "Test resolution",
+                    }
+                ]
+            },
+        )
+
+        chapter_file = self.projects_root / "demo" / "chapters" / "0001.txt"
+        original_content = chapter_file.read_text(encoding="utf-8")
+
+        generated_chunks = ["First continuation.", "Second continuation."]
+
+        async def _sequenced_stream(**kwargs):
+            yield {"content": generated_chunks.pop(0)}
+
+        body = {
+            "model_type": "CHAT",
+            "messages": [
+                {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": [
+                        {
+                            "id": "call_1",
+                            "type": "function",
+                            "function": {
+                                "name": "call_writing_llm",
+                                "arguments": json.dumps(
+                                    {
+                                        "instruction": "Write prose for scene one",
+                                        "context": "Scene one context",
+                                        "write_mode": "append",
+                                        "chap_id": 1,
+                                    }
+                                ),
+                            },
+                        },
+                        {
+                            "id": "call_2",
+                            "type": "function",
+                            "function": {
+                                "name": "call_writing_llm",
+                                "arguments": json.dumps(
+                                    {
+                                        "instruction": "Write prose for scene two",
+                                        "context": "Scene two context",
+                                        "preceding_content": "First continuation.",
+                                        "write_mode": "append",
+                                        "chap_id": 1,
+                                    }
+                                ),
+                            },
+                        },
+                    ],
+                }
+            ],
+        }
+
+        with (
+            patch(
+                "augmentedquill.services.llm.llm.resolve_openai_credentials",
+                return_value=("http://localhost:11434/v1", None, "dummy", 30, "dummy"),
+            ),
+            patch(
+                "augmentedquill.services.llm.llm.unified_chat_stream",
+                new=_sequenced_stream,
+            ),
+        ):
+            response = self.client.post("/api/v1/chat/tools", json=body)
+
+        self.assertEqual(response.status_code, 200, response.text)
+        data = _parse_tool_sse_result(response.text)
+
+        prose_start_events = response.text.count('"type": "prose_start"')
+        self.assertEqual(prose_start_events, 2)
+
+        new_content = chapter_file.read_text(encoding="utf-8")
+        self.assertEqual(
+            new_content,
+            original_content + " First continuation. Second continuation.",
+        )
+
+        appended = data.get("appended_messages") or []
+        self.assertEqual(len(appended), 2)
+        first_result = json.loads(appended[0].get("content") or "{}")
+        second_result = json.loads(appended[1].get("content") or "{}")
+        self.assertEqual(first_result.get("write_mode"), "append")
+        self.assertEqual(second_result.get("write_mode"), "append")
+        self.assertTrue(first_result.get("written"))
+        self.assertTrue(second_result.get("written"))
+
+        mutations = data.get("mutations") or {}
+        self.assertTrue(mutations.get("story_changed"))
+
+    def test_update_story_metadata_append_patch_is_cumulative_within_one_batch(self):
+        self._bootstrap_project()
+
+        self._post_single_tool(
+            "update_story_metadata",
+            {
+                "notes": "Story base",
+                "conflicts": [{"description": "Conflict", "resolution": "Open"}],
+            },
+        )
+
+        data = self._post_tool_calls(
+            [
+                (
+                    "update_story_metadata",
+                    {
+                        "notes_patch": {
+                            "operation": "append",
+                            "value": " one",
+                        }
+                    },
+                ),
+                (
+                    "update_story_metadata",
+                    {
+                        "notes_patch": {
+                            "operation": "append",
+                            "value": " two",
+                        }
+                    },
+                ),
+            ]
+        )
+
+        story = json.loads(
+            (self.projects_root / "demo" / "story.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(story.get("notes"), "Story base one two")
+        self.assertTrue((data.get("mutations") or {}).get("story_changed"))
+
+    def test_update_chapter_metadata_append_patch_is_cumulative_within_one_batch(self):
+        self._bootstrap_project()
+
+        self._post_single_tool(
+            "update_chapter_metadata",
+            {"chap_id": 1, "notes": "Chapter base"},
+        )
+
+        data = self._post_tool_calls(
+            [
+                (
+                    "update_chapter_metadata",
+                    {
+                        "chap_id": 1,
+                        "notes_patch": {
+                            "operation": "append",
+                            "value": " one",
+                        },
+                    },
+                ),
+                (
+                    "update_chapter_metadata",
+                    {
+                        "chap_id": 1,
+                        "notes_patch": {
+                            "operation": "append",
+                            "value": " two",
+                        },
+                    },
+                ),
+            ]
+        )
+
+        story = json.loads(
+            (self.projects_root / "demo" / "story.json").read_text(encoding="utf-8")
+        )
+        chapter = (story.get("chapters") or [])[0]
+        self.assertEqual(chapter.get("notes"), "Chapter base one two")
+        self.assertTrue((data.get("mutations") or {}).get("story_changed"))
+
+    def test_update_book_metadata_append_patch_is_cumulative_within_one_batch(self):
+        self._bootstrap_project()
+
+        story_path = self.projects_root / "demo" / "story.json"
+        story = json.loads(story_path.read_text(encoding="utf-8"))
+        story["project_type"] = "series"
+        story["books"] = [
+            {
+                "id": "book-1",
+                "folder": "book-1",
+                "title": "Book One",
+                "summary": "",
+                "notes": "Book base",
+                "chapters": [],
+            }
+        ]
+        story_path.write_text(json.dumps(story), encoding="utf-8")
+
+        data = self._post_tool_calls(
+            [
+                (
+                    "update_book_metadata",
+                    {
+                        "book_id": "book-1",
+                        "notes_patch": {
+                            "operation": "append",
+                            "value": " one",
+                        },
+                    },
+                ),
+                (
+                    "update_book_metadata",
+                    {
+                        "book_id": "book-1",
+                        "notes_patch": {
+                            "operation": "append",
+                            "value": " two",
+                        },
+                    },
+                ),
+            ]
+        )
+
+        story_after = json.loads(story_path.read_text(encoding="utf-8"))
+        book = (story_after.get("books") or [])[0]
+        self.assertEqual(book.get("notes"), "Book base one two")
+        self.assertTrue((data.get("mutations") or {}).get("story_changed"))
+
+    def test_update_sourcebook_entry_append_patch_is_cumulative_within_one_batch(self):
+        self._bootstrap_project()
+
+        self._post_single_tool(
+            "create_sourcebook_entry",
+            {
+                "name": "Ava",
+                "description": "Base description",
+                "category": "Character",
+            },
+        )
+
+        data = self._post_tool_calls(
+            [
+                (
+                    "update_sourcebook_entry",
+                    {
+                        "name_or_id": "Ava",
+                        "description_patch": {
+                            "operation": "append",
+                            "value": " one",
+                        },
+                    },
+                ),
+                (
+                    "update_sourcebook_entry",
+                    {
+                        "name_or_id": "Ava",
+                        "description_patch": {
+                            "operation": "append",
+                            "value": " two",
+                        },
+                    },
+                ),
+            ]
+        )
+
+        fetched = self._post_single_tool("get_sourcebook_entry", {"name_or_id": "Ava"})
+        payload = fetched.get("appended_messages") or []
+        self.assertEqual(len(payload), 1)
+        entry = json.loads(payload[0]["content"])
+        self.assertEqual(entry.get("description"), "Base description one two")
+        self.assertTrue((data.get("mutations") or {}).get("story_changed"))
+
+    def test_manage_scenes_append_patch_is_cumulative_within_one_batch(self):
+        self._bootstrap_project()
+
+        created = self._post_single_tool(
+            "manage_scenes",
+            {
+                "action": "create",
+                "create_data": {"summary": "Scene base"},
+            },
+        )
+        created_payload = created.get("appended_messages") or []
+        self.assertEqual(len(created_payload), 1)
+        scene = json.loads(created_payload[0]["content"])
+        scene_id = scene.get("id")
+        self.assertIsInstance(scene_id, int)
+
+        data = self._post_tool_calls(
+            [
+                (
+                    "manage_scenes",
+                    {
+                        "action": "update",
+                        "scene_id": scene_id,
+                        "update_data": {
+                            "summary_patch": {
+                                "operation": "append",
+                                "value": " one",
+                            }
+                        },
+                    },
+                ),
+                (
+                    "manage_scenes",
+                    {
+                        "action": "update",
+                        "scene_id": scene_id,
+                        "update_data": {
+                            "summary_patch": {
+                                "operation": "append",
+                                "value": " two",
+                            }
+                        },
+                    },
+                ),
+            ]
+        )
+
+        fetched = self._post_single_tool(
+            "manage_scenes",
+            {"action": "get", "scene_id": scene_id},
+        )
+        fetched_payload = fetched.get("appended_messages") or []
+        self.assertEqual(len(fetched_payload), 1)
+        updated_scene = json.loads(fetched_payload[0]["content"])
+        self.assertEqual(updated_scene.get("summary"), "Scene base one two")
+        self.assertTrue((data.get("mutations") or {}).get("story_changed"))
+
+    def test_append_capable_tools_integration_single_turn_batch(self):
+        """Integration: append-capable tool paths all preserve cumulative appends in one turn."""
+        self._bootstrap_project()
+
+        self._post_single_tool(
+            "update_story_metadata",
+            {
+                "conflicts": [
+                    {
+                        "id": "c1",
+                        "description": "Integration conflict",
+                        "resolution": "Open",
+                    }
+                ]
+            },
+        )
+
+        chapter_file = self.projects_root / "demo" / "chapters" / "0001.txt"
+        original_chapter = chapter_file.read_text(encoding="utf-8")
+
+        generated_chunks = ["First prose.", "Second prose."]
+
+        async def _sequenced_stream(**kwargs):
+            text = generated_chunks.pop(0) if generated_chunks else ""
+            yield {"content": text}
+
+        with (
+            patch(
+                "augmentedquill.services.llm.llm.resolve_openai_credentials",
+                return_value=("http://localhost:11434/v1", None, "dummy", 30, "dummy"),
+            ),
+            patch(
+                "augmentedquill.services.llm.llm.unified_chat_stream",
+                new=_sequenced_stream,
+            ),
+        ):
+            data = self._post_tool_calls(
+                [
+                    (
+                        "call_writing_llm",
+                        {
+                            "instruction": "Write prose for scene one",
+                            "context": "Context one",
+                            "write_mode": "append",
+                            "chap_id": 1,
+                        },
+                    ),
+                    (
+                        "call_writing_llm",
+                        {
+                            "instruction": "Write prose for scene two",
+                            "context": "Context two",
+                            "preceding_content": "First prose.",
+                            "write_mode": "append",
+                            "chap_id": 1,
+                        },
+                    ),
+                    (
+                        "update_story_metadata",
+                        {
+                            "notes_patch": {
+                                "operation": "append",
+                                "value": " story-one",
+                            }
+                        },
+                    ),
+                    (
+                        "update_story_metadata",
+                        {
+                            "notes_patch": {
+                                "operation": "append",
+                                "value": " story-two",
+                            }
+                        },
+                    ),
+                    (
+                        "update_chapter_metadata",
+                        {
+                            "chap_id": 1,
+                            "notes_patch": {
+                                "operation": "append",
+                                "value": " chapter-one",
+                            },
+                        },
+                    ),
+                    (
+                        "update_chapter_metadata",
+                        {
+                            "chap_id": 1,
+                            "notes_patch": {
+                                "operation": "append",
+                                "value": " chapter-two",
+                            },
+                        },
+                    ),
+                    (
+                        "create_sourcebook_entry",
+                        {
+                            "name": "Integration Entry",
+                            "description": "Entry base",
+                            "category": "Character",
+                        },
+                    ),
+                    (
+                        "update_sourcebook_entry",
+                        {
+                            "name_or_id": "Integration Entry",
+                            "description_patch": {
+                                "operation": "append",
+                                "value": " one",
+                            },
+                        },
+                    ),
+                    (
+                        "update_sourcebook_entry",
+                        {
+                            "name_or_id": "Integration Entry",
+                            "description_patch": {
+                                "operation": "append",
+                                "value": " two",
+                            },
+                        },
+                    ),
+                    (
+                        "manage_scenes",
+                        {
+                            "action": "create",
+                            "create_data": {"summary": "Scene base"},
+                        },
+                    ),
+                    (
+                        "manage_scenes",
+                        {
+                            "action": "update",
+                            "scene_id": 1,
+                            "update_data": {
+                                "summary_patch": {
+                                    "operation": "append",
+                                    "value": " one",
+                                }
+                            },
+                        },
+                    ),
+                    (
+                        "manage_scenes",
+                        {
+                            "action": "update",
+                            "scene_id": 1,
+                            "update_data": {
+                                "summary_patch": {
+                                    "operation": "append",
+                                    "value": " two",
+                                }
+                            },
+                        },
+                    ),
+                ]
+            )
+
+        self.assertTrue((data.get("mutations") or {}).get("story_changed"))
+
+        new_chapter = chapter_file.read_text(encoding="utf-8")
+        self.assertEqual(new_chapter, original_chapter + " First prose. Second prose.")
+
+        story = json.loads(
+            (self.projects_root / "demo" / "story.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(story.get("notes"), " story-one story-two")
+        chapter = (story.get("chapters") or [])[0]
+        self.assertEqual(chapter.get("notes"), " chapter-one chapter-two")
+
+        sourcebook_data = self._post_single_tool(
+            "get_sourcebook_entry", {"name_or_id": "Integration Entry"}
+        )
+        sourcebook_payload = sourcebook_data.get("appended_messages") or []
+        self.assertEqual(len(sourcebook_payload), 1)
+        sourcebook_entry = json.loads(sourcebook_payload[0]["content"])
+        self.assertEqual(sourcebook_entry.get("description"), "Entry base one two")
+
+        scene_data = self._post_single_tool(
+            "manage_scenes",
+            {"action": "get", "scene_id": 1},
+        )
+        scene_payload = scene_data.get("appended_messages") or []
+        self.assertEqual(len(scene_payload), 1)
+        scene_one = json.loads(scene_payload[0]["content"])
+        self.assertEqual(scene_one.get("summary"), "Scene base one two")
 
     def test_call_writing_llm_append_mode_with_trailing_newline(self):
         """Test append mode consumes trailing newline when continuation is inline."""

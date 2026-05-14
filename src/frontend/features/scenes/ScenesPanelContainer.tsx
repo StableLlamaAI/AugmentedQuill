@@ -419,7 +419,7 @@ export const ScenesPanelContainer: React.FC<ScenesPanelContainerProps> = ({
       targetSceneId: SceneId,
       placeBefore: boolean
     ): Promise<void> => {
-      const chapterOrderMap = buildChapterOrderMap(projectType, chapters, books);
+      const chapterOrderMap = buildChapterOrderMap(projectType, chapters, books ?? []);
       const sortedScenes = [...scenes].sort((a: Scene, b: Scene) =>
         proseSort(a, b, chapterOrderMap)
       );
@@ -470,7 +470,9 @@ export const ScenesPanelContainer: React.FC<ScenesPanelContainerProps> = ({
             } as SceneUpdatePayload)
           )
         );
-        persisted.forEach((scene: Scene): void => patchScene(scene));
+        persisted.forEach((scene: Scene): void => {
+          patchScene(scene);
+        });
         recordSceneHistory(
           'Reorder scene narrative',
           applyScenePatches(scenes, persisted)

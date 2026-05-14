@@ -853,3 +853,5 @@ export const NarrativeView: React.FC<NarrativeViewProps> = ({
   );
 };
 /* eslint-enable complexity */
+
+export default NarrativeView;

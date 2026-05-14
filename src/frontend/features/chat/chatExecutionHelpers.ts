@@ -321,7 +321,12 @@ export type ExecuteChatRequestContext = {
   currentChapterId: string | null;
   getCurrentChatId: () => string | null;
   currentChapter?: { id: string; title: string } | null;
-  onProseChunk?: (chapId: number, writeMode: string, accumulated: string) => void;
+  onProseChunk?: (
+    chapId: number,
+    writeMode: string,
+    accumulated: string,
+    streamId: number
+  ) => void;
   refreshProjects: () => Promise<void>;
   refreshStory: () => Promise<void>;
   requestToolCallLoopAccess: (

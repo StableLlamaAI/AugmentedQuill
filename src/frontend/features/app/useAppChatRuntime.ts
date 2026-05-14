@@ -310,7 +310,12 @@ export function useAppChatRuntime({
     refreshProjects,
     refreshStory,
     onProseChunk: useCallback(
-      (chapterId: number, writeMode: string, accumulated: string): void => {
+      (
+        chapterId: number,
+        writeMode: string,
+        accumulated: string,
+        streamId: number
+      ): void => {
         if (!useChatStore.getState().isChatLoading) {
           return;
         }
@@ -326,7 +331,7 @@ export function useAppChatRuntime({
           return;
         }
 
-        const streamKey = `${chapterId}:${writeMode}`;
+        const streamKey = `${chapterId}:${writeMode}:${streamId}`;
         const previous = prosePreviewStateRef.current[streamKey];
         const restarted =
           !previous ||
