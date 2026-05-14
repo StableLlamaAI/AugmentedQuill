@@ -19,13 +19,13 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { Scene, SceneProseLink } from '../../types';
+import type { Scene, SceneId, SceneProseLink } from '../../types';
 import type { WritingUnit } from '../../types/domain';
 import type { EditorHandle } from '../editor/Editor';
 import type { ProseHighlightRange } from '../editor/CodeMirrorEditor';
 
-/** Returns true when two sets contain exactly the same string members. */
-function setsEqual(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
+/** Returns true when two sets contain exactly the same SceneId members. */
+function setsEqual(a: ReadonlySet<SceneId>, b: ReadonlySet<SceneId>): boolean {
   if (a.size !== b.size) return false;
   for (const item of a) {
     if (!b.has(item)) return false;
@@ -34,10 +34,10 @@ function setsEqual(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
 }
 
 export interface SceneProseSyncResult {
-  selectedSceneId: string | null;
-  handleSelectScene: (id: string | null) => void;
+  selectedSceneId: SceneId | null;
+  handleSelectScene: (id: SceneId | null) => void;
   /** Called by PinboardView whenever the full multi-selection set changes. */
-  handleMultipleSelectScenes: (ids: ReadonlySet<string>) => void;
+  handleMultipleSelectScenes: (ids: ReadonlySet<SceneId>) => void;
 }
 
 export function useSceneProseSync(
@@ -45,9 +45,9 @@ export function useSceneProseSync(
   currentChapter: WritingUnit | null | undefined,
   editorRef: React.RefObject<EditorHandle | null> | undefined
 ): SceneProseSyncResult {
-  const [selectedSceneId, setSelectedSceneId] = useState<string | null>(null);
+  const [selectedSceneId, setSelectedSceneId] = useState<SceneId | null>(null);
   // Full set of scene ids whose prose ranges should be highlighted.
-  const [highlightSceneIds, setHighlightSceneIds] = useState<ReadonlySet<string>>(
+  const [highlightSceneIds, setHighlightSceneIds] = useState<ReadonlySet<SceneId>>(
     new Set()
   );
 
@@ -68,7 +68,7 @@ export function useSceneProseSync(
       const chapter = currentChapterRef.current;
       if (!chapter) {
         setSelectedSceneId(null);
-        setHighlightSceneIds((prev: ReadonlySet<string>) =>
+        setHighlightSceneIds((prev: ReadonlySet<SceneId>) =>
           prev.size === 0 ? prev : new Set()
         );
         return;
@@ -91,8 +91,8 @@ export function useSceneProseSync(
       });
       const foundId = found?.id ?? null;
       setSelectedSceneId(foundId);
-      setHighlightSceneIds((prev: ReadonlySet<string>) => {
-        const next = foundId ? new Set([foundId]) : new Set<string>();
+      setHighlightSceneIds((prev: ReadonlySet<SceneId>) => {
+        const next = foundId ? new Set<SceneId>([foundId]) : new Set<SceneId>();
         return setsEqual(prev, next) ? prev : next;
       });
     });
@@ -133,16 +133,16 @@ export function useSceneProseSync(
     }
   }, [highlightSceneIds, currentChapter, editorRef]);
 
-  const handleSelectScene = useCallback((id: string | null): void => {
+  const handleSelectScene = useCallback((id: SceneId | null): void => {
     setSelectedSceneId(id);
-    setHighlightSceneIds((prev: ReadonlySet<string>) => {
-      const next = id ? new Set([id]) : new Set<string>();
+    setHighlightSceneIds((prev: ReadonlySet<SceneId>) => {
+      const next = id ? new Set<SceneId>([id]) : new Set<SceneId>();
       return setsEqual(prev, next) ? prev : next;
     });
   }, []);
 
-  const handleMultipleSelectScenes = useCallback((ids: ReadonlySet<string>): void => {
-    setHighlightSceneIds((prev: ReadonlySet<string>) =>
+  const handleMultipleSelectScenes = useCallback((ids: ReadonlySet<SceneId>): void => {
+    setHighlightSceneIds((prev: ReadonlySet<SceneId>) =>
       setsEqual(prev, ids) ? prev : new Set(ids)
     );
   }, []);

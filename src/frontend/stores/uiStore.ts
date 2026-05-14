@@ -16,7 +16,7 @@
 
 import { create, StoreApi } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { ViewMode, MetadataTab } from '../types';
+import type { MetadataTab, SceneId, ViewMode } from '../types';
 
 // ---------------------------------------------------------------------------
 // Dialog state types
@@ -45,7 +45,7 @@ export interface ChapterMetadataDialogState {
 export interface SceneEditorDialogState {
   isOpen: boolean;
   version: number;
-  sceneId: string | null;
+  sceneId: SceneId | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -90,7 +90,7 @@ export interface UIStoreState {
   closeSourcebookDialog: () => void;
   openChapterMetadataDialog: (chapterId: string, initialTab?: MetadataTab) => void;
   closeChapterMetadataDialog: () => void;
-  openSceneEditorDialog: (sceneId: string) => void;
+  openSceneEditorDialog: (sceneId: SceneId) => void;
   closeSceneEditorDialog: () => void;
 
   setWorkspaceMode: (
@@ -264,7 +264,7 @@ export const useUIStore = create<UIStoreState>()(
           chapterMetadataDialog: { ...s.chapterMetadataDialog, isOpen: false },
         })),
 
-      openSceneEditorDialog: (sceneId: string) =>
+      openSceneEditorDialog: (sceneId: SceneId) =>
         set((s: UIStoreState) => ({
           sceneEditorDialog: {
             isOpen: true,
@@ -413,7 +413,7 @@ export const uiStoreActions = {
   openChapterMetadataDialog: (chapterId: string, initialTab?: MetadataTab) =>
     useUIStore.getState().openChapterMetadataDialog(chapterId, initialTab),
   closeChapterMetadataDialog: () => useUIStore.getState().closeChapterMetadataDialog(),
-  openSceneEditorDialog: (sceneId: string) =>
+  openSceneEditorDialog: (sceneId: SceneId) =>
     useUIStore.getState().openSceneEditorDialog(sceneId),
   closeSceneEditorDialog: () => useUIStore.getState().closeSceneEditorDialog(),
 };

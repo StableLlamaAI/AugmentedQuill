@@ -105,6 +105,7 @@ export interface StoryState extends Story {
 // Scenes
 // ---------------------------------------------------------------------------
 
+export type SceneId = number;
 export type SceneStatus = 'active' | 'inactive' | 'draft';
 export type SceneScopeType = 'story' | 'chapter';
 
@@ -132,7 +133,7 @@ export interface SceneChronologyTime {
 }
 
 export interface Scene {
-  id: string;
+  id: SceneId;
   summary: string;
   beats: SceneBeat[];
   active_characters: string[];
@@ -143,8 +144,8 @@ export interface Scene {
   scene_time?: SceneChronologyTime | null;
   color_tag?: string | null;
   prose_link?: SceneProseLink | null;
-  order_before: string[];
-  order_after: string[];
+  order_before: SceneId[];
+  order_after: SceneId[];
   pinboard_x: number;
   pinboard_y: number;
   status: SceneStatus;

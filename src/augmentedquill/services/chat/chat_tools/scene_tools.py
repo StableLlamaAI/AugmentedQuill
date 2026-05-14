@@ -15,6 +15,7 @@ from augmentedquill.models.scene import (
     SceneBeat,
     SceneChronologyTime,
     SceneCreateRequest,
+    SceneId,
     SceneProseLink,
     SceneTagPersonalDatetime,
     SceneUpdateRequest,
@@ -103,7 +104,7 @@ class ManageScenesUpdateData(BaseModel):
         None,
         description="Optional full replacement scene prose link.",
     )
-    order_before: list[str] | None = Field(
+    order_before: list[SceneId | str] | None = Field(
         None,
         description="Optional full replacement order_before list.",
     )
@@ -111,7 +112,7 @@ class ManageScenesUpdateData(BaseModel):
         None,
         description="Optional patch operation for order_before IDs.",
     )
-    order_after: list[str] | None = Field(
+    order_after: list[SceneId | str] | None = Field(
         None,
         description="Optional full replacement order_after list.",
     )
@@ -143,7 +144,7 @@ class ManageScenesParams(BaseModel):
         ...,
         description="Scene action: 'list', 'get', 'create', 'update', or 'delete'.",
     )
-    scene_id: str | None = Field(
+    scene_id: SceneId | None = Field(
         None,
         description="Required for actions 'get', 'update', and 'delete'.",
     )
@@ -185,7 +186,7 @@ async def manage_scenes(
         return list_scenes(active)
 
     if params.action == "get":
-        if not params.scene_id:
+        if params.scene_id is None:
             return {"error": "scene_id is required when action='get'."}
         scene = get_scene(active, params.scene_id)
         if scene is None:
@@ -200,7 +201,7 @@ async def manage_scenes(
         return created
 
     if params.action == "update":
-        if not params.scene_id:
+        if params.scene_id is None:
             return {"error": "scene_id is required when action='update'."}
         if params.update_data is None:
             return {"error": "update_data is required when action='update'."}
@@ -273,7 +274,7 @@ async def manage_scenes(
             if not isinstance(current_order_before, list):
                 current_order_before = []
             order_before_value = apply_string_list_patch(
-                current_order_before,
+                [str(scene_id) for scene_id in current_order_before],
                 params.update_data.order_before_patch,
             )
         if (
@@ -288,7 +289,7 @@ async def manage_scenes(
             if not isinstance(current_order_after, list):
                 current_order_after = []
             order_after_value = apply_string_list_patch(
-                current_order_after,
+                [str(scene_id) for scene_id in current_order_after],
                 params.update_data.order_after_patch,
             )
         if (
@@ -328,7 +329,7 @@ async def manage_scenes(
         return updated
 
     if params.action == "delete":
-        if not params.scene_id:
+        if params.scene_id is None:
             return {"error": "scene_id is required when action='delete'."}
         deleted = delete_scene(active, params.scene_id)
         if not deleted:

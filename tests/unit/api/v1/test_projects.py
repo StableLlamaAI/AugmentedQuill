@@ -188,3 +188,41 @@ class ProjectsTest(ApiTestCase):
             ),
             "Book intro",
         )
+
+    def test_select_invalid_scene_schema_returns_invalid_config(self):
+        project_name = "invalid_scene_schema_proj"
+        ok, msg = select_project(project_name)
+        self.assertTrue(ok, msg)
+
+        story_path = self.projects_root / project_name / "story.json"
+        story = json.loads(story_path.read_text(encoding="utf-8"))
+        story["scenes"] = {
+            "bad-scene-id": {
+                "summary": "Invalid id shape",
+                "beats": [],
+                "active_characters": [],
+                "passive_characters": [],
+                "sourcebook_entry_ids": [],
+                "location": None,
+                "time": None,
+                "scene_time": None,
+                "color_tag": None,
+                "prose_link": None,
+                "order_before": [],
+                "order_after": [],
+                "pinboard_x": 10,
+                "pinboard_y": 10,
+                "status": "active",
+            }
+        }
+        story_path.write_text(json.dumps(story, indent=2), encoding="utf-8")
+
+        response = self.client.post(
+            "/api/v1/projects/select", json={"name": project_name}
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload.get("error"), "invalid_config")
+        self.assertIn("schema requirements", payload.get("error_message", ""))
+        self.assertIsNone(payload.get("story"))

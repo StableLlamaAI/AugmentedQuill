@@ -9,7 +9,7 @@
  * HTTP client for the scenes endpoints. Keeps transport concerns isolated from UI logic.
  */
 
-import type { Scene, SceneChronologyTime, SceneProseLink } from '../../types';
+import type { Scene, SceneChronologyTime, SceneId, SceneProseLink } from '../../types';
 import {
   fetchJson,
   postJson,
@@ -34,8 +34,8 @@ export interface SceneCreatePayload {
   scene_time?: SceneChronologyTime | null;
   color_tag?: string | null;
   prose_link?: SceneProseLink | null;
-  order_before?: string[];
-  order_after?: string[];
+  order_before?: SceneId[];
+  order_after?: SceneId[];
   pinboard_x?: number;
   pinboard_y?: number;
   status?: string;
@@ -57,8 +57,8 @@ export interface LinkProsePayload {
 }
 
 export interface ReorderProsePayload {
-  source_scene_id: string;
-  target_scene_id: string;
+  source_scene_id: SceneId;
+  target_scene_id: SceneId;
   place_before: boolean;
 }
 
@@ -79,16 +79,16 @@ export interface ReorderProseResponse {
 export interface ScenesApi {
   list: () => Promise<Scene[]>;
   create: (payload: SceneCreatePayload) => Promise<Scene>;
-  get: (sceneId: string) => Promise<Scene>;
-  update: (sceneId: string, payload: SceneUpdatePayload) => Promise<Scene>;
-  delete: (sceneId: string) => Promise<void>;
+  get: (sceneId: SceneId) => Promise<Scene>;
+  update: (sceneId: SceneId, payload: SceneUpdatePayload) => Promise<Scene>;
+  delete: (sceneId: SceneId) => Promise<void>;
   refreshHash: (
-    sceneId: string,
+    sceneId: SceneId,
     payload: RefreshHashPayload
   ) => Promise<SceneProseLink>;
-  linkProse: (sceneId: string, payload: LinkProsePayload) => Promise<Scene[]>;
+  linkProse: (sceneId: SceneId, payload: LinkProsePayload) => Promise<Scene[]>;
   reorderProse: (payload: ReorderProsePayload) => Promise<ReorderProseResponse>;
-  updateProseContent: (sceneId: string, text: string) => Promise<Scene>;
+  updateProseContent: (sceneId: SceneId, text: string) => Promise<Scene>;
 }
 
 export const createScenesApi = (projectName: string): ScenesApi => {
@@ -101,17 +101,17 @@ export const createScenesApi = (projectName: string): ScenesApi => {
     create: (payload: SceneCreatePayload): Promise<Scene> =>
       postJson<Scene>(base, payload, 'Failed to create scene'),
 
-    get: (sceneId: string): Promise<Scene> =>
+    get: (sceneId: SceneId): Promise<Scene> =>
       fetchJson<Scene>(`${base}/${sceneId}`, undefined, 'Failed to load scene'),
 
-    update: (sceneId: string, payload: SceneUpdatePayload): Promise<Scene> =>
+    update: (sceneId: SceneId, payload: SceneUpdatePayload): Promise<Scene> =>
       putJson<Scene>(`${base}/${sceneId}`, payload, 'Failed to update scene'),
 
-    delete: (sceneId: string): Promise<void> =>
+    delete: (sceneId: SceneId): Promise<void> =>
       deleteJson<void>(`${base}/${sceneId}`, 'Failed to delete scene'),
 
     refreshHash: (
-      sceneId: string,
+      sceneId: SceneId,
       payload: RefreshHashPayload
     ): Promise<SceneProseLink> =>
       postJson<SceneProseLink>(
@@ -120,7 +120,7 @@ export const createScenesApi = (projectName: string): ScenesApi => {
         'Failed to refresh hash'
       ),
 
-    linkProse: (sceneId: string, payload: LinkProsePayload): Promise<Scene[]> =>
+    linkProse: (sceneId: SceneId, payload: LinkProsePayload): Promise<Scene[]> =>
       postJson<Scene[]>(
         `${base}/${sceneId}/link-prose`,
         payload,
@@ -134,7 +134,7 @@ export const createScenesApi = (projectName: string): ScenesApi => {
         'Failed to reorder prose'
       ),
 
-    updateProseContent: (sceneId: string, text: string): Promise<Scene> =>
+    updateProseContent: (sceneId: SceneId, text: string): Promise<Scene> =>
       patchJson<Scene>(
         `${base}/${sceneId}/prose-content`,
         { text },

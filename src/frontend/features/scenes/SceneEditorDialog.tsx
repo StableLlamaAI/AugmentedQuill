@@ -20,6 +20,7 @@ import type {
   SceneProseLink,
   SceneTagPersonalDatetime,
   SourcebookEntry,
+  SceneId,
 } from '../../types';
 import { useThemeClasses } from '../layout/ThemeContext';
 import { useFocusTrap } from '../layout/useFocusTrap';
@@ -88,7 +89,7 @@ interface SceneEditorDialogProps {
   onSave: (updates: Partial<Omit<Scene, 'id'>>) => Promise<void>;
   onDelete: () => Promise<void>;
   /** Removes the causal link between fromId and toId (updates both sides). */
-  onDeleteCause?: (fromId: string, toId: string) => Promise<void>;
+  onDeleteCause?: (fromId: SceneId, toId: SceneId) => Promise<void>;
   /** Returns the current prose text for a given link, or null if unavailable. */
   getLinkedProseText?: (link: SceneProseLink) => string | null;
   /** Saves new prose content back to the file at the link range. */
@@ -1246,9 +1247,9 @@ export const SceneEditorDialog: React.FC<SceneEditorDialogProps> = ({
                   <p className={`text-xs font-medium ${tc.muted}`}>
                     {t('Must come before')}:
                   </p>
-                  {scene.order_before.map((id: string) => {
+                  {scene.order_before.map((id: SceneId) => {
                     const name =
-                      allScenes.find((s: Scene) => s.id === id)?.summary || id;
+                      allScenes.find((s: Scene) => s.id === id)?.summary || String(id);
                     return (
                       <div key={id} className="flex items-center gap-1 group">
                         <span
@@ -1275,9 +1276,9 @@ export const SceneEditorDialog: React.FC<SceneEditorDialogProps> = ({
                   <p className={`text-xs font-medium ${tc.muted}`}>
                     {t('Must come after')}:
                   </p>
-                  {scene.order_after.map((id: string) => {
+                  {scene.order_after.map((id: SceneId) => {
                     const name =
-                      allScenes.find((s: Scene) => s.id === id)?.summary || id;
+                      allScenes.find((s: Scene) => s.id === id)?.summary || String(id);
                     return (
                       <div key={id} className="flex items-center gap-1 group">
                         <span

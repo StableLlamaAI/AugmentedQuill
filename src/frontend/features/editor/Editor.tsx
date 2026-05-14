@@ -22,6 +22,7 @@ import {
   SuggestionGenerationMode,
   ViewMode,
   WritingUnit,
+  SceneId,
 } from '../../types';
 import { Upload } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -975,7 +976,7 @@ export const Editor = React.memo(
                       selectionBg={selectionBg}
                       proseHighlightBg={proseHighlightBg}
                       onProseBoundaryChange={(
-                        sceneId: string,
+                        sceneId: SceneId,
                         edge: 'start' | 'end',
                         offset: number
                       ): void => {

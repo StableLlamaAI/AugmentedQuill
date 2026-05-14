@@ -47,6 +47,7 @@ import { setErrorDispatcher } from './services/errorNotifier';
 import { useChatStore, ChatStoreState } from './stores/chatStore';
 import { uiStoreActions, useUIStore, UIStoreState } from './stores/uiStore';
 import type { SessionMutation } from './features/chat';
+import type { SceneId } from './types';
 
 const App: React.FC = () => {
   const { confirm, alert, confirmDialogState, handleConfirm, handleCancel } =
@@ -186,7 +187,7 @@ const App: React.FC = () => {
   );
 
   const openSceneEditorDialog = useCallback(
-    (sceneId: string): void => {
+    (sceneId: SceneId): void => {
       setWorkspaceMode('scenes');
       uiStoreActions.openSceneEditorDialog(sceneId);
     },

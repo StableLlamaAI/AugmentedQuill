@@ -10,7 +10,7 @@
  * ConvergenceMapView. Extracted to avoid duplication.
  */
 
-import type { Scene } from '../../types';
+import type { Scene, SceneId } from '../../types';
 import type { Chapter, Book } from '../../types/domain';
 import { parseZonedDateTime } from '../../utils/temporal';
 
@@ -129,7 +129,7 @@ export function proseSort(
   const [bChIdx, bOff] = sceneSortKey(sceneB, chapterOrderMap);
   if (aChIdx !== bChIdx) return aChIdx < bChIdx ? -1 : 1;
   if (aOff !== bOff) return aOff - bOff;
-  return sceneA.id.localeCompare(sceneB.id);
+  return sceneA.id - sceneB.id;
 }
 
 export function getSceneEpochNanoseconds(scene: Scene): bigint | null {
@@ -142,7 +142,7 @@ export function chronologicalSort(
   sceneA: Scene,
   sceneB: Scene,
   chapterOrderMap: Map<string, number>,
-  sceneEpochNanosecondsById: Map<string, bigint>
+  sceneEpochNanosecondsById: Map<SceneId, bigint>
 ): number {
   const epochA = sceneEpochNanosecondsById.get(sceneA.id);
   const epochB = sceneEpochNanosecondsById.get(sceneB.id);

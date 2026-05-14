@@ -20,7 +20,7 @@ offset may be stale.
 from __future__ import annotations
 
 import uuid
-from typing import Literal, Optional
+from typing import Literal, Optional, TypeAlias
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -28,6 +28,8 @@ from augmentedquill.models.temporal_utils import normalize_temporal_value
 
 # Keep a private alias for backward compat within this module
 _normalize_scene_temporal_value = normalize_temporal_value
+
+SceneId: TypeAlias = int
 
 
 class SceneTagPersonalDatetime(BaseModel):
@@ -133,7 +135,7 @@ class Scene(BaseModel):
     pinboard canvas, in logical (unscaled) units.
     """
 
-    id: str
+    id: SceneId
     summary: str = ""
     beats: list[SceneBeat] = []
     active_characters: list[str] = []
@@ -144,8 +146,8 @@ class Scene(BaseModel):
     scene_time: Optional[SceneChronologyTime] = None
     color_tag: Optional[str] = None  # hex color, e.g. "#a855f7"
     prose_link: Optional[SceneProseLink] = None  # used when beats is empty
-    order_before: list[str] = []  # scene IDs this scene must precede
-    order_after: list[str] = []  # scene IDs this scene must follow
+    order_before: list[SceneId] = []  # scene IDs this scene must precede
+    order_after: list[SceneId] = []  # scene IDs this scene must follow
     pinboard_x: float = 100.0
     pinboard_y: float = 100.0
     status: str = "active"  # 'active' | 'inactive' | 'draft'
@@ -172,8 +174,8 @@ class SceneCreateRequest(BaseModel):
     scene_time: Optional[SceneChronologyTime] = None
     color_tag: Optional[str] = None
     prose_link: Optional[SceneProseLink] = None
-    order_before: list[str] = []
-    order_after: list[str] = []
+    order_before: list[SceneId] = []
+    order_after: list[SceneId] = []
     pinboard_x: float = 100.0
     pinboard_y: float = 100.0
     status: str = "active"
@@ -193,8 +195,8 @@ class SceneUpdateRequest(BaseModel):
     scene_time: Optional[SceneChronologyTime] = None
     color_tag: Optional[str] = None
     prose_link: Optional[SceneProseLink] = None
-    order_before: Optional[list[str]] = None
-    order_after: Optional[list[str]] = None
+    order_before: Optional[list[SceneId]] = None
+    order_after: Optional[list[SceneId]] = None
     pinboard_x: Optional[float] = None
     pinboard_y: Optional[float] = None
     status: Optional[str] = None
@@ -220,8 +222,8 @@ class SceneLinkProseRequest(BaseModel):
 class SceneReorderProseRequest(BaseModel):
     """Payload for reordering scenes within a linked prose scope."""
 
-    source_scene_id: str
-    target_scene_id: str
+    source_scene_id: SceneId
+    target_scene_id: SceneId
     place_before: bool = True
 
 
@@ -246,6 +248,6 @@ class SceneUpdateProseContentRequest(BaseModel):
 class ProseConflictError(Exception):
     """Raised when a new prose range would create a hole in an existing scene."""
 
-    def __init__(self, conflicting_scene_id: str) -> None:
+    def __init__(self, conflicting_scene_id: SceneId) -> None:
         super().__init__(f"Range creates a hole in scene '{conflicting_scene_id}'")
         self.conflicting_scene_id = conflicting_scene_id

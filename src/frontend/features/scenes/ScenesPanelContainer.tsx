@@ -15,7 +15,7 @@ import { useTranslation } from 'react-i18next';
 import { Plus } from 'lucide-react';
 import type { EditorView } from '@codemirror/view';
 import type { EditorHandle } from '../editor/Editor';
-import type { Scene, SceneProseLink, StoryState } from '../../types';
+import type { Scene, SceneProseLink, StoryState, SceneId } from '../../types';
 import type { WritingUnit } from '../../types/domain';
 import { useScenes } from '../../stores/storyStore';
 import { useStoryStore } from '../../stores/storyStore';
@@ -53,7 +53,7 @@ interface ScenesPanelContainerProps {
 }
 
 type BoundaryAdjustment = {
-  id: string;
+  id: SceneId;
   link: SceneProseLink;
   newStart: number;
   newEnd: number;
@@ -61,7 +61,7 @@ type BoundaryAdjustment = {
 
 function collectBoundaryAdjustments(
   scenes: Scene[],
-  sceneId: string,
+  sceneId: SceneId,
   link: SceneProseLink,
   edge: 'start' | 'end',
   startOffset: number,
@@ -95,7 +95,7 @@ function collectBoundaryAdjustments(
 function applyScenePatch(
   prevScenes: Scene[],
   scene: Scene | null,
-  sceneId?: string
+  sceneId?: SceneId
 ): Scene[] {
   if (scene === null) {
     return prevScenes.filter((candidate: Scene): boolean => candidate.id !== sceneId);
@@ -143,7 +143,7 @@ export const ScenesPanelContainer: React.FC<ScenesPanelContainerProps> = ({
   const books = useStoryBooks();
 
   const [viewMode, setViewMode] = useState<ViewMode>('pinboard');
-  const [editingSceneId, setEditingSceneId] = useState<string | null>(null);
+  const [editingSceneId, setEditingSceneId] = useState<SceneId | null>(null);
   const lastHandledSceneIntentVersionRef = React.useRef(0);
 
   const storyRef = React.useRef(story);
@@ -253,7 +253,7 @@ export const ScenesPanelContainer: React.FC<ScenesPanelContainerProps> = ({
 
   // ---- Move (position update from drag) ----
   const handleMoveScene = useCallback(
-    async (sceneId: string, x: number, y: number): Promise<void> => {
+    async (sceneId: SceneId, x: number, y: number): Promise<void> => {
       // Optimistic store update
       const prev = scenes.find((s: Scene) => s.id === sceneId);
       if (!prev) return;
@@ -299,13 +299,13 @@ export const ScenesPanelContainer: React.FC<ScenesPanelContainerProps> = ({
 
   // ---- Delete cause ----
   const handleDeleteCause = useCallback(
-    async (fromId: string, toId: string): Promise<void> => {
+    async (fromId: SceneId, toId: SceneId): Promise<void> => {
       const fromScene = scenes.find((s: Scene) => s.id === fromId);
       const toScene = scenes.find((s: Scene) => s.id === toId);
       if (!fromScene || !toScene) return;
 
-      const newBefore = fromScene.order_before.filter((id: string) => id !== toId);
-      const newAfter = toScene.order_after.filter((id: string) => id !== fromId);
+      const newBefore = fromScene.order_before.filter((id: SceneId) => id !== toId);
+      const newAfter = toScene.order_after.filter((id: SceneId) => id !== fromId);
 
       // Optimistic update
       patchScene({ ...fromScene, order_before: newBefore });
@@ -334,7 +334,7 @@ export const ScenesPanelContainer: React.FC<ScenesPanelContainerProps> = ({
 
   // ---- Create cause (Alt+drag on pinboard) ----
   const handleCreateCause = useCallback(
-    async (fromId: string, toId: string): Promise<void> => {
+    async (fromId: SceneId, toId: SceneId): Promise<void> => {
       const fromScene = scenes.find((s: Scene) => s.id === fromId);
       const toScene = scenes.find((s: Scene) => s.id === toId);
       if (!fromScene || !toScene) return;
@@ -370,7 +370,7 @@ export const ScenesPanelContainer: React.FC<ScenesPanelContainerProps> = ({
 
   // ---- Prose drop (drag from editor to scene card) ----
   const handleDropProse = useCallback(
-    async (sceneId: string, data: ProseDropData): Promise<void> => {
+    async (sceneId: SceneId, data: ProseDropData): Promise<void> => {
       try {
         const modified = await api.scenes.linkProse(sceneId, {
           scope_type: data.scopeType,
@@ -391,8 +391,8 @@ export const ScenesPanelContainer: React.FC<ScenesPanelContainerProps> = ({
   // ---- Narrative reorder (drag in list + move linked prose text) ----
   const handleNarrativeReorder = useCallback(
     async (
-      sourceSceneId: string,
-      targetSceneId: string,
+      sourceSceneId: SceneId,
+      targetSceneId: SceneId,
       placeBefore: boolean
     ): Promise<void> => {
       if (sourceSceneId === targetSceneId) return;
@@ -441,7 +441,7 @@ export const ScenesPanelContainer: React.FC<ScenesPanelContainerProps> = ({
 
   // ---- Prose-link boundary drag (update start/end offset) ----
   const handleProseBoundaryChange = useCallback(
-    async (sceneId: string, edge: 'start' | 'end', offset: number): Promise<void> => {
+    async (sceneId: SceneId, edge: 'start' | 'end', offset: number): Promise<void> => {
       const scene = scenes.find((s: Scene): boolean => s.id === sceneId);
       if (!scene?.prose_link) return;
       const link = scene.prose_link;

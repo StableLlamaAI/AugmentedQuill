@@ -104,6 +104,23 @@ function makeMouseEvent(
   });
 }
 
+function makePointerEvent(
+  type: string,
+  opts: Partial<
+    PointerEventInit & { ctrlKey?: boolean; shiftKey?: boolean; button?: number }
+  > = {}
+): PointerEvent {
+  return new PointerEvent(type, {
+    bubbles: true,
+    cancelable: true,
+    clientX: opts.clientX ?? 0,
+    clientY: opts.clientY ?? 0,
+    ctrlKey: opts.ctrlKey ?? false,
+    shiftKey: opts.shiftKey ?? false,
+    button: opts.button ?? 0,
+  });
+}
+
 // Click a card by dispatching via its stored handler.
 function clickCard(id: string, opts: { ctrl?: boolean; shift?: boolean } = {}): void {
   const e = makeMouseEvent('click', { ctrlKey: opts.ctrl, shiftKey: opts.shift });
@@ -245,12 +262,12 @@ describe('PinboardView — multi-select', () => {
     const { container, onSelectScene } = renderPinboard('s1');
     onSelectScene.mockClear();
 
-    // Fire mousedown on the canvas transform div (no card involved)
+    // Fire mousedown on the transformed canvas layer (no card involved)
     const canvas = container.querySelector<HTMLElement>('[style*="translate"]');
     act(() => {
       if (canvas) {
         canvas.dispatchEvent(
-          makeMouseEvent('mousedown', { clientX: 5, clientY: 5, button: 0 })
+          makePointerEvent('pointerdown', { clientX: 5, clientY: 5, button: 0 })
         );
         // No mousemove → not a lasso drag, so mouseup on document is plain click
         document.dispatchEvent(makeMouseEvent('mouseup', { clientX: 5, clientY: 5 }));
@@ -325,7 +342,7 @@ describe('PinboardView — multi-select', () => {
     act(() => {
       // Mousedown at (0,0) on the canvas background
       canvas.dispatchEvent(
-        makeMouseEvent('mousedown', { clientX: 0, clientY: 0, button: 0 })
+        makePointerEvent('pointerdown', { clientX: 0, clientY: 0, button: 0 })
       );
       // Drag to (250, 150) — crosses s1 (x=0,w=192) and s2 (x=200,w=192).
       // s3 is at x=400, so it stays outside.
@@ -365,7 +382,7 @@ describe('PinboardView — multi-select', () => {
 
     act(() => {
       canvas.dispatchEvent(
-        makeMouseEvent('mousedown', {
+        makePointerEvent('pointerdown', {
           clientX: 0,
           clientY: 0,
           button: 0,

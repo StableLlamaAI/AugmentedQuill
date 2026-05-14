@@ -21,7 +21,7 @@
 
 import React, { useCallback, useRef, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { Scene } from '../../types';
+import type { Scene, SceneId } from '../../types';
 import type { ProseDropData } from './types';
 import { SceneCard } from './SceneCard';
 import { CauseArrows } from './ConstraintArrows';
@@ -43,13 +43,13 @@ interface LassoRect {
 
 interface PinboardViewProps {
   scenes: Scene[];
-  primarySelectedSceneId: string | null;
-  onSelectScene: (id: string | null) => void;
-  onMoveScene: (sceneId: string, x: number, y: number) => void;
-  onEditScene: (sceneId: string) => void;
-  onCreateCause: (fromId: string, toId: string) => void;
-  onDropProse?: (sceneId: string, data: ProseDropData) => void;
-  onSelectionChange?: (ids: ReadonlySet<string>) => void;
+  primarySelectedSceneId: SceneId | null;
+  onSelectScene: (id: SceneId | null) => void;
+  onMoveScene: (sceneId: SceneId, x: number, y: number) => void;
+  onEditScene: (sceneId: SceneId) => void;
+  onCreateCause: (fromId: SceneId, toId: SceneId) => void;
+  onDropProse?: (sceneId: SceneId, data: ProseDropData) => void;
+  onSelectionChange?: (ids: ReadonlySet<SceneId>) => void;
 }
 
 export const PinboardView: React.FC<PinboardViewProps> = ({
@@ -115,10 +115,10 @@ export const PinboardView: React.FC<PinboardViewProps> = ({
   const [ghostArrow, setGhostArrow] = useState<GhostArrow | null>(null);
 
   // ---- Actual card heights measured via ResizeObserver (used by CauseArrows) ----
-  const [cardHeights, setCardHeights] = useState<Map<string, number>>(new Map());
+  const [cardHeights, setCardHeights] = useState<Map<SceneId, number>>(new Map());
 
-  const handleCardLayout = useCallback((sceneId: string, height: number): void => {
-    setCardHeights((prev: Map<string, number>) => {
+  const handleCardLayout = useCallback((sceneId: SceneId, height: number): void => {
+    setCardHeights((prev: Map<SceneId, number>) => {
       if (prev.get(sceneId) === height) return prev; // avoid spurious re-renders
       const next = new Map(prev);
       next.set(sceneId, height);
@@ -141,9 +141,9 @@ export const PinboardView: React.FC<PinboardViewProps> = ({
   const [lassoRect, setLassoRect] = useState<LassoRect | null>(null);
 
   // ---- Cause drag state ----
-  const causeDragSourceRef = useRef<string | null>(null);
-  const causeTargetRef = useRef<string | null>(null);
-  const [causeTargetDisplay, setCauseTargetDisplay] = useState<string | null>(null);
+  const causeDragSourceRef = useRef<SceneId | null>(null);
+  const causeTargetRef = useRef<SceneId | null>(null);
+  const [causeTargetDisplay, setCauseTargetDisplay] = useState<SceneId | null>(null);
 
   // Pan via middle-mouse
   const isPanning = useRef(false);
@@ -169,12 +169,12 @@ export const PinboardView: React.FC<PinboardViewProps> = ({
   // pixels; we convert to canvas pixels by dividing by the current zoom.
   // If the dragged card is selected, all selected cards move together.
   const handleCardDragMove = useCallback(
-    (draggedId: string, screenDx: number, screenDy: number): void => {
+    (draggedId: SceneId, screenDx: number, screenDy: number): void => {
       const cz = zoomRef.current;
       const dx = screenDx / cz;
       const dy = screenDy / cz;
       const currentSelected = selectedIdsRef.current;
-      const movers: string[] = currentSelected.has(draggedId)
+      const movers: SceneId[] = currentSelected.has(draggedId)
         ? Array.from(currentSelected)
         : [draggedId];
 
@@ -194,12 +194,12 @@ export const PinboardView: React.FC<PinboardViewProps> = ({
 
   // Called when drag ends – commit all positions to the store.
   const handleCardDragEnd = useCallback(
-    (draggedId: string, screenDx: number, screenDy: number): void => {
+    (draggedId: SceneId, screenDx: number, screenDy: number): void => {
       const cz = zoomRef.current;
       const dx = screenDx / cz;
       const dy = screenDy / cz;
       const currentSelected = selectedIdsRef.current;
-      const movers: string[] = currentSelected.has(draggedId)
+      const movers: SceneId[] = currentSelected.has(draggedId)
         ? Array.from(currentSelected)
         : [draggedId];
 
@@ -275,9 +275,9 @@ export const PinboardView: React.FC<PinboardViewProps> = ({
 
         if (additive) {
           // Additive lasso: add to selection, preserve active scene.
-          setSelectedSceneIds((prev: ReadonlySet<string>) => {
+          setSelectedSceneIds((prev: ReadonlySet<SceneId>) => {
             const next = new Set(prev);
-            inLasso.forEach((id: string) => next.add(id));
+            inLasso.forEach((id: SceneId) => next.add(id));
             return next;
           });
           // Do not change active scene in additive mode.
@@ -338,7 +338,7 @@ export const PinboardView: React.FC<PinboardViewProps> = ({
 
   // ---- Cause drag handlers (Alt+drag on a card) ----
   const handleCauseDragStart = useCallback(
-    (sceneId: string, startCanvasX: number, startCanvasY: number): void => {
+    (sceneId: SceneId, startCanvasX: number, startCanvasY: number): void => {
       causeDragSourceRef.current = sceneId;
       causeTargetRef.current = null;
       setCauseTargetDisplay(null);
@@ -388,7 +388,7 @@ export const PinboardView: React.FC<PinboardViewProps> = ({
     [onCreateCause]
   );
 
-  const handleCauseDrop = useCallback((targetId: string): void => {
+  const handleCauseDrop = useCallback((targetId: SceneId): void => {
     if (causeDragSourceRef.current && causeDragSourceRef.current !== targetId) {
       causeTargetRef.current = targetId;
       setCauseTargetDisplay(targetId);
@@ -406,8 +406,8 @@ export const PinboardView: React.FC<PinboardViewProps> = ({
   const activeScene = activeSceneId
     ? (scenes.find((s: Scene) => s.id === activeSceneId) ?? null)
     : null;
-  const causeIds = new Set<string>(activeScene?.order_after ?? []);
-  const effectIds = new Set<string>(activeScene?.order_before ?? []);
+  const causeIds = new Set<SceneId>(activeScene?.order_after ?? []);
+  const effectIds = new Set<SceneId>(activeScene?.order_before ?? []);
 
   return (
     <div

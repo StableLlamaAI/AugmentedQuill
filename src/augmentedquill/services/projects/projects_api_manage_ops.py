@@ -17,6 +17,7 @@ from uuid import uuid4
 from pathlib import Path
 
 from fastapi import HTTPException
+from pydantic import ValidationError
 
 from augmentedquill.services.exceptions import BadRequestError
 
@@ -129,11 +130,25 @@ def select_project_response(name: str) -> ProjectSelectResponse:
             )
         raise
 
+    try:
+        story_payload = StoryPayload(**normalize_story_for_frontend(story))
+    except ValidationError as e:
+        return ProjectSelectResponse(
+            ok=True,
+            message=msg,
+            registry={"current": normalized_reg["current"], "recent": normalized_reg["recent"]},  # type: ignore[arg-type]
+            story=None,
+            error="invalid_config",
+            error_message=(
+                "Story config does not match schema requirements: " f"{e.errors()}"
+            ),
+        )
+
     return ProjectSelectResponse(
         ok=True,
         message=msg,
         registry={"current": normalized_reg["current"], "recent": normalized_reg["recent"]},  # type: ignore[arg-type]
-        story=StoryPayload(**normalize_story_for_frontend(story)),
+        story=story_payload,
     )
 
 

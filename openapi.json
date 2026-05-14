@@ -3622,7 +3622,7 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string",
+              "type": "integer",
               "title": "Scene Id"
             }
           },
@@ -3672,7 +3672,7 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string",
+              "type": "integer",
               "title": "Scene Id"
             }
           },
@@ -3732,7 +3732,7 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string",
+              "type": "integer",
               "title": "Scene Id"
             }
           },
@@ -3777,7 +3777,7 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string",
+              "type": "integer",
               "title": "Scene Id"
             }
           },
@@ -3839,7 +3839,7 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string",
+              "type": "integer",
               "title": "Scene Id"
             }
           },
@@ -3958,7 +3958,7 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string",
+              "type": "integer",
               "title": "Scene Id"
             }
           },
@@ -6474,7 +6474,7 @@
       "Scene": {
         "properties": {
           "id": {
-            "type": "string",
+            "type": "integer",
             "title": "Id"
           },
           "summary": {
@@ -6569,7 +6569,7 @@
           },
           "order_before": {
             "items": {
-              "type": "string"
+              "type": "integer"
             },
             "type": "array",
             "title": "Order Before",
@@ -6577,7 +6577,7 @@
           },
           "order_after": {
             "items": {
-              "type": "string"
+              "type": "integer"
             },
             "type": "array",
             "title": "Order After",
@@ -6743,7 +6743,7 @@
           },
           "order_before": {
             "items": {
-              "type": "string"
+              "type": "integer"
             },
             "type": "array",
             "title": "Order Before",
@@ -6751,7 +6751,7 @@
           },
           "order_after": {
             "items": {
-              "type": "string"
+              "type": "integer"
             },
             "type": "array",
             "title": "Order After",
@@ -6890,11 +6890,11 @@
       "SceneReorderProseRequest": {
         "properties": {
           "source_scene_id": {
-            "type": "string",
+            "type": "integer",
             "title": "Source Scene Id"
           },
           "target_scene_id": {
-            "type": "string",
+            "type": "integer",
             "title": "Target Scene Id"
           },
           "place_before": {
@@ -7131,7 +7131,7 @@
             "anyOf": [
               {
                 "items": {
-                  "type": "string"
+                  "type": "integer"
                 },
                 "type": "array"
               },
@@ -7145,7 +7145,7 @@
             "anyOf": [
               {
                 "items": {
-                  "type": "string"
+                  "type": "integer"
                 },
                 "type": "array"
               },

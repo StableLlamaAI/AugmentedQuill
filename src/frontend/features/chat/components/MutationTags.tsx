@@ -43,9 +43,10 @@ function buildSceneMutationLabel(
     return mutation.label;
   }
 
-  const sceneIndex = scenes.findIndex(
-    (scene: Scene): boolean => scene.id === mutation.targetId
-  );
+  const sceneIndex = scenes.findIndex((scene: Scene): boolean => {
+    const targetId = mutation.targetId;
+    return targetId != null && scene.id === Number(targetId);
+  });
   if (sceneIndex < 0) {
     return mutation.label;
   }

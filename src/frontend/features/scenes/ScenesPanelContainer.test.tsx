@@ -29,7 +29,7 @@ import { I18nextProvider } from 'react-i18next';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import i18n from '../app/i18n';
 import { ScenesPanelContainer } from './ScenesPanelContainer';
-import type { Scene, SceneProseLink } from '../../types';
+import type { Scene, SceneProseLink, SceneId } from '../../types';
 import type { WritingUnit } from '../../types/domain';
 import type { EditorHandle } from '../editor/Editor';
 import type { ProseBoundaryCallback } from '../editor/CodeMirrorEditor';
@@ -142,11 +142,11 @@ vi.mock('../../services/api', () => ({ api: apiMock }));
 // ---------------------------------------------------------------------------
 
 interface PinboardHandlers {
-  onMoveScene: (id: string, x: number, y: number) => Promise<void>;
-  onEditScene: (id: string) => void;
-  onCreateCause: (fromId: string, toId: string) => Promise<void>;
+  onMoveScene: (id: SceneId, x: number, y: number) => Promise<void>;
+  onEditScene: (id: SceneId) => void;
+  onCreateCause: (fromId: SceneId, toId: SceneId) => Promise<void>;
   onDropProse: (
-    sceneId: string,
+    sceneId: SceneId,
     data: {
       scopeType: string;
       startOffset: number;
@@ -167,8 +167,8 @@ interface DialogHandlers {
 interface NarrativeHandlers {
   sortMode?: 'narrative' | 'chronological';
   onReorderScene?: (
-    sourceSceneId: string,
-    targetSceneId: string,
+    sourceSceneId: SceneId,
+    targetSceneId: SceneId,
     placeBefore: boolean
   ) => Promise<void>;
 }

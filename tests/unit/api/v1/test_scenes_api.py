@@ -67,7 +67,7 @@ class ScenesApiTest(ApiTestCase):
         self.assertEqual(resp.json()["summary"], "Single")
 
     def test_get_404(self) -> None:
-        resp = self.client.get(self._url("/nonexistent"))
+        resp = self.client.get(self._url("/999999"))
         self.assertEqual(resp.status_code, 404)
 
     def test_update(self) -> None:
@@ -77,7 +77,7 @@ class ScenesApiTest(ApiTestCase):
         self.assertEqual(resp.json()["summary"], "After")
 
     def test_update_404(self) -> None:
-        resp = self.client.put(self._url("/ghost"), json={"summary": "x"})
+        resp = self.client.put(self._url("/999999"), json={"summary": "x"})
         self.assertEqual(resp.status_code, 404)
 
     def test_delete(self) -> None:
@@ -87,7 +87,7 @@ class ScenesApiTest(ApiTestCase):
         self.assertEqual(self.client.get(self._url()).json(), [])
 
     def test_delete_404(self) -> None:
-        resp = self.client.delete(self._url("/ghost"))
+        resp = self.client.delete(self._url("/999999"))
         self.assertEqual(resp.status_code, 404)
 
     # ------------------------------------------------------------------
@@ -134,7 +134,7 @@ class ScenesApiTest(ApiTestCase):
         story_path = pdir / "story.json"
         story = json.loads(story_path.read_text(encoding="utf-8"))
         story["scenes"] = {
-            "legacy": {
+            "1": {
                 "summary": "Legacy",
                 "beats": None,
                 "active_characters": None,
@@ -150,7 +150,7 @@ class ScenesApiTest(ApiTestCase):
         self.assertEqual(resp.status_code, 200, resp.text)
         payload = resp.json()
         self.assertEqual(len(payload), 1)
-        self.assertEqual(payload[0]["id"], "legacy")
+        self.assertEqual(payload[0]["id"], 1)
         self.assertEqual(payload[0]["active_characters"], [])
 
     def test_refresh_hash_endpoint(self) -> None:
@@ -212,7 +212,7 @@ class ScenesApiTest(ApiTestCase):
 
     def test_link_prose_404_for_unknown_scene(self) -> None:
         resp = self.client.post(
-            self._url("/ghost/link-prose"),
+            self._url("/999999/link-prose"),
             json={"scope_type": "story", "start_offset": 0, "end_offset": 10},
         )
         self.assertEqual(resp.status_code, 404)
@@ -276,7 +276,7 @@ class ScenesApiTest(ApiTestCase):
 
     def test_patch_prose_content_404_for_unknown_scene(self) -> None:
         resp = self.client.patch(
-            self._url("/ghost/prose-content"),
+            self._url("/999999/prose-content"),
             json={"text": "anything"},
         )
         self.assertEqual(resp.status_code, 404)
@@ -369,7 +369,7 @@ class ScenesApiTest(ApiTestCase):
             self._url("/reorder-prose"),
             json={
                 "source_scene_id": scene["id"],
-                "target_scene_id": "ghost",
+                "target_scene_id": 999999,
                 "place_before": True,
             },
         )

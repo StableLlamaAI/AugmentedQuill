@@ -17,15 +17,15 @@ import { I18nextProvider } from 'react-i18next';
 import { describe, it, expect, vi, beforeAll, afterEach } from 'vitest';
 import i18n from '../app/i18n';
 import { NarrativeView } from './NarrativeView';
-import type { Scene } from '../../types';
+import type { Scene, SceneId } from '../../types';
 import type { Book, Chapter, SourcebookEntry } from '../../types/domain';
 
 const { selectionState } = vi.hoisted(() => ({
   selectionState: {
-    selectedSceneIds: new Set<string>(),
-    activeSceneId: null as string | null,
-    causeIds: new Set<string>(),
-    effectIds: new Set<string>(),
+    selectedSceneIds: new Set<SceneId>(),
+    activeSceneId: null as SceneId | null,
+    causeIds: new Set<SceneId>(),
+    effectIds: new Set<SceneId>(),
     handleCardSelect: vi.fn(),
   },
 }));
@@ -138,8 +138,8 @@ describe('NarrativeView drag reorder interactions', () => {
       activeSceneId,
     }: {
       label: string;
-      selectedSceneIds: Set<string>;
-      activeSceneId: string | null;
+      selectedSceneIds: Set<SceneId>;
+      activeSceneId: SceneId | null;
     }) => {
       selectionState.selectedSceneIds = selectedSceneIds;
       selectionState.activeSceneId = activeSceneId;

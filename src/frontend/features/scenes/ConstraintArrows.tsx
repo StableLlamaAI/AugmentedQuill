@@ -20,7 +20,7 @@
  */
 
 import React from 'react';
-import type { Scene } from '../../types';
+import type { Scene, SceneId } from '../../types';
 import { useTheme } from '../layout/ThemeContext';
 
 const CARD_WIDTH = 192; // matches w-48 (12rem × 16px)
@@ -48,7 +48,7 @@ type Arrow = {
 };
 
 /** Position lookup – keyed by scene id, allowing live values during drag. */
-export type ScenePositions = Map<string, { x: number; y: number }>;
+export type ScenePositions = Map<SceneId, { x: number; y: number }>;
 
 /**
  * Per-card layout from DOM measurement. Used in views where cards are in a
@@ -56,12 +56,12 @@ export type ScenePositions = Map<string, { x: number; y: number }>;
  * the fixed pinboard values.
  */
 export type CardLayout = { x: number; y: number; w: number; h: number };
-export type CardLayoutMap = Map<string, CardLayout>;
+export type CardLayoutMap = Map<SceneId, CardLayout>;
 
 /** Ghost arrow state during an Alt+drag cause creation. */
 export interface GhostArrow {
   /** Source scene id */
-  fromId: string;
+  fromId: SceneId;
   /** Canvas-space mouse X */
   toX: number;
   /** Canvas-space mouse Y */
@@ -75,10 +75,10 @@ interface CauseArrowsProps {
   /** Live per-scene positions (overrides scene.pinboard_x/y during drag). */
   livePositions: ScenePositions;
   /** Actual rendered heights keyed by scene id (from ResizeObserver in SceneCard). */
-  cardHeights: Map<string, number>;
+  cardHeights: Map<SceneId, number>;
   /** The currently active scene id. When set, only arrows involving this scene
    *  are drawn, coloured red (causes → active) or green (active → effects). */
-  activeSceneId: string | null;
+  activeSceneId: SceneId | null;
   /** Optional ghost arrow to draw during an Alt+drag cause creation. */
   ghostArrow?: GhostArrow | null;
   /**
@@ -192,17 +192,21 @@ export const CauseArrows: React.FC<CauseArrowsProps> = ({
   };
 
   /** Resolve actual card height: DOM layout overrides measured/default. */
-  const h = (id: string): number =>
+  const h = (id: SceneId): number =>
     cardLayouts?.get(id)?.h ?? cardHeights.get(id) ?? DEFAULT_CARD_HEIGHT;
 
   /** Resolve actual card width: DOM layout overrides the pinboard constant. */
-  const cardW = (id: string): number => cardLayouts?.get(id)?.w ?? CARD_WIDTH;
+  const cardW = (id: SceneId): number => cardLayouts?.get(id)?.w ?? CARD_WIDTH;
 
-  const byId = new Map<string, Scene>(scenes.map((s: Scene) => [s.id, s]));
+  const byId = new Map<SceneId, Scene>(scenes.map((s: Scene) => [s.id, s]));
   const arrows: Arrow[] = [];
 
   /** Build one arrow from scene A (source) to scene B (target). */
-  const makeArrow = (fromId: string, toId: string, color: ArrowColor): Arrow | null => {
+  const makeArrow = (
+    fromId: SceneId,
+    toId: SceneId,
+    color: ArrowColor
+  ): Arrow | null => {
     const from = byId.get(fromId);
     const to = byId.get(toId);
     if (!from || !to) return null;

@@ -12,7 +12,7 @@
 
 import React from 'react';
 import { createPortal } from 'react-dom';
-import { AppTheme, SourcebookEntry, SourcebookRelation } from '../../types';
+import { AppTheme, SourcebookEntry, SourcebookRelation, SceneId } from '../../types';
 import { ProjectImage } from '../../services/apiTypes';
 import { SourcebookRelationDialog } from './SourcebookRelationDialog';
 import {
@@ -100,7 +100,7 @@ interface SourcebookEntryDialogViewProps {
   onSaveRelation: (relation: SourcebookRelation) => void;
   onCloseRelationDialog: () => void;
   onCloseImagePicker: () => void;
-  sceneReferences: Array<{ id: string; summary: string; roles: string[] }>;
+  sceneReferences: Array<{ id: SceneId; summary: string; roles: string[] }>;
 }
 
 export const SourcebookEntryDialogView: React.FC<SourcebookEntryDialogViewProps> = (
@@ -305,7 +305,7 @@ export const SourcebookEntryDialogView: React.FC<SourcebookEntryDialogViewProps>
                 ) : (
                   sceneReferences.map(
                     (sceneReference: {
-                      id: string;
+                      id: SceneId;
                       summary: string;
                       roles: string[];
                     }) => (
@@ -314,7 +314,7 @@ export const SourcebookEntryDialogView: React.FC<SourcebookEntryDialogViewProps>
                         className="text-xs flex items-center justify-between gap-2"
                       >
                         <span className={descriptionTextClass}>
-                          {sceneReference.summary || sceneReference.id}
+                          {sceneReference.summary || String(sceneReference.id)}
                         </span>
                         <span
                           className={`text-[10px] px-1.5 py-0.5 rounded border ${inputBorderClass} ${labelClass}`}

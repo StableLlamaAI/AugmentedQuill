@@ -76,14 +76,14 @@ describe('handleSessionMutationClick', () => {
         id: 'm1',
         type: 'scene',
         label: 'Scene 7',
-        targetId: 'scene-7',
+        targetId: '7',
       },
       callbacks
     );
 
     expect(callbacks.openAndExpandStory).toHaveBeenCalledTimes(1);
     expect(callbacks.handleChapterSelect).toHaveBeenCalledWith(null);
-    expect(callbacks.openSceneEditorDialog).toHaveBeenCalledWith('scene-7');
+    expect(callbacks.openSceneEditorDialog).toHaveBeenCalledWith(7);
     expect(callbacks.openSourcebookEntryDialog).not.toHaveBeenCalled();
     expect(callbacks.openStoryMetadataDialog).not.toHaveBeenCalled();
     expect(callbacks.openChapterMetadataDialog).not.toHaveBeenCalled();

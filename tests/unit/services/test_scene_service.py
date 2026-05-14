@@ -48,7 +48,7 @@ def project_dir(tmp_path: Path) -> Path:
 
 
 @pytest.fixture()
-def scene_with_prose(project_dir: Path) -> tuple[Path, str]:
+def scene_with_prose(project_dir: Path) -> tuple[Path, int]:
     """Create a project with a content file and a scene linked to it.
 
     Returns (project_dir, scene_id).
@@ -81,15 +81,21 @@ class TestSceneCRUD:
     def test_create_and_list(self, project_dir: Path) -> None:
         payload = SceneCreateRequest(summary="Scene one", color_tag="#ff0000")
         scene = create_scene(project_dir, payload)
+        second_scene = create_scene(
+            project_dir, SceneCreateRequest(summary="Scene two")
+        )
 
-        assert scene["id"]
+        assert scene["id"] == 1
+        assert isinstance(scene["id"], int)
+        assert second_scene["id"] == 2
         assert scene["summary"] == "Scene one"
         assert scene["color_tag"] == "#ff0000"
         assert scene["status"] == "active"
 
         scenes = list_scenes(project_dir)
-        assert len(scenes) == 1
+        assert len(scenes) == 2
         assert scenes[0]["id"] == scene["id"]
+        assert scenes[1]["id"] == second_scene["id"]
 
     def test_get_single_scene(self, project_dir: Path) -> None:
         created = create_scene(project_dir, SceneCreateRequest(summary="Fetched"))
@@ -98,7 +104,7 @@ class TestSceneCRUD:
         assert fetched["summary"] == "Fetched"
 
     def test_get_nonexistent_returns_none(self, project_dir: Path) -> None:
-        assert get_scene(project_dir, "does-not-exist") is None
+        assert get_scene(project_dir, 999999) is None
 
     def test_update_scene(self, project_dir: Path) -> None:
         scene = create_scene(project_dir, SceneCreateRequest(summary="Original"))
@@ -148,7 +154,7 @@ class TestSceneCRUD:
 
     def test_update_nonexistent_returns_none(self, project_dir: Path) -> None:
         result = update_scene(
-            project_dir, "ghost", SceneUpdateRequest(summary="No effect")
+            project_dir, 999999, SceneUpdateRequest(summary="No effect")
         )
         assert result is None
 
@@ -158,7 +164,7 @@ class TestSceneCRUD:
         assert get_scene(project_dir, scene["id"]) is None
 
     def test_delete_nonexistent_returns_false(self, project_dir: Path) -> None:
-        assert delete_scene(project_dir, "ghost") is False
+        assert delete_scene(project_dir, 999999) is False
 
     def test_delete_removes_from_order_constraints(self, project_dir: Path) -> None:
         """Deleting a scene clears its ID from order_before/after on siblings."""
@@ -206,7 +212,7 @@ class TestSceneCRUD:
         """Scenes with legacy null list fields are coerced to valid list defaults."""
         story = load_story_config(project_dir / "story.json") or {}
         story["scenes"] = {
-            "legacy-null": {
+            "1": {
                 "summary": "Legacy",
                 "beats": None,
                 "active_characters": None,
@@ -224,7 +230,7 @@ class TestSceneCRUD:
         scenes = list_scenes(project_dir)
         assert len(scenes) == 1
         scene = scenes[0]
-        assert scene["id"] == "legacy-null"
+        assert scene["id"] == 1
         assert scene["beats"] == []
         assert scene["active_characters"] == []
         assert scene["passive_characters"] == []
@@ -937,7 +943,7 @@ class TestUpdateProseContent:
             update_prose_content(project_dir, scene["id"], "text")
 
     def test_nonexistent_scene_returns_none(self, project_dir: Path) -> None:
-        result = update_prose_content(project_dir, "ghost-id", "text")
+        result = update_prose_content(project_dir, 999999, "text")
         assert result is None
 
     def test_preserves_surrounding_content(self, project_dir: Path) -> None:

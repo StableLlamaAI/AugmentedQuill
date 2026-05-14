@@ -270,8 +270,8 @@ class ChatToolContractsTest(TestCase):
 
         scene_time_schema = update_props.get("scene_time", {})
         scene_time_description = scene_time_schema.get("description", "")
-        self.assertIn("plain string", scene_time_description)
-        self.assertIn("Missing pieces are normalized", scene_time_description)
+        self.assertIn("ISO 8601 datetime string", scene_time_description)
+        self.assertIn("gracefully normalized", scene_time_description)
 
     def test_manage_scenes_update_applies_partial_patches(self):
         created = self._call_tool(
@@ -315,8 +315,8 @@ class ChatToolContractsTest(TestCase):
                     "active_characters": ["hero"],
                     "passive_characters": ["guide"],
                     "sourcebook_entry_ids": ["Hero Entry"],
-                    "order_before": ["scene-x"],
-                    "order_after": ["scene-y"],
+                    "order_before": [101],
+                    "order_after": [202],
                     "status": "active",
                 },
             },

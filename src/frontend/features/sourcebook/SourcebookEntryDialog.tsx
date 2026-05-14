@@ -12,7 +12,7 @@
 import React, { useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AppTheme, SourcebookEntry, SourcebookRelation } from '../../types';
-import type { Scene } from '../../types';
+import type { Scene, SceneId } from '../../types';
 import { SourcebookUpsertPayload } from '../../services/apiTypes';
 import { useThemeClasses } from '../layout/ThemeContext';
 import { useFocusTrap } from '../layout/useFocusTrap';
@@ -97,7 +97,7 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
       : 'No keywords yet.';
 
   const sceneReferences = useMemo((): Array<{
-    id: string;
+    id: SceneId;
     summary: string;
     roles: string[];
   }> => {
@@ -108,7 +108,7 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
         (
           sceneItem: Scene
         ): {
-          id: string;
+          id: SceneId;
           summary: string;
           roles: string[];
         } | null => {
@@ -146,9 +146,9 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
       )
       .filter(
         (
-          value: { id: string; summary: string; roles: string[] } | null
+          value: { id: SceneId; summary: string; roles: string[] } | null
         ): value is {
-          id: string;
+          id: SceneId;
           summary: string;
           roles: string[];
         } => value !== null

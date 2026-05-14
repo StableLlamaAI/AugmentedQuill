@@ -78,7 +78,7 @@ describe('MutationTags', () => {
       ],
       scenes: [
         {
-          id: 'scene-a',
+          id: 1,
           summary: 'A',
           beats: [],
           active_characters: [],
@@ -91,7 +91,7 @@ describe('MutationTags', () => {
           prose_link: null,
         },
         {
-          id: 'scene-b',
+          id: 2,
           summary: 'B',
           beats: [],
           active_characters: [],
@@ -120,7 +120,7 @@ describe('MutationTags', () => {
         id: 'm-scene',
         type: 'scene',
         label: 'Scene',
-        targetId: 'scene-b',
+        targetId: '2',
       },
     ];
 

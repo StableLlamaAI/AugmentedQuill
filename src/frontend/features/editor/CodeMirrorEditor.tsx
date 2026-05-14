@@ -38,6 +38,7 @@ import { history, historyKeymap, defaultKeymap } from '@codemirror/commands';
 import { markdown } from '@codemirror/lang-markdown';
 import { syntaxHighlighting, HighlightStyle } from '@codemirror/language';
 import { tags } from '@lezer/highlight';
+import type { SceneId } from '../../types';
 import {
   buildMarkdownDecorationPlugin,
   markdownDecorationTheme,
@@ -54,14 +55,14 @@ import { buildEnterExtension, buildTabExtension } from './codeMirrorKeymap';
 
 export interface ProseHighlightRange {
   /** Owning scene identifier – used to route boundary-drag callbacks. */
-  sceneId: string;
+  sceneId: SceneId;
   from: number;
   to: number;
 }
 
 /** Callback type for prose-link boundary drag events. */
 export type ProseBoundaryCallback = (
-  sceneId: string,
+  sceneId: SceneId,
   edge: 'start' | 'end',
   offset: number
 ) => void;
@@ -87,7 +88,7 @@ export const proseHighlightField = StateField.define<ProseHighlightRange[]>({
  */
 class ProseHandleWidget extends WidgetType {
   constructor(
-    private readonly sceneId: string,
+    private readonly sceneId: SceneId,
     private readonly edge: 'start' | 'end',
     private readonly offset: number,
     private readonly callbackRef: React.MutableRefObject<ProseBoundaryCallback | null>,

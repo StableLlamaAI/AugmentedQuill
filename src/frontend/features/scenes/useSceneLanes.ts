@@ -13,7 +13,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { Scene } from '../../types';
+import type { Scene, SceneId } from '../../types';
 import type { SourcebookEntry } from '../../types/domain';
 import type { ProjectImage } from '../../services/apiTypes';
 import { listProjectImages } from '../sourcebook/sourcebookApi';
@@ -35,8 +35,8 @@ export type LaneMarkerStyle = 'solid' | 'hollow';
 export interface UseSceneLanesParams {
   scenes: Scene[];
   sourcebookEntries: SourcebookEntry[];
-  onSelectScene: (id: string | null) => void;
-  onSelectionChange?: (ids: ReadonlySet<string>) => void;
+  onSelectScene: (id: SceneId | null) => void;
+  onSelectionChange?: (ids: ReadonlySet<SceneId>) => void;
 }
 
 export interface UseSceneLanesResult {
@@ -58,11 +58,11 @@ export interface UseSceneLanesResult {
 
   // Derived lookups
   sourcebookEntriesById: Map<string, SourcebookEntry>;
-  sceneEntryMarkerStyles: Map<string, Map<string, LaneMarkerStyle>>;
+  sceneEntryMarkerStyles: Map<SceneId, Map<string, LaneMarkerStyle>>;
   /** markerStyleBySceneId filtered to only visible lanes. */
-  markerStyleBySceneId: Map<string, Map<string, LaneMarkerStyle>>;
+  markerStyleBySceneId: Map<SceneId, Map<string, LaneMarkerStyle>>;
   filteredScenes: Scene[];
-  sceneEpochNanosecondsById: Map<string, bigint>;
+  sceneEpochNanosecondsById: Map<SceneId, bigint>;
   referencedCharacterEntryIds: string[];
   projectImageByFilename: Map<string, ProjectImage>;
   availableSourcebookEntries: SourcebookEntry[];
@@ -210,10 +210,10 @@ export function useSceneLanes({
   }, [sourcebookEntries]);
 
   const sceneEntryMarkerStyles = useMemo(() => {
-    const stylesBySceneId = new Map<string, Map<string, LaneMarkerStyle>>();
+    const stylesBySceneId = new Map<SceneId, Map<string, LaneMarkerStyle>>();
 
     const register = (
-      sceneId: string,
+      sceneId: SceneId,
       entryId: string,
       style: LaneMarkerStyle
     ): void => {
@@ -359,9 +359,9 @@ export function useSceneLanes({
   );
 
   const markerStyleBySceneId = useMemo(() => {
-    const stylesBySceneId = new Map<string, Map<string, LaneMarkerStyle>>();
+    const stylesBySceneId = new Map<SceneId, Map<string, LaneMarkerStyle>>();
     sceneEntryMarkerStyles.forEach(
-      (styles: Map<string, LaneMarkerStyle>, sceneId: string) => {
+      (styles: Map<string, LaneMarkerStyle>, sceneId: SceneId) => {
         const filtered = new Map<string, LaneMarkerStyle>();
         visibleLaneEntryIds.forEach((entryId: string) => {
           const style = styles.get(entryId);
@@ -385,7 +385,7 @@ export function useSceneLanes({
   }, [sceneEntryMarkerStyles, scenes, selectedLaneEntryIds]);
 
   const sceneEpochNanosecondsById = useMemo(() => {
-    const map = new Map<string, bigint>();
+    const map = new Map<SceneId, bigint>();
     for (const scene of scenes) {
       const epoch = getSceneEpochNanoseconds(scene);
       if (epoch !== null) map.set(scene.id, epoch);
@@ -586,7 +586,7 @@ export function useSceneLanes({
       if (target.closest('button, input, textarea, select, a, [role="button"]')) return;
       setSelectedLaneEntryIds(new Set<string>());
       onSelectScene(null);
-      onSelectionChange?.(new Set<string>());
+      onSelectionChange?.(new Set<SceneId>());
     },
     [onSelectScene, onSelectionChange]
   );

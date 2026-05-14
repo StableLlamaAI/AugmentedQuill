@@ -20,6 +20,7 @@ from augmentedquill.models.scene import (
     ProseConflictError,
     Scene,
     SceneCreateRequest,
+    SceneId,
     SceneLinkProseRequest,
     SceneProseLink,
     SceneReorderProseRequest,
@@ -58,7 +59,7 @@ async def create_new_scene(
 
 
 @router.get("/scenes/{scene_id}", response_model=Scene)
-async def get_single_scene(project_dir: ProjectDep, scene_id: str) -> Scene:
+async def get_single_scene(project_dir: ProjectDep, scene_id: SceneId) -> Scene:
     """Fetch a single scene by ID."""
     scene = get_scene(project_dir, scene_id)
     if scene is None:
@@ -69,7 +70,7 @@ async def get_single_scene(project_dir: ProjectDep, scene_id: str) -> Scene:
 @router.put("/scenes/{scene_id}", response_model=Scene)
 async def update_existing_scene(
     project_dir: ProjectDep,
-    scene_id: str,
+    scene_id: SceneId,
     payload: SceneUpdateRequest,
 ) -> Scene:
     """Update an existing scene (partial – only provided fields are changed)."""
@@ -80,7 +81,7 @@ async def update_existing_scene(
 
 
 @router.delete("/scenes/{scene_id}", status_code=204)
-async def delete_existing_scene(project_dir: ProjectDep, scene_id: str) -> None:
+async def delete_existing_scene(project_dir: ProjectDep, scene_id: SceneId) -> None:
     """Delete a scene and remove it from all order constraints."""
     if not delete_scene(project_dir, scene_id):
         raise HTTPException(status_code=404, detail=f"Scene '{scene_id}' not found")
@@ -95,7 +96,7 @@ class RefreshProseHashRequest(SceneProseLink):
 @router.post("/scenes/{scene_id}/refresh-hash", response_model=SceneProseLink)
 async def refresh_prose_hash(
     project_dir: ProjectDep,
-    scene_id: str,
+    scene_id: SceneId,
     payload: RefreshProseHashRequest,
 ) -> SceneProseLink:
     """Recompute and persist the content hash for a prose link.
@@ -111,7 +112,7 @@ async def refresh_prose_hash(
 @router.post("/scenes/{scene_id}/link-prose", response_model=List[Scene])
 async def link_scene_prose(
     project_dir: ProjectDep,
-    scene_id: str,
+    scene_id: SceneId,
     payload: SceneLinkProseRequest,
 ) -> List[Scene]:
     """Assign a prose-text range to a scene.
@@ -165,7 +166,7 @@ async def reorder_scene_prose_route(
 @router.patch("/scenes/{scene_id}/prose-content", response_model=Scene)
 async def update_scene_prose_content(
     project_dir: ProjectDep,
-    scene_id: str,
+    scene_id: SceneId,
     payload: SceneUpdateProseContentRequest,
 ) -> Scene:
     """Replace the text at a scene's linked prose offsets.

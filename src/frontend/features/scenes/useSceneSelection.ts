@@ -16,7 +16,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type React from 'react';
-import type { Scene } from '../../types';
+import type { Scene, SceneId } from '../../types';
 
 export interface UseSceneSelectionOptions {
   /**
@@ -26,21 +26,21 @@ export interface UseSceneSelectionOptions {
    */
   displayOrder: Scene[];
   /** Externally driven primary selection (e.g. from editor cursor sync). */
-  primarySelectedSceneId: string | null;
-  onSelectScene: (id: string | null) => void;
-  onSelectionChange?: (ids: ReadonlySet<string>) => void;
+  primarySelectedSceneId: SceneId | null;
+  onSelectScene: (id: SceneId | null) => void;
+  onSelectionChange?: (ids: ReadonlySet<SceneId>) => void;
 }
 
 export interface UseSceneSelectionResult {
-  selectedSceneIds: ReadonlySet<string>;
-  activeSceneId: string | null;
-  setSelectedSceneIds: React.Dispatch<React.SetStateAction<ReadonlySet<string>>>;
-  setActiveSceneId: React.Dispatch<React.SetStateAction<string | null>>;
-  handleCardSelect: (sceneId: string, e: MouseEvent) => void;
-  anchorIdRef: React.MutableRefObject<string | null>;
-  prevPrimaryRef: React.MutableRefObject<string | null>;
-  activeSceneIdRef: React.MutableRefObject<string | null>;
-  selectedIdsRef: React.MutableRefObject<ReadonlySet<string>>;
+  selectedSceneIds: ReadonlySet<SceneId>;
+  activeSceneId: SceneId | null;
+  setSelectedSceneIds: React.Dispatch<React.SetStateAction<ReadonlySet<SceneId>>>;
+  setActiveSceneId: React.Dispatch<React.SetStateAction<SceneId | null>>;
+  handleCardSelect: (sceneId: SceneId, e: MouseEvent) => void;
+  anchorIdRef: React.MutableRefObject<SceneId | null>;
+  prevPrimaryRef: React.MutableRefObject<SceneId | null>;
+  activeSceneIdRef: React.MutableRefObject<SceneId | null>;
+  selectedIdsRef: React.MutableRefObject<ReadonlySet<SceneId>>;
 }
 
 export function useSceneSelection({
@@ -49,13 +49,13 @@ export function useSceneSelection({
   onSelectScene,
   onSelectionChange,
 }: UseSceneSelectionOptions): UseSceneSelectionResult {
-  const [selectedSceneIds, setSelectedSceneIds] = useState<ReadonlySet<string>>(
+  const [selectedSceneIds, setSelectedSceneIds] = useState<ReadonlySet<SceneId>>(
     primarySelectedSceneId ? new Set([primarySelectedSceneId]) : new Set()
   );
-  const anchorIdRef = useRef<string | null>(primarySelectedSceneId);
+  const anchorIdRef = useRef<SceneId | null>(primarySelectedSceneId);
 
-  const [activeSceneId, setActiveSceneId] = useState<string | null>(null);
-  const activeSceneIdRef = useRef<string | null>(null);
+  const [activeSceneId, setActiveSceneId] = useState<SceneId | null>(null);
+  const activeSceneIdRef = useRef<SceneId | null>(null);
   useEffect((): void => {
     activeSceneIdRef.current = activeSceneId;
   }, [activeSceneId]);
@@ -91,7 +91,7 @@ export function useSceneSelection({
   }, [selectedSceneIds, onSelectionChange]);
 
   const handleCardSelect = useCallback(
-    (sceneId: string, e: MouseEvent): void => {
+    (sceneId: SceneId, e: MouseEvent): void => {
       const ctrl = e.ctrlKey || e.metaKey;
       const shift = e.shiftKey;
 
@@ -108,7 +108,7 @@ export function useSceneSelection({
       if (ctrl && !shift) {
         // Ctrl+click: add/remove from selection AND make this card the active one.
         setActiveSceneId(sceneId);
-        setSelectedSceneIds((prev: ReadonlySet<string>) => {
+        setSelectedSceneIds((prev: ReadonlySet<SceneId>) => {
           const next = new Set(prev);
           if (next.has(sceneId)) {
             next.delete(sceneId);
@@ -140,9 +140,9 @@ export function useSceneSelection({
       const lo = Math.min(anchorIdx, clickIdx);
       const hi = Math.max(anchorIdx, clickIdx);
       const rangeIds = order.slice(lo, hi + 1).map((s: Scene) => s.id);
-      setSelectedSceneIds((prev: ReadonlySet<string>) => {
+      setSelectedSceneIds((prev: ReadonlySet<SceneId>) => {
         const next = new Set(prev);
-        rangeIds.forEach((id: string) => next.add(id));
+        rangeIds.forEach((id: SceneId) => next.add(id));
         return next;
       });
       prevPrimaryRef.current = sceneId;

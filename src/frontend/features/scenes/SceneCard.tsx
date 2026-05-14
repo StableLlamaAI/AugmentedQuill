@@ -19,7 +19,7 @@
 import React, { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Clock3 } from 'lucide-react';
-import type { Scene, SceneBeat } from '../../types';
+import type { Scene, SceneBeat, SceneId } from '../../types';
 import type { ProseDropData } from './types';
 import { useTheme } from '../layout/ThemeContext';
 import { toDisplayString, toInternationalDisplayString } from '../../utils/temporal';
@@ -80,26 +80,26 @@ interface SceneCardProps {
   /** Called every frame while dragging to report the cumulative delta (in canvas
    *  pixels) so that the parent can update live positions and SVG arrows.
    *  Required in pinboard mode; unused in narrative mode. */
-  onDragMove?: (sceneId: string, dx: number, dy: number) => void;
+  onDragMove?: (sceneId: SceneId, dx: number, dy: number) => void;
   /** Called when the drag ends, with the final cumulative delta.
    *  Required in pinboard mode; unused in narrative mode. */
-  onDragEnd?: (sceneId: string, dx: number, dy: number) => void;
+  onDragEnd?: (sceneId: SceneId, dx: number, dy: number) => void;
   /** Called on single click to select this card. Receives the native event so
    *  the caller can inspect ctrlKey / shiftKey for multi-selection logic. */
-  onSelect: (sceneId: string, e: MouseEvent) => void;
+  onSelect: (sceneId: SceneId, e: MouseEvent) => void;
   /** Called on double-click to open the editor. */
-  onEdit: (sceneId: string) => void;
+  onEdit: (sceneId: SceneId) => void;
   /** Called when Alt+drag starts, providing the source scene id and the
    *  starting canvas-space coordinates so the ghost arrow can be placed.
    *  Required in pinboard mode; unused in narrative mode. */
   onCauseDragStart?: (
-    sceneId: string,
+    sceneId: SceneId,
     startCanvasX: number,
     startCanvasY: number
   ) => void;
   /** Called when Alt+drag enters this card – provides the target scene id.
    *  Pinboard only. */
-  onCauseDrop?: (targetSceneId: string) => void;
+  onCauseDrop?: (targetSceneId: SceneId) => void;
   /** Called when Alt+drag leaves this card without releasing. Pinboard only. */
   onCauseLeave?: () => void;
   /** Whether this card is the target of an ongoing cause drag. Pinboard only. */
@@ -113,13 +113,13 @@ interface SceneCardProps {
   /** Whether the active scene is a cause of this card (green glow). */
   isEffect: boolean;
   /** Called when prose text is dropped onto this card. */
-  onDropProse?: (sceneId: string, data: ProseDropData) => void;
+  onDropProse?: (sceneId: SceneId, data: ProseDropData) => void;
   /** Override display position (canvas px) during live drag. Pinboard only. */
   displayX?: number;
   displayY?: number;
   /** Called whenever the card's rendered height changes (used by CauseArrows for
    *  accurate border-intersection math). Pinboard only. */
-  onLayout?: (sceneId: string, height: number) => void;
+  onLayout?: (sceneId: SceneId, height: number) => void;
 }
 
 /* eslint-disable complexity */

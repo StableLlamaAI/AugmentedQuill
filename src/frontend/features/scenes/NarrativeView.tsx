@@ -29,12 +29,12 @@ import React, {
   useEffect,
 } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { Scene } from '../../types';
+import type { Scene, SceneId } from '../../types';
 import type { Chapter, Book, SourcebookEntry } from '../../types/domain';
 import type { ProseDropData } from './types';
 import { SceneCard } from './SceneCard';
 import { CauseArrows } from './ConstraintArrows';
-import type { CardLayoutMap } from './ConstraintArrows';
+import type { CardLayoutMap, CardLayout } from './ConstraintArrows';
 import { useSceneSelection } from './useSceneSelection';
 import { useThemeClasses, useTheme } from '../layout/ThemeContext';
 import { useSceneLanes } from './useSceneLanes';
@@ -53,14 +53,14 @@ interface NarrativeViewProps {
   chapters: Chapter[];
   books?: Book[];
   sortMode?: 'narrative' | 'chronological';
-  primarySelectedSceneId: string | null;
-  onSelectScene: (id: string | null) => void;
-  onSelectionChange?: (ids: ReadonlySet<string>) => void;
-  onEditScene: (sceneId: string) => void;
-  onDropProse?: (sceneId: string, data: ProseDropData) => void;
+  primarySelectedSceneId: SceneId | null;
+  onSelectScene: (id: SceneId | null) => void;
+  onSelectionChange?: (ids: ReadonlySet<SceneId>) => void;
+  onEditScene: (sceneId: SceneId) => void;
+  onDropProse?: (sceneId: SceneId, data: ProseDropData) => void;
   onReorderScene?: (
-    sourceSceneId: string,
-    targetSceneId: string,
+    sourceSceneId: SceneId,
+    targetSceneId: SceneId,
     placeBefore: boolean
   ) => Promise<void>;
 }
@@ -84,7 +84,7 @@ interface BreakState {
 function isUnlinkedWithoutChronology(
   scene: Scene,
   sortMode: 'narrative' | 'chronological',
-  sceneEpochNanosecondsById: Map<string, bigint>
+  sceneEpochNanosecondsById: Map<SceneId, bigint>
 ): boolean {
   if (scene.prose_link) return false;
   if (sortMode !== 'chronological') return true;
@@ -139,7 +139,7 @@ function appendChapterBreakItems(
 function buildItems(
   sortedScenes: Scene[],
   sortMode: 'narrative' | 'chronological',
-  sceneEpochNanosecondsById: Map<string, bigint>,
+  sceneEpochNanosecondsById: Map<SceneId, bigint>,
   projectType: ProjectType,
   chapters: Chapter[],
   books: Book[]
@@ -288,6 +288,11 @@ export const NarrativeView: React.FC<NarrativeViewProps> = ({
   const { t } = useTranslation();
   const { isLight } = useTheme();
 
+  const parseSceneId = useCallback((raw: string): SceneId | null => {
+    const parsed = Number(raw);
+    return Number.isInteger(parsed) ? (parsed as SceneId) : null;
+  }, []);
+
   const lanes = useSceneLanes({
     scenes,
     sourcebookEntries,
@@ -339,8 +344,8 @@ export const NarrativeView: React.FC<NarrativeViewProps> = ({
   const activeScene = activeSceneId
     ? (scenes.find((s: Scene) => s.id === activeSceneId) ?? null)
     : null;
-  const causeIds = new Set<string>(activeScene?.order_after ?? []);
-  const effectIds = new Set<string>(activeScene?.order_before ?? []);
+  const causeIds = new Set<SceneId>(activeScene?.order_after ?? []);
+  const effectIds = new Set<SceneId>(activeScene?.order_before ?? []);
 
   // Build the ordered list of items (dividers + scenes) to render.
   const items = useMemo(
@@ -359,7 +364,7 @@ export const NarrativeView: React.FC<NarrativeViewProps> = ({
   // Build a flat index of scene entries so we can pass the correct 'index' to
   // SceneCard (it's the display position, not the original store index).
   const sceneIndexMap = useMemo(() => {
-    const map = new Map<string, number>();
+    const map = new Map<SceneId, number>();
     let i = 0;
     for (const item of items) {
       if (item.kind === 'scene') {
@@ -383,7 +388,7 @@ export const NarrativeView: React.FC<NarrativeViewProps> = ({
   // -------------------------------------------------------------------------
 
   /** Refs to each scene card's wrapper div, keyed by scene id. */
-  const cardWrapperRefs = useRef(new Map<string, HTMLDivElement>());
+  const cardWrapperRefs = useRef(new Map<SceneId, HTMLDivElement>());
   const narrativeRootRef = useRef<HTMLDivElement>(null);
 
   const laneTrackRef = useRef<HTMLDivElement>(null);
@@ -401,8 +406,11 @@ export const NarrativeView: React.FC<NarrativeViewProps> = ({
   const innerContainerRef = useRef<HTMLDivElement>(null);
 
   /** Stable empty maps so CauseArrows doesn't recreate objects on every render. */
-  const emptyPositions = useMemo(() => new Map<string, { x: number; y: number }>(), []);
-  const emptyHeights = useMemo(() => new Map<string, number>(), []);
+  const emptyPositions = useMemo(
+    () => new Map<SceneId, { x: number; y: number }>(),
+    []
+  );
+  const emptyHeights = useMemo(() => new Map<SceneId, number>(), []);
 
   /**
    * Ordered relationship keys currently drawn by CauseArrows.
@@ -462,8 +470,8 @@ export const NarrativeView: React.FC<NarrativeViewProps> = ({
 
   /** Re-measure all tracked card divs and update layout state. */
   const measureLayouts = useCallback(() => {
-    const next = new Map<string, { x: number; y: number; w: number; h: number }>();
-    cardWrapperRefs.current.forEach((el: HTMLDivElement, id: string) => {
+    const next = new Map<SceneId, CardLayout>();
+    cardWrapperRefs.current.forEach((el: HTMLDivElement, id: SceneId) => {
       next.set(id, {
         x: el.offsetLeft,
         y: el.offsetTop,
@@ -508,11 +516,12 @@ export const NarrativeView: React.FC<NarrativeViewProps> = ({
   // Narrative drag/reorder interactions
   // -------------------------------------------------------------------------
 
-  const [dragSceneId, setDragSceneId] = useState<string | null>(null);
-  const dragSceneIdRef = useRef<string | null>(null);
-  const [dropHint, setDropHint] = useState<{ id: string; placeBefore: boolean } | null>(
-    null
-  );
+  const [dragSceneId, setDragSceneId] = useState<SceneId | null>(null);
+  const dragSceneIdRef = useRef<SceneId | null>(null);
+  const [dropHint, setDropHint] = useState<{
+    id: SceneId;
+    placeBefore: boolean;
+  } | null>(null);
   const applyLaneScrollDelta = useCallback((delta: number): boolean => {
     const scroller = bottomLaneScrollRef.current;
     if (!scroller) return false;
@@ -557,13 +566,13 @@ export const NarrativeView: React.FC<NarrativeViewProps> = ({
   }, [handleLaneWheelEvent]);
 
   const handleSceneDragStart = useCallback(
-    (e: React.DragEvent<HTMLDivElement>, sceneId: string): void => {
+    (e: React.DragEvent<HTMLDivElement>, sceneId: SceneId): void => {
       dragSceneIdRef.current = sceneId;
       e.dataTransfer.effectAllowed = 'move';
       // Keep scene id in the drag payload in case React state isn't visible
       // synchronously inside dragover/drop handlers.
-      e.dataTransfer.setData(DRAG_SCENE_MIME, sceneId);
-      e.dataTransfer.setData('text/plain', sceneId);
+      e.dataTransfer.setData(DRAG_SCENE_MIME, String(sceneId));
+      e.dataTransfer.setData('text/plain', String(sceneId));
       setDragSceneId(sceneId);
       setDropHint(null);
     },
@@ -577,30 +586,30 @@ export const NarrativeView: React.FC<NarrativeViewProps> = ({
   }, []);
 
   const handleSceneDragOver = useCallback(
-    (e: React.DragEvent<HTMLDivElement>, sceneId: string): void => {
+    (e: React.DragEvent<HTMLDivElement>, sceneId: SceneId): void => {
       const sourceId =
         dragSceneIdRef.current ||
-        e.dataTransfer.getData(DRAG_SCENE_MIME) ||
+        parseSceneId(e.dataTransfer.getData(DRAG_SCENE_MIME)) ||
         dragSceneId;
       if (!sourceId || sourceId === sceneId) return;
       e.preventDefault();
       const rect = e.currentTarget.getBoundingClientRect();
       const placeBefore = e.clientY < rect.top + rect.height / 2;
-      setDropHint((prev: { id: string; placeBefore: boolean } | null) => {
+      setDropHint((prev: { id: SceneId; placeBefore: boolean } | null) => {
         if (prev && prev.id === sceneId && prev.placeBefore === placeBefore)
           return prev;
         return { id: sceneId, placeBefore };
       });
     },
-    [DRAG_SCENE_MIME, dragSceneId]
+    [DRAG_SCENE_MIME, dragSceneId, parseSceneId]
   );
 
   const handleSceneDrop = useCallback(
-    async (e: React.DragEvent<HTMLDivElement>, targetId: string): Promise<void> => {
+    async (e: React.DragEvent<HTMLDivElement>, targetId: SceneId): Promise<void> => {
       e.preventDefault();
       const sourceId =
         dragSceneIdRef.current ||
-        e.dataTransfer.getData(DRAG_SCENE_MIME) ||
+        parseSceneId(e.dataTransfer.getData(DRAG_SCENE_MIME)) ||
         dragSceneId;
       if (!sourceId || sourceId === targetId) return;
       const rect = e.currentTarget.getBoundingClientRect();
@@ -610,7 +619,7 @@ export const NarrativeView: React.FC<NarrativeViewProps> = ({
       setDragSceneId(null);
       await onReorderScene?.(sourceId, targetId, placeBefore);
     },
-    [DRAG_SCENE_MIME, dragSceneId, onReorderScene]
+    [DRAG_SCENE_MIME, dragSceneId, onReorderScene, parseSceneId]
   );
 
   useEffect(() => {
@@ -729,16 +738,18 @@ export const NarrativeView: React.FC<NarrativeViewProps> = ({
 
             const { scene } = item;
             const displayIndex = sceneIndexMap.get(scene.id) ?? 0;
-            const dropTop =
+            const dropTop = Boolean(
               dropHint &&
               dropHint.id === scene.id &&
               dropHint.placeBefore &&
-              dragSceneId;
-            const dropBottom =
+              dragSceneId
+            );
+            const dropBottom = Boolean(
               dropHint &&
               dropHint.id === scene.id &&
               !dropHint.placeBefore &&
-              dragSceneId;
+              dragSceneId
+            );
 
             return (
               <div

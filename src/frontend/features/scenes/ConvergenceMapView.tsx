@@ -22,7 +22,7 @@ import React, {
   useEffect,
 } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { Scene } from '../../types';
+import type { Scene, SceneId } from '../../types';
 import type {
   Chapter,
   Book,
@@ -48,10 +48,10 @@ interface ConvergenceMapViewProps {
   projectType: ProjectType;
   chapters: Chapter[];
   books?: Book[];
-  primarySelectedSceneId: string | null;
-  onSelectScene: (id: string | null) => void;
-  onSelectionChange?: (ids: ReadonlySet<string>) => void;
-  onEditScene?: (id: string) => void;
+  primarySelectedSceneId: SceneId | null;
+  onSelectScene: (id: SceneId | null) => void;
+  onSelectionChange?: (ids: ReadonlySet<SceneId>) => void;
+  onEditScene?: (id: SceneId) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -82,7 +82,7 @@ type CardLayoutEntry = { x: number; y: number; w: number; h: number };
  */
 function countDirectionChanges(
   proseScenes: Scene[],
-  cardLayouts: Map<string, CardLayoutEntry>
+  cardLayouts: Map<SceneId, CardLayoutEntry>
 ): number {
   let changes = 0;
   let prevY: number | null = null;
@@ -125,10 +125,10 @@ function countDirectionChanges(
  */
 function buildSnakePath(
   proseScenes: Scene[],
-  cardLayouts: Map<string, CardLayoutEntry>,
+  cardLayouts: Map<SceneId, CardLayoutEntry>,
   laneCenterX: number
-): { pathData: string; sceneXById: Map<string, number> } {
-  const sceneXById = new Map<string, number>();
+): { pathData: string; sceneXById: Map<SceneId, number> } {
+  const sceneXById = new Map<SceneId, number>();
   const parts: string[] = [];
 
   const numChanges = countDirectionChanges(proseScenes, cardLayouts);
@@ -294,12 +294,12 @@ export const ConvergenceMapView: React.FC<ConvergenceMapViewProps> = ({
   const activeScene = activeSceneId
     ? (scenes.find((s: Scene) => s.id === activeSceneId) ?? null)
     : null;
-  const causeIds = new Set<string>(activeScene?.order_after ?? []);
-  const effectIds = new Set<string>(activeScene?.order_before ?? []);
+  const causeIds = new Set<SceneId>(activeScene?.order_after ?? []);
+  const effectIds = new Set<SceneId>(activeScene?.order_before ?? []);
 
   // Display index for each scene card (sequential position in sorted list).
   const sceneIndexMap = useMemo(() => {
-    const map = new Map<string, number>();
+    const map = new Map<SceneId, number>();
     sortedScenes.forEach((s: Scene, i: number) => map.set(s.id, i));
     return map;
   }, [sortedScenes]);
@@ -312,9 +312,9 @@ export const ConvergenceMapView: React.FC<ConvergenceMapViewProps> = ({
   const innerContainerRef = useRef<HTMLDivElement>(null);
   const laneTrackRef = useRef<HTMLDivElement>(null);
   const bottomLaneScrollRef = useRef<HTMLDivElement>(null);
-  const cardWrapperRefs = useRef(new Map<string, HTMLDivElement>());
+  const cardWrapperRefs = useRef(new Map<SceneId, HTMLDivElement>());
 
-  const [cardLayouts, setCardLayouts] = useState<Map<string, CardLayoutEntry>>(
+  const [cardLayouts, setCardLayouts] = useState<Map<SceneId, CardLayoutEntry>>(
     new Map()
   );
   const [laneCenterXById, setLaneCenterXById] = useState<Map<string, number>>(
@@ -324,8 +324,8 @@ export const ConvergenceMapView: React.FC<ConvergenceMapViewProps> = ({
 
   /** Measure all card positions and lane button centers. */
   const measureLayouts = useCallback(() => {
-    const nextCards = new Map<string, CardLayoutEntry>();
-    cardWrapperRefs.current.forEach((el: HTMLDivElement, id: string) => {
+    const nextCards = new Map<SceneId, CardLayoutEntry>();
+    cardWrapperRefs.current.forEach((el: HTMLDivElement, id: SceneId) => {
       nextCards.set(id, {
         x: el.offsetLeft,
         y: el.offsetTop,

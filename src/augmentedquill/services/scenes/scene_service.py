@@ -20,15 +20,15 @@ from __future__ import annotations
 
 import hashlib
 import os
-import uuid
+import tempfile
 from pathlib import Path
 from typing import Any
-import tempfile
 
 from augmentedquill.core.config import load_story_config, save_story_config
 from augmentedquill.models.scene import (
     ProseConflictError,
     SceneCreateRequest,
+    SceneId,
     SceneLinkProseRequest,
     SceneProseLink,
     SceneReorderProseRequest,
@@ -250,8 +250,40 @@ def _write_text_atomic(path: Path, content: str) -> None:
             temp_path.unlink(missing_ok=True)
 
 
+def _coerce_scene_id(raw_id: object) -> SceneId | None:
+    """Return a numeric scene ID when the stored representation is valid."""
+    if isinstance(raw_id, int) and raw_id > 0:
+        return raw_id
+    if isinstance(raw_id, str) and raw_id.isdigit():
+        parsed = int(raw_id)
+        return parsed if parsed > 0 else None
+    return None
+
+
+def _coerce_scene_id_list(raw_ids: object) -> list[SceneId]:
+    """Normalise scene reference lists to numeric scene IDs."""
+    if not isinstance(raw_ids, list):
+        return []
+    result: list[SceneId] = []
+    for raw_id in raw_ids:
+        scene_id = _coerce_scene_id(raw_id)
+        if scene_id is not None:
+            result.append(scene_id)
+    return result
+
+
+def _next_scene_id(scenes_dict: dict[SceneId, Any]) -> SceneId:
+    """Allocate the next per-project numeric scene ID."""
+    return max(scenes_dict.keys(), default=0) + 1
+
+
 def _normalise_scene(raw: dict[str, Any]) -> dict[str, Any]:
     """Ensure default fields exist on a raw scene dict read from disk."""
+    scene_id = _coerce_scene_id(raw.get("id"))
+    if scene_id is None:
+        raise ValueError("Scene IDs must be positive integers")
+    raw["id"] = scene_id
+
     summary = raw.get("summary")
     if not isinstance(summary, str):
         raw["summary"] = ""
@@ -261,12 +293,13 @@ def _normalise_scene(raw: dict[str, Any]) -> dict[str, Any]:
         "active_characters",
         "passive_characters",
         "sourcebook_entry_ids",
-        "order_before",
-        "order_after",
     ):
         value = raw.get(key)
         if not isinstance(value, list):
             raw[key] = []
+
+    raw["order_before"] = _coerce_scene_id_list(raw.get("order_before"))
+    raw["order_after"] = _coerce_scene_id_list(raw.get("order_after"))
 
     raw.setdefault("scene_time", None)
     raw.setdefault("tag_personal_datetimes", [])
@@ -325,74 +358,52 @@ def _check_link_staleness(link: dict[str, Any] | None, project_dir: Path) -> Non
 def list_scenes(project_dir: Path) -> list[dict[str, Any]]:
     """Return all scenes for a project, sorted by pinboard_y then pinboard_x."""
     story = load_story_config(project_dir / "story.json") or {}
-    raw_scenes = story.get("scenes", {})
-    if isinstance(raw_scenes, dict):
-        scenes = [
-            _normalise_scene({"id": scene_id, **data})
-            for scene_id, data in raw_scenes.items()
-        ]
-    elif isinstance(raw_scenes, list):
-        scenes = [_normalise_scene(s) for s in raw_scenes]
-    else:
-        scenes = []
+    scenes_dict = _load_scenes_dict(story)
+    scenes = [
+        _normalise_scene({"id": scene_id, **data})
+        for scene_id, data in scenes_dict.items()
+    ]
     _attach_stale_flags(scenes, project_dir)
     return sorted(
         scenes, key=lambda s: (s.get("pinboard_y", 0), s.get("pinboard_x", 0))
     )
 
 
-def get_scene(project_dir: Path, scene_id: str) -> dict[str, Any] | None:
+def get_scene(project_dir: Path, scene_id: SceneId) -> dict[str, Any] | None:
     """Return a single scene dict, or None if not found."""
     story = load_story_config(project_dir / "story.json") or {}
-    raw_scenes = story.get("scenes", {})
-    if isinstance(raw_scenes, dict):
-        raw = raw_scenes.get(scene_id)
-        if raw is None:
-            return None
-        scene = _normalise_scene({"id": scene_id, **raw})
-    elif isinstance(raw_scenes, list):
-        matches = [s for s in raw_scenes if s.get("id") == scene_id]
-        if not matches:
-            return None
-        scene = _normalise_scene(matches[0])
-    else:
+    scenes_dict = _load_scenes_dict(story)
+    raw = scenes_dict.get(scene_id)
+    if raw is None:
         return None
+    scene = _normalise_scene({"id": scene_id, **raw})
     _attach_stale_flags([scene], project_dir)
     return scene
 
 
 def create_scene(project_dir: Path, payload: SceneCreateRequest) -> dict[str, Any]:
     """Create and persist a new scene; returns the saved scene dict."""
-    scene_id = str(uuid.uuid4())
     story_path = project_dir / "story.json"
     story = load_story_config(story_path) or {}
-    if "scenes" not in story or not isinstance(story["scenes"], dict):
-        story["scenes"] = {}
+    scenes_dict = _load_scenes_dict(story)
+    scene_id = _next_scene_id(scenes_dict)
     data = payload.model_dump(exclude_none=False)
     data.pop("id", None)  # id is derived, not stored in dict value
-    story["scenes"][scene_id] = data
+    scenes_dict[scene_id] = data
+    story["scenes"] = scenes_dict
     save_story_config(story_path, story)
-    scene = _normalise_scene({"id": scene_id, **payload.model_dump(exclude_none=False)})
+    scene = _normalise_scene({"id": scene_id, **data})
     _attach_stale_flags([scene], project_dir)
     return scene
 
 
 def update_scene(
-    project_dir: Path, scene_id: str, payload: SceneUpdateRequest
+    project_dir: Path, scene_id: SceneId, payload: SceneUpdateRequest
 ) -> dict[str, Any] | None:
     """Apply a partial update to a scene; returns the updated scene or None."""
     story_path = project_dir / "story.json"
     story = load_story_config(story_path) or {}
-    scenes_dict: dict[str, Any] = {}
-
-    # Normalise storage format to dict
-    raw = story.get("scenes", {})
-    if isinstance(raw, dict):
-        scenes_dict = raw
-    elif isinstance(raw, list):
-        scenes_dict = {
-            s.get("id", ""): {k: v for k, v in s.items() if k != "id"} for s in raw
-        }
+    scenes_dict = _load_scenes_dict(story)
 
     if scene_id not in scenes_dict:
         return None
@@ -408,46 +419,32 @@ def update_scene(
     return result
 
 
-def delete_scene(project_dir: Path, scene_id: str) -> bool:
+def delete_scene(project_dir: Path, scene_id: SceneId) -> bool:
     """Delete a scene by ID.  Returns True if deleted, False if not found."""
     story_path = project_dir / "story.json"
     story = load_story_config(story_path) or {}
-    scenes_raw = story.get("scenes", {})
-    deleted = False
+    scenes_dict = _load_scenes_dict(story)
 
-    if isinstance(scenes_raw, dict):
-        if scene_id in scenes_raw:
-            del scenes_raw[scene_id]
-            deleted = True
-            for sid, data in scenes_raw.items():
-                data["order_before"] = [
-                    s for s in data.get("order_before", []) if s != scene_id
-                ]
-                data["order_after"] = [
-                    s for s in data.get("order_after", []) if s != scene_id
-                ]
-            story["scenes"] = scenes_raw
-    elif isinstance(scenes_raw, list):
-        original_len = len(scenes_raw)
-        scenes_raw = [s for s in scenes_raw if s.get("id") != scene_id]
-        deleted = len(scenes_raw) < original_len
-        for scene in scenes_raw:
-            scene["order_before"] = [
-                s for s in scene.get("order_before", []) if s != scene_id
-            ]
-            scene["order_after"] = [
-                s for s in scene.get("order_after", []) if s != scene_id
-            ]
-        story["scenes"] = scenes_raw
+    if scene_id not in scenes_dict:
+        return False
 
-    if deleted:
-        save_story_config(story_path, story)
-    return deleted
+    del scenes_dict[scene_id]
+    for data in scenes_dict.values():
+        data["order_before"] = [
+            s for s in _coerce_scene_id_list(data.get("order_before")) if s != scene_id
+        ]
+        data["order_after"] = [
+            s for s in _coerce_scene_id_list(data.get("order_after")) if s != scene_id
+        ]
+
+    story["scenes"] = scenes_dict
+    save_story_config(story_path, story)
+    return True
 
 
 def update_prose_link_hash(
     project_dir: Path,
-    scene_id: str,
+    scene_id: SceneId,
     beat_id: str | None,
     link: SceneProseLink,
 ) -> SceneProseLink:
@@ -458,10 +455,8 @@ def update_prose_link_hash(
 
     story_path = project_dir / "story.json"
     story = load_story_config(story_path) or {}
-    scenes_raw = story.get("scenes", {})
-    if not isinstance(scenes_raw, dict):
-        return updated
-    scene_data = scenes_raw.get(scene_id)
+    scenes_dict = _load_scenes_dict(story)
+    scene_data = scenes_dict.get(scene_id)
     if scene_data is None:
         return updated
     if beat_id:
@@ -471,23 +466,38 @@ def update_prose_link_hash(
                 break
     else:
         scene_data["prose_link"] = updated.model_dump()
+    story["scenes"] = scenes_dict
     save_story_config(story_path, story)
     return updated
 
 
-def _load_scenes_dict(story: dict[str, Any]) -> dict[str, Any]:
-    """Return the scenes as a plain dict keyed by scene-ID (normalises list storage)."""
+def _load_scenes_dict(story: dict[str, Any]) -> dict[SceneId, Any]:
+    """Return the scenes as a plain dict keyed by numeric scene ID."""
     raw = story.get("scenes", {})
     if isinstance(raw, dict):
-        return raw
+        scenes: dict[SceneId, Any] = {}
+        for raw_id, scene_data in raw.items():
+            scene_id = _coerce_scene_id(raw_id)
+            if scene_id is None or not isinstance(scene_data, dict):
+                continue
+            scenes[scene_id] = {k: v for k, v in scene_data.items() if k != "id"}
+        return scenes
     if isinstance(raw, list):
-        return {s.get("id", ""): {k: v for k, v in s.items() if k != "id"} for s in raw}
+        scenes = {}
+        for scene_data in raw:
+            if not isinstance(scene_data, dict):
+                continue
+            scene_id = _coerce_scene_id(scene_data.get("id"))
+            if scene_id is None:
+                continue
+            scenes[scene_id] = {k: v for k, v in scene_data.items() if k != "id"}
+        return scenes
     return {}
 
 
 def link_prose(
     project_dir: Path,
-    target_scene_id: str,
+    target_scene_id: SceneId,
     request: SceneLinkProseRequest,
 ) -> list[dict[str, Any]]:
     """Assign a prose range to *target_scene_id*, adjusting any overlapping scenes.
@@ -514,7 +524,7 @@ def link_prose(
     story = load_story_config(story_path) or {}
     scenes_dict = _load_scenes_dict(story)
 
-    modified_ids: list[str] = []
+    modified_ids: list[SceneId] = []
 
     for scene_id, scene_data in scenes_dict.items():
         if scene_id == target_scene_id:
@@ -590,7 +600,7 @@ def link_prose(
 
 def update_prose_content(
     project_dir: Path,
-    scene_id: str,
+    scene_id: SceneId,
     new_text: str,
 ) -> dict[str, Any] | None:
     """Replace the prose at a scene's linked offsets with *new_text*.
@@ -760,7 +770,7 @@ def reorder_scene_prose(
         if not content_path.exists():
             raise ValueError("Cannot resolve content path for the selected scope")
 
-        scene_text_by_id: dict[str, str] = {}
+        scene_text_by_id: dict[SceneId, str] = {}
         for entry in linked_in_scope:
             scene_text_by_id[entry["scene_id"]] = original_content[
                 entry["start"] : entry["end"]
@@ -775,7 +785,7 @@ def reorder_scene_prose(
         scope_start = linked_in_scope[0]["start"]
         scope_end = linked_in_scope[-1]["end"]
         rebuilt_text_parts: list[str] = []
-        next_links: dict[str, dict[str, Any]] = {}
+        next_links: dict[SceneId, dict[str, Any]] = {}
         cursor = scope_start
 
         for index, entry in enumerate(reordered):
@@ -805,8 +815,8 @@ def reorder_scene_prose(
         _write_text_atomic(content_path, rebuilt_content)
 
         updated_hash = _compute_file_hash(content_path)
-        modified_ids: list[str] = []
-        original_scene_data: dict[str, dict[str, Any]] = {}
+        modified_ids: list[SceneId] = []
+        original_scene_data: dict[SceneId, dict[str, Any]] = {}
         try:
             for entry in reordered:
                 scene_id = entry["scene_id"]
@@ -900,8 +910,8 @@ def reorder_scene_prose(
         source_hash = _compute_file_hash(source_path)
         target_hash = _compute_file_hash(target_path)
 
-        updated_ids: set[str] = set()
-        original_scene_data: dict[str, dict[str, Any]] = {}
+        updated_ids: set[SceneId] = set()
+        original_scene_data: dict[SceneId, dict[str, Any]] = {}
 
         for entry in source_scope_entries:
             scene_id = entry["scene_id"]

@@ -15,7 +15,7 @@
 import { useCallback, useRef } from 'react';
 import { create, StoreApi } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
-import type { Chapter, Scene, StoryState, SourcebookEntry } from '../types';
+import type { Chapter, Scene, SceneId, StoryState, SourcebookEntry } from '../types';
 import type { StoryHistoryEntry } from '../features/story/historyUtils';
 
 // ---------------------------------------------------------------------------
@@ -67,7 +67,7 @@ export interface StoryStoreState {
   setIsChapterLoading: (loading: boolean) => void;
   patchSourcebookEntry: (entry: SourcebookEntry | null, entryId?: string) => boolean;
   /** Upsert or remove a scene in the store without going through history. */
-  patchScene: (scene: Scene | null, sceneId?: string) => boolean;
+  patchScene: (scene: Scene | null, sceneId?: SceneId) => boolean;
 
   /** Atomically update story + history + baseline in a single state write. */
   pushHistoryState: (params: {
@@ -257,7 +257,7 @@ export const useStoryStore = create<StoryStoreState>()(
       return true;
     },
 
-    patchScene: (scene: Scene | null, sceneId?: string): boolean => {
+    patchScene: (scene: Scene | null, sceneId?: SceneId): boolean => {
       const prev = get().story.scenes ?? [];
       let next: Scene[];
       if (scene === null) {
@@ -457,7 +457,7 @@ export function useScenes(): Scene[] {
 }
 
 /** Subscribe to a single scene by ID. */
-export function useSceneById(id: string): Scene | undefined {
+export function useSceneById(id: SceneId): Scene | undefined {
   return useStoryStore((s: StoryStoreState): Scene | undefined =>
     (s.story.scenes ?? EMPTY_SCENES).find((sc: Scene) => sc.id === id)
   );

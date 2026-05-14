@@ -22,6 +22,7 @@ import type { PromptsState } from '../settings/usePrompts';
 import type { ChatToolExecutionResponse } from '../../services/apiTypes';
 import { useChatStore, ChatStoreState } from '../../stores/chatStore';
 import { useStoryStore } from '../../stores/storyStore';
+import type { SceneId } from '../../types';
 
 type CurrentChapterContext = {
   id: string;
@@ -57,7 +58,7 @@ type UseAppChatRuntimeParams = {
   ) => Promise<'stop' | 'continue' | 'unlimited'>;
   handleChapterSelect: (chapterId: string | null) => void;
   openAndExpandStory: () => void;
-  openSceneEditorDialog: (sceneId: string) => void;
+  openSceneEditorDialog: (sceneId: SceneId) => void;
   openSourcebookEntryDialog: (entryId: string) => void;
   openStoryMetadataDialog: (tab?: MetadataTab) => void;
   openChapterMetadataDialog: (chapterId: string, initialTab?: MetadataTab) => void;
@@ -86,7 +87,7 @@ type ToolMutationPayload = ChatToolExecutionResponse & {
 type MutationNavigationCallbacks = {
   handleChapterSelect: (chapterId: string | null) => void;
   openAndExpandStory: () => void;
-  openSceneEditorDialog: (sceneId: string) => void;
+  openSceneEditorDialog: (sceneId: SceneId) => void;
   openSourcebookEntryDialog: (entryId: string) => void;
   openStoryMetadataDialog: (tab?: MetadataTab) => void;
   openChapterMetadataDialog: (chapterId: string, initialTab?: MetadataTab) => void;
@@ -111,7 +112,10 @@ export function handleSessionMutationClick(
     openAndExpandStory();
     handleChapterSelect(null);
     if (mutation.targetId) {
-      openSceneEditorDialog(mutation.targetId);
+      const sceneId = Number(mutation.targetId);
+      if (Number.isInteger(sceneId)) {
+        openSceneEditorDialog(sceneId);
+      }
     }
   } else if (mutation.type === 'story') {
     openAndExpandStory();
