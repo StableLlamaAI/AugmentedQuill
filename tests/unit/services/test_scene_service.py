@@ -97,6 +97,13 @@ class TestSceneCRUD:
         assert scenes[0]["id"] == scene["id"]
         assert scenes[1]["id"] == second_scene["id"]
 
+    def test_create_rejects_self_referential_ordering(self, project_dir: Path) -> None:
+        with pytest.raises(ValueError, match="cannot reference itself"):
+            create_scene(
+                project_dir,
+                SceneCreateRequest(summary="Self ref", order_before=[1]),
+            )
+
     def test_get_single_scene(self, project_dir: Path) -> None:
         created = create_scene(project_dir, SceneCreateRequest(summary="Fetched"))
         fetched = get_scene(project_dir, created["id"])
@@ -118,6 +125,15 @@ class TestSceneCRUD:
         assert updated["status"] == "inactive"
         # Unchanged fields survive
         assert updated["id"] == scene["id"]
+
+    def test_update_rejects_self_referential_ordering(self, project_dir: Path) -> None:
+        scene = create_scene(project_dir, SceneCreateRequest(summary="Original"))
+        with pytest.raises(ValueError, match="cannot reference itself"):
+            update_scene(
+                project_dir,
+                scene["id"],
+                SceneUpdateRequest(order_after=[scene["id"]]),
+            )
 
     def test_create_scene_normalizes_scene_time_date_only(
         self, project_dir: Path

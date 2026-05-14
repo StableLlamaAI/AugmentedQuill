@@ -98,6 +98,87 @@ def _simplify_schema(schema: Any) -> Any:
     return result
 
 
+def _inline_local_refs(schema: dict[str, Any]) -> dict[str, Any]:
+    """Inline local #/$defs references so tool schemas stay direct and LLM-friendly."""
+
+    defs = schema.get("$defs", {}) if isinstance(schema, dict) else {}
+
+    def _walk(node: Any, stack: tuple[str, ...] = ()) -> Any:
+        if isinstance(node, dict):
+            ref = node.get("$ref")
+            if isinstance(ref, str) and ref.startswith("#/$defs/"):
+                key = ref.split("#/$defs/", 1)[1]
+                if key in stack:
+                    # Cycle fallback: keep original node to avoid infinite expansion.
+                    return {k: _walk(v, stack) for k, v in node.items() if k != "$defs"}
+                target = defs.get(key)
+                if isinstance(target, dict):
+                    merged = deepcopy(target)
+                    for k, v in node.items():
+                        if k == "$ref":
+                            continue
+                        merged[k] = v
+                    return _walk(merged, stack + (key,))
+
+            return {k: _walk(v, stack) for k, v in node.items() if k != "$defs"}
+
+        if isinstance(node, list):
+            return [_walk(item, stack) for item in node]
+
+        return node
+
+    inlined = _walk(schema)
+    if isinstance(inlined, dict):
+        inlined.pop("$defs", None)
+        return inlined
+    return schema
+
+
+def _resolve_active_project_type() -> str | None:
+    """Resolve the active project type for runtime tool gating."""
+    from augmentedquill.core.config import load_story_config
+    from augmentedquill.services.projects.projects import get_active_project_dir
+
+    active = get_active_project_dir()
+    if not active:
+        return None
+    story = load_story_config(active / "story.json") or {}
+    project_type = story.get("project_type")
+    return str(project_type) if isinstance(project_type, str) and project_type else None
+
+
+def _project_type_error_payload(
+    name: str, current_project_type: str, allowed_project_types: tuple[str, ...]
+) -> dict[str, Any]:
+    """Build a clear error payload when a tool is called in the wrong project context."""
+    message_by_tool = {
+        "create_new_chapter": (
+            "Cannot create a chapter in a short-story project. "
+            "Short-story projects use a single content file and do not allow chapter creation."
+        ),
+        "create_new_book": (
+            "Cannot create a book in this project type. "
+            "Book creation is only allowed for series projects."
+        ),
+    }
+    message = message_by_tool.get(
+        name,
+        (
+            f"Tool '{name}' is not allowed for project type '{current_project_type}'. "
+            f"Allowed project types: {', '.join(allowed_project_types)}."
+        ),
+    )
+    return {
+        "error": "Tool unavailable for project type",
+        "message": message,
+        "details": {
+            "tool": name,
+            "project_type": current_project_type,
+            "allowed_project_types": list(allowed_project_types),
+        },
+    }
+
+
 def _sanitize_validation_details(details: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Strip oversized raw input values from validation details."""
     sanitized: list[dict[str, Any]] = []
@@ -179,7 +260,7 @@ def chat_tool(
                 f"Tool function {tool_name} 'params' must be annotated with a Pydantic BaseModel"
             )
 
-        schema = _simplify_schema(params_type.model_json_schema())
+        schema = _inline_local_refs(_simplify_schema(params_type.model_json_schema()))
         tool_def = {
             "type": "function",
             "function": {
@@ -190,7 +271,6 @@ def chat_tool(
                     "properties": schema.get("properties", {}),
                     "required": schema.get("required", []),
                     "additionalProperties": False,
-                    "$defs": schema.get("$defs", {}),
                 },
             },
         }
@@ -478,6 +558,24 @@ async def execute_registered_tool(
                 },
             },
         )
+
+    info = _TOOL_REGISTRY.get(name)
+    allowed_project_types = tuple(info.get("project_types") or ()) if info else ()
+    if allowed_project_types:
+        current_project_type = _resolve_active_project_type()
+        if (
+            isinstance(current_project_type, str)
+            and current_project_type not in allowed_project_types
+        ):
+            return _tool_message(
+                name,
+                call_id,
+                _project_type_error_payload(
+                    name,
+                    current_project_type=current_project_type,
+                    allowed_project_types=allowed_project_types,
+                ),
+            )
 
     try:
         return await tool_fn(args_obj, call_id, payload, mutations)

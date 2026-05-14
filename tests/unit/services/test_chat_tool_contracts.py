@@ -159,6 +159,13 @@ class ChatToolContractsTest(TestCase):
             synonyms=["The Hero"],
         )
 
+    def _set_project_type(self, project_type: str) -> None:
+        pdir = self.projects_root / "tool_contracts"
+        story_path = pdir / "story.json"
+        story = json.loads(story_path.read_text(encoding="utf-8"))
+        story["project_type"] = project_type
+        story_path.write_text(json.dumps(story), encoding="utf-8")
+
     def _tool_names(self):
         return [t["function"]["name"] for t in get_story_tools()]
 
@@ -249,17 +256,12 @@ class ChatToolContractsTest(TestCase):
         )
         self.assertIsNotNone(tool, "manage_scenes schema should exist")
 
-        update_ref = (
+        update_schema = (
             tool.get("function", {})
             .get("parameters", {})
             .get("properties", {})
             .get("update_data", {})
-            .get("$ref")
         )
-        self.assertTrue(update_ref)
-
-        defs = tool.get("function", {}).get("parameters", {}).get("$defs", {})
-        update_schema = defs.get("ManageScenesUpdateData", {})
         update_props = update_schema.get("properties", {})
         self.assertIn("summary_patch", update_props)
         self.assertIn("active_characters_patch", update_props)
@@ -272,6 +274,21 @@ class ChatToolContractsTest(TestCase):
         scene_time_description = scene_time_schema.get("description", "")
         self.assertIn("ISO 8601 datetime string", scene_time_description)
         self.assertIn("gracefully normalized", scene_time_description)
+
+    def test_registered_tool_schemas_inline_refs_and_omit_defs(self):
+        tools = get_registered_tool_schemas(model_type="CHAT", project_type="series")
+
+        def _assert_no_ref_or_defs(value):
+            if isinstance(value, dict):
+                self.assertNotIn("$ref", value)
+                self.assertNotIn("$defs", value)
+                for nested in value.values():
+                    _assert_no_ref_or_defs(nested)
+            elif isinstance(value, list):
+                for nested in value:
+                    _assert_no_ref_or_defs(nested)
+
+        _assert_no_ref_or_defs(tools)
 
     def test_manage_scenes_update_applies_partial_patches(self):
         created = self._call_tool(
@@ -419,6 +436,101 @@ class ChatToolContractsTest(TestCase):
         self.assertEqual(
             scene_time.get("temporal_zoned_datetime"), "1985-11-05T12:00:00Z"
         )
+
+    def test_manage_scenes_create_rejects_self_referential_ordering(self):
+        content = self._call_tool(
+            "manage_scenes",
+            {
+                "action": "create",
+                "create_data": {
+                    "summary": "Self-ref",
+                    "order_before": [1],
+                },
+            },
+            model_type="CHAT",
+        )
+
+        self.assertEqual(content.get("error"), "Invalid scene ordering")
+        self.assertIn("cannot reference itself", (content.get("message") or "").lower())
+
+    def test_manage_scenes_update_rejects_self_referential_ordering(self):
+        created = self._call_tool(
+            "manage_scenes",
+            {
+                "action": "create",
+                "create_data": {"summary": "Base"},
+            },
+            model_type="CHAT",
+        )
+        scene_id = created.get("id")
+        self.assertTrue(scene_id)
+
+        content = self._call_tool(
+            "manage_scenes",
+            {
+                "action": "update",
+                "scene_id": scene_id,
+                "update_data": {
+                    "order_after": [scene_id],
+                },
+            },
+            model_type="CHAT",
+        )
+
+        self.assertEqual(content.get("error"), "Invalid scene ordering")
+        self.assertIn("cannot reference itself", (content.get("message") or "").lower())
+
+    def test_manage_story_core_conflicts_patch_schema_guides_indexed_updates(self):
+        tools = get_registered_tool_schemas(model_type="CHAT", project_type="series")
+        tool = next(
+            (t for t in tools if t["function"]["name"] == "manage_story_core"),
+            None,
+        )
+        self.assertIsNotNone(tool, "manage_story_core schema should exist")
+
+        update_data = (
+            tool.get("function", {})
+            .get("parameters", {})
+            .get("properties", {})
+            .get("update_data", {})
+        )
+        conflicts_patch = (update_data.get("properties", {}) or {}).get(
+            "conflicts_patch", {}
+        )
+        description = conflicts_patch.get("description", "")
+        self.assertIn("append new conflict", description)
+        self.assertIn("index:<0-based>", description)
+
+    def test_manage_story_core_conflicts_patch_invalid_update_has_actionable_error(
+        self,
+    ):
+        content = self._call_tool(
+            "manage_story_core",
+            {
+                "action": "update_metadata",
+                "update_data": {
+                    "conflicts_patch": {
+                        "operations": [
+                            {
+                                "op": "update",
+                                "conflict": {
+                                    "description": "d",
+                                    "resolution": "r",
+                                },
+                            }
+                        ]
+                    }
+                },
+            },
+            model_type="CHAT",
+        )
+
+        self.assertEqual(content.get("error"), "Invalid parameters")
+        details = content.get("details") or []
+        self.assertTrue(details)
+        message = str(details[0].get("msg", ""))
+        self.assertIn("To append a new conflict", message)
+        self.assertIn("provide both index and updates", message)
 
     def test_manager_action_enums_are_role_filtered_for_editing(self):
         tools = {
@@ -868,6 +980,58 @@ class ChatToolContractsTest(TestCase):
             model_type="CHAT",
         )
         self.assertEqual(content.get("error"), "Tool unavailable for model role")
+
+    def test_create_new_chapter_rejected_in_short_story_project(self):
+        self._set_project_type("short-story")
+
+        content = self._call_tool(
+            "create_new_chapter",
+            {"title": "Should fail"},
+            model_type="CHAT",
+        )
+
+        self.assertEqual(content.get("error"), "Tool unavailable for project type")
+        self.assertIn(
+            "Cannot create a chapter in a short-story project",
+            content.get("message", ""),
+        )
+
+    def test_create_new_book_rejected_in_non_series_projects(self):
+        for project_type in ("short-story", "novel"):
+            self._set_project_type(project_type)
+            content = self._call_tool(
+                "create_new_book",
+                {"title": "Should fail"},
+                model_type="CHAT",
+            )
+            self.assertEqual(
+                content.get("error"),
+                "Tool unavailable for project type",
+            )
+            self.assertIn(
+                "Book creation is only allowed for series projects",
+                content.get("message", ""),
+            )
+
+    def test_series_only_tools_reject_wrong_project_context(self):
+        self._set_project_type("novel")
+
+        series_only_calls = [
+            ("get_book_metadata", {"book_id": self.book_id}),
+            ("update_book_metadata", {"book_id": self.book_id, "title": "X"}),
+            ("read_book_content", {"book_id": self.book_id}),
+            ("write_book_content", {"book_id": self.book_id, "content": "X"}),
+            ("delete_book", {"book_id": self.book_id, "confirm": True}),
+        ]
+
+        for tool_name, args in series_only_calls:
+            model_type = self._tool_role_for_execution(tool_name)
+            content = self._call_tool(tool_name, args, model_type=model_type)
+            self.assertEqual(
+                content.get("error"),
+                "Tool unavailable for project type",
+                f"Expected project-type rejection for {tool_name}: {content}",
+            )
 
     def test_all_tools_have_successful_execution_path(self):
         async def fake_generate_summary(**kwargs):

@@ -855,6 +855,7 @@ async def continue_chapter(
     description="Create a new chapter with an optional title and book_id.",
     allowed_roles=(CHAT_ROLE,),
     capability="metadata-write",
+    project_types=("novel", "series"),
 )
 async def create_new_chapter(
     params: CreateNewChapterParams, payload: dict, mutations: dict

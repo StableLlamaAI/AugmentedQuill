@@ -157,7 +157,12 @@ class ManageStoryCoreUpdateData(BaseModel):
     )
     conflicts_patch: ConflictListPatch | None = Field(
         None,
-        description="Optional ordered operations for partial conflict updates.",
+        description=(
+            "Optional ordered operations for partial conflict updates. "
+            "Use index-based operations: append new conflict with {conflict:{...}} (no index), "
+            "update existing with {index:<0-based>, updates:{...}}, replace existing with "
+            "{index:<0-based>, conflict:{...}}, and remove with {index:<0-based>}."
+        ),
     )
 
 
@@ -235,7 +240,9 @@ class ManageScratchpadParams(BaseModel):
         "metadata, action='update_metadata' to patch title/summary/notes/tags/conflicts "
         "(requires update_data), action='read_content' to read story-level prose "
         "(optional read_data), and action='sync_summary' to regenerate summary "
-        "(optional sync_data.mode)."
+        "(optional sync_data.mode). For update_data.conflicts_patch: this is index-based. "
+        "To append a new conflict, use operations:[{conflict:{description:'...',resolution:'...'}}]. "
+        "To update an existing conflict, use operations:[{index:0, updates:{resolution:'...'}}]."
     ),
     allowed_roles=(CHAT_ROLE, EDITING_ROLE),
     capability="metadata-read",

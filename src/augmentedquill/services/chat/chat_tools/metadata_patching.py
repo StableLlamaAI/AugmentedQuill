@@ -92,20 +92,30 @@ class ConflictPatchOperation(BaseModel):
             "Operation type. Inferred automatically when omitted: "
             "updates present → 'update'; conflict present with index → 'replace'; "
             "conflict present without index → 'add'; only index present → 'remove'. "
-            "Must be set explicitly for 'insert' and 'clear'."
+            "Must be set explicitly for 'insert' and 'clear'. "
+            "IMPORTANT: 'update' requires both index and updates (not conflict)."
         ),
     )
     index: int | None = Field(
         None,
-        description="0-based conflict list index. Required for insert/replace/update/remove.",
+        description=(
+            "0-based conflict list index. Required for insert/replace/update/remove. "
+            "For append/add, omit index."
+        ),
     )
     conflict: dict[str, Any] | None = Field(
         None,
-        description="Conflict payload for add/insert/replace operations.",
+        description=(
+            "Conflict payload for add/insert/replace operations. "
+            "Use this to append a new conflict object (usually without index)."
+        ),
     )
     updates: dict[str, Any] | None = Field(
         None,
-        description="Fields to merge into the existing conflict for update operations.",
+        description=(
+            "Fields to merge into an existing conflict for update operations. "
+            "Requires index to identify which conflict to update."
+        ),
     )
 
     @model_validator(mode="before")
@@ -135,7 +145,11 @@ class ConflictPatchOperation(BaseModel):
                 "provide op explicitly (add/insert/replace/update/remove/clear)"
             )
         if self.op in ("insert", "replace", "update", "remove") and self.index is None:
-            raise ValueError("index is required for insert/replace/update/remove")
+            raise ValueError(
+                "index is required for insert/replace/update/remove. "
+                "To append a new conflict, omit index and use conflict with op='add' "
+                "(or omit op to infer add). For update, provide both index and updates."
+            )
         if self.op in ("add", "insert", "replace") and self.conflict is None:
             raise ValueError("conflict is required for add/insert/replace")
         if self.op == "update" and self.updates is None:
@@ -150,7 +164,8 @@ class ConflictListPatch(BaseModel):
         ...,
         description=(
             "Ordered index-based operations to apply to the conflicts list. "
-            "Use numeric index for update/insert/replace/remove operations."
+            "Use numeric index for update/insert/replace/remove operations. "
+            "Examples: append -> {conflict:{...}}; update existing -> {index:0, updates:{resolution:'...'}}."
         ),
     )
 

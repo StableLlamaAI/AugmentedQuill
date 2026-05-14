@@ -277,6 +277,20 @@ def _next_scene_id(scenes_dict: dict[SceneId, Any]) -> SceneId:
     return max(scenes_dict.keys(), default=0) + 1
 
 
+def _validate_scene_ordering_constraints(
+    scene_id: SceneId,
+    order_before: object,
+    order_after: object,
+) -> None:
+    """Reject invalid ordering constraints that reference the same scene."""
+    before_ids = _coerce_scene_id_list(order_before)
+    after_ids = _coerce_scene_id_list(order_after)
+    if scene_id in before_ids or scene_id in after_ids:
+        raise ValueError(
+            f"Scene {scene_id} cannot reference itself in order_before/order_after"
+        )
+
+
 def _normalise_scene(raw: dict[str, Any]) -> dict[str, Any]:
     """Ensure default fields exist on a raw scene dict read from disk."""
     scene_id = _coerce_scene_id(raw.get("id"))
@@ -389,6 +403,11 @@ def create_scene(project_dir: Path, payload: SceneCreateRequest) -> dict[str, An
     scene_id = _next_scene_id(scenes_dict)
     data = payload.model_dump(exclude_none=False)
     data.pop("id", None)  # id is derived, not stored in dict value
+    _validate_scene_ordering_constraints(
+        scene_id,
+        data.get("order_before"),
+        data.get("order_after"),
+    )
     scenes_dict[scene_id] = data
     story["scenes"] = scenes_dict
     save_story_config(story_path, story)
@@ -411,6 +430,11 @@ def update_scene(
     existing = scenes_dict[scene_id]
     updates = payload.model_dump(exclude_unset=True)
     existing.update(updates)
+    _validate_scene_ordering_constraints(
+        scene_id,
+        existing.get("order_before"),
+        existing.get("order_after"),
+    )
     scenes_dict[scene_id] = existing
     story["scenes"] = scenes_dict
     save_story_config(story_path, story)

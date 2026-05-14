@@ -2028,6 +2028,10 @@ class ChatToolsTest(TestCase):
 
     def test_update_book_metadata_missing_book_returns_error(self):
         self._bootstrap_project()
+        story_path = self.projects_root / "demo" / "story.json"
+        story_data = json.loads(story_path.read_text(encoding="utf-8"))
+        story_data["project_type"] = "series"
+        story_path.write_text(json.dumps(story_data), encoding="utf-8")
         result = self._post_single_tool(
             "update_book_metadata",
             {

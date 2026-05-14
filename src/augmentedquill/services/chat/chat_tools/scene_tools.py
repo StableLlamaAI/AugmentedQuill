@@ -196,7 +196,23 @@ async def manage_scenes(
     if params.action == "create":
         if params.create_data is None:
             return {"error": "create_data is required when action='create'."}
-        created = create_scene(active, params.create_data)
+        try:
+            created = create_scene(active, params.create_data)
+        except ValueError as exc:
+            message = str(exc)
+            if "cannot reference itself in order_before/order_after" in message:
+                return {
+                    "error": "Invalid scene ordering",
+                    "message": (
+                        "A scene cannot reference itself in order_before/order_after. "
+                        "Remove that ID from ordering lists and reference only other existing scenes."
+                    ),
+                    "details": {"reason": message},
+                }
+            return {
+                "error": "Invalid scene data",
+                "message": message,
+            }
         mutations["story_changed"] = True
         return created
 
@@ -322,7 +338,23 @@ async def manage_scenes(
 
         update_payload = SceneUpdateRequest(**update_kwargs)
 
-        updated = update_scene(active, params.scene_id, update_payload)
+        try:
+            updated = update_scene(active, params.scene_id, update_payload)
+        except ValueError as exc:
+            message = str(exc)
+            if "cannot reference itself in order_before/order_after" in message:
+                return {
+                    "error": "Invalid scene ordering",
+                    "message": (
+                        "A scene cannot reference itself in order_before/order_after. "
+                        "Use IDs of other scenes only."
+                    ),
+                    "details": {"scene_id": params.scene_id, "reason": message},
+                }
+            return {
+                "error": "Invalid scene update",
+                "message": message,
+            }
         if updated is None:
             return {"error": f"Scene '{params.scene_id}' not found"}
         mutations["story_changed"] = True
