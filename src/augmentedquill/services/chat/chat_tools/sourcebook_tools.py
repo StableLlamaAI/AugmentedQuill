@@ -123,8 +123,11 @@ class ManageSourcebookEntryData(BaseModel):
     origin_date: str | None = Field(
         None,
         description=(
-            "Optional ISO 8601 birth or creation date for this entry (e.g. '1985-11-05'). "
-            "Used to compute the entry's personal timeline age at each scene it appears in."
+            "Optional ISO 8601 birth or creation date for this entry. "
+            "RECOMMENDED FORMAT: ISO 8601 date (e.g. '1985-11-05') or full datetime (e.g. '1985-11-05T12:00:00Z'). "
+            "ALSO ACCEPTED: time-only ('14:30' or '14:30:45' → uses today's date), or date with time and timezone. "
+            "Used to compute the entry's personal timeline age at each scene it appears in. "
+            "All forms are normalized and stored as complete ISO 8601 format."
         ),
     )
 
@@ -156,8 +159,11 @@ class ManageSourcebookUpdateData(BaseModel):
     origin_date: str | None = Field(
         None,
         description=(
-            "Optional ISO 8601 birth or creation date (e.g. '1985-11-05'). "
-            "Set to clear the existing value or provide a new one."
+            "Optional ISO 8601 birth or creation date. "
+            "RECOMMENDED FORMAT: ISO 8601 date (e.g. '1985-11-05') or full datetime (e.g. '1985-11-05T12:00:00Z'). "
+            "ALSO ACCEPTED: time-only ('14:30' or '14:30:45' → uses today's date), or date with time and timezone. "
+            "Set to clear the existing value or provide a new one. "
+            "All forms are normalized and stored as complete ISO 8601 format."
         ),
     )
 

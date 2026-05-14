@@ -83,11 +83,16 @@ class ManageScenesUpdateData(BaseModel):
     scene_time: SceneChronologyTime | str | None = Field(
         None,
         description=(
-            "Optional scene chronology time. Accepted forms: "
-            "{'temporal_zoned_datetime': '1985-11-05T20:00:00Z'}, "
-            "{'value': '1985-11-05T20:00'}, or plain string '1985-11-05'. "
-            "Missing pieces are normalized automatically: date-only uses 12:00:00, "
-            "missing seconds become :00, and missing timezone defaults to Z (UTC)."
+            "Optional scene chronology time. "
+            "RECOMMENDED FORMAT: ISO 8601 datetime string with timezone (e.g., '1985-11-05T20:00:00Z' or '1985-11-05T14:30:00+05:30'). "
+            "ALSO ACCEPTED (gracefully normalized): "
+            "date-only ('1985-11-05' → uses 12:00:00 UTC), "
+            "date+time ('1985-11-05 14:30' → adds :00 seconds and UTC), "
+            "time-only ('14:30' or '14:30:45' → uses today's date, :00 seconds if omitted, UTC if no timezone), "
+            "time with timezone ('14:30+05:30' → uses today's date), "
+            "or dict forms {'temporal_zoned_datetime': 'ISO_STRING'} or {'value': 'SHORTHAND_STRING'}. "
+            "When date is omitted, the current date is used; missing seconds default to :00; missing timezone defaults to Z (UTC). "
+            "All forms are stored internally as complete ISO 8601 format."
         ),
     )
     color_tag: str | None = Field(
