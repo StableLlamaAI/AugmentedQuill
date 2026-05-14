@@ -2712,7 +2712,7 @@ export interface components {
      */
     Scene: {
       /** Id */
-      id: string;
+      id: number;
       /**
        * Summary
        * @default
@@ -2750,12 +2750,12 @@ export interface components {
        * Order Before
        * @default []
        */
-      order_before: string[];
+      order_before: number[];
       /**
        * Order After
        * @default []
        */
-      order_after: string[];
+      order_after: number[];
       /**
        * Pinboard X
        * @default 100
@@ -2835,12 +2835,12 @@ export interface components {
        * Order Before
        * @default []
        */
-      order_before: string[];
+      order_before: number[];
       /**
        * Order After
        * @default []
        */
-      order_after: string[];
+      order_after: number[];
       /**
        * Pinboard X
        * @default 100
@@ -2928,9 +2928,9 @@ export interface components {
      */
     SceneReorderProseRequest: {
       /** Source Scene Id */
-      source_scene_id: string;
+      source_scene_id: number;
       /** Target Scene Id */
-      target_scene_id: string;
+      target_scene_id: number;
       /**
        * Place Before
        * @default true
@@ -3018,9 +3018,9 @@ export interface components {
       color_tag?: string | null;
       prose_link?: components['schemas']['SceneProseLink'] | null;
       /** Order Before */
-      order_before?: string[] | null;
+      order_before?: number[] | null;
       /** Order After */
-      order_after?: string[] | null;
+      order_after?: number[] | null;
       /** Pinboard X */
       pinboard_x?: number | null;
       /** Pinboard Y */
@@ -6142,7 +6142,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
-        scene_id: string;
+        scene_id: number;
         /** @description Directory name of the project */
         project_name: string;
       };
@@ -6175,7 +6175,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
-        scene_id: string;
+        scene_id: number;
         /** @description Directory name of the project */
         project_name: string;
       };
@@ -6212,7 +6212,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
-        scene_id: string;
+        scene_id: number;
         /** @description Directory name of the project */
         project_name: string;
       };
@@ -6243,7 +6243,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
-        scene_id: string;
+        scene_id: number;
         /** @description Directory name of the project */
         project_name: string;
       };
@@ -6280,7 +6280,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
-        scene_id: string;
+        scene_id: number;
         /** @description Directory name of the project */
         project_name: string;
       };
@@ -6353,7 +6353,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
-        scene_id: string;
+        scene_id: number;
         /** @description Directory name of the project */
         project_name: string;
       };
