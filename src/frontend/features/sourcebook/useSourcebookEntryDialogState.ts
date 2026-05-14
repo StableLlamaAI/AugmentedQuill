@@ -27,6 +27,7 @@ const CATEGORY_KEYS = [
   'Event',
   'Lore',
   'Other',
+  'Time Travel',
 ] as const;
 
 const DEFAULT_CATEGORY = CATEGORY_KEYS[0];
@@ -84,6 +85,10 @@ export interface UseSourcebookEntryDialogStateResult {
   category: string;
   synonyms: string[];
   newSynonym: string;
+  originDate: string | null;
+  destinationDatetime: string | null;
+  destinationRelative: string;
+  createsNewTimeline: boolean;
   images: string[];
   relations: SourcebookRelation[];
   isImagesExpanded: boolean;
@@ -108,6 +113,10 @@ export interface UseSourcebookEntryDialogStateResult {
   setCategory: Dispatch<SetStateAction<string>>;
   setSynonyms: Dispatch<SetStateAction<string[]>>;
   setNewSynonym: Dispatch<SetStateAction<string>>;
+  setOriginDate: Dispatch<SetStateAction<string | null>>;
+  setDestinationDatetime: Dispatch<SetStateAction<string | null>>;
+  setDestinationRelative: Dispatch<SetStateAction<string>>;
+  setCreatesNewTimeline: Dispatch<SetStateAction<boolean>>;
   setImages: Dispatch<SetStateAction<string[]>>;
   setRelations: Dispatch<SetStateAction<SourcebookRelation[]>>;
   setIsImagesExpanded: Dispatch<SetStateAction<boolean>>;
@@ -141,6 +150,10 @@ export const useSourcebookEntryDialogState = ({
   const [category, setCategory] = useState<string>(DEFAULT_CATEGORY);
   const [synonyms, setSynonyms] = useState<string[]>([]);
   const [newSynonym, setNewSynonym] = useState('');
+  const [originDate, setOriginDate] = useState<string | null>(null);
+  const [destinationDatetime, setDestinationDatetime] = useState<string | null>(null);
+  const [destinationRelative, setDestinationRelative] = useState<string>('');
+  const [createsNewTimeline, setCreatesNewTimeline] = useState<boolean>(false);
   const [images, setImages] = useState<string[]>([]);
   const [relations, setRelations] = useState<SourcebookRelation[]>([]);
   const [isImagesExpanded, setIsImagesExpanded] = useState(true);
@@ -201,6 +214,10 @@ export const useSourcebookEntryDialogState = ({
     );
     setCategory(initialState.category);
     setSynonyms(initialState.synonyms);
+    setOriginDate(entry?.origin_date ?? null);
+    setDestinationDatetime(entry?.destination_datetime ?? null);
+    setDestinationRelative(entry?.destination_relative ?? '');
+    setCreatesNewTimeline(entry?.creates_new_timeline ?? false);
     setImages(initialState.images);
     setRelations(initialState.relations);
 
@@ -230,6 +247,10 @@ export const useSourcebookEntryDialogState = ({
         // Cast: domain SourcebookRelation is structurally compatible with the
         // generated type; direction differs only in optional vs. nullable.
         relations: relations as SourcebookUpsertPayload['relations'],
+        origin_date: originDate ?? undefined,
+        destination_datetime: destinationDatetime ?? undefined,
+        destination_relative: destinationRelative || undefined,
+        creates_new_timeline: createsNewTimeline,
       });
       onClose();
     } finally {
@@ -282,6 +303,10 @@ export const useSourcebookEntryDialogState = ({
     category,
     synonyms,
     newSynonym,
+    originDate,
+    destinationDatetime,
+    destinationRelative,
+    createsNewTimeline,
     images,
     relations,
     isImagesExpanded,
@@ -306,6 +331,10 @@ export const useSourcebookEntryDialogState = ({
     setCategory,
     setSynonyms,
     setNewSynonym,
+    setOriginDate,
+    setDestinationDatetime,
+    setDestinationRelative,
+    setCreatesNewTimeline,
     setImages,
     setRelations,
     setIsImagesExpanded,

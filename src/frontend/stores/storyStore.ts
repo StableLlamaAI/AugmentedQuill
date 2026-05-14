@@ -225,16 +225,24 @@ export const useStoryStore = create<StoryStoreState>()(
         next = prev.filter((e: SourcebookEntry): boolean => e.id !== entryId);
         if (next.length === prev.length) return false;
       } else {
-        const idx = prev.findIndex((e: SourcebookEntry): boolean => e.id === entry.id);
+        const idx = prev.findIndex(
+          (e: SourcebookEntry): boolean =>
+            e.id === entry.id || (entryId !== undefined && e.id === entryId)
+        );
         if (idx >= 0) {
           const sig = (e: SourcebookEntry): string =>
             JSON.stringify({
+              id: e.id,
               name: e.name,
               description: e.description,
               category: e.category,
               synonyms: e.synonyms,
               images: e.images,
               relations: e.relations,
+              origin_date: e.origin_date,
+              destination_datetime: e.destination_datetime,
+              destination_relative: e.destination_relative,
+              creates_new_timeline: e.creates_new_timeline,
             });
           if (sig(prev[idx]) === sig(entry)) return false;
           next = [...prev];

@@ -167,6 +167,9 @@ export const en = {
     Category: 'Category',
     'Synonyms & Nicknames': 'Synonyms & Nicknames',
     'Add (+)': 'Add (+)',
+    'Origin Date': 'Origin Date',
+    'ISO date (birth/creation, e.g. 1955-11-05)':
+      'ISO date (birth/creation, e.g. 1955-11-05)',
     'Associated Images': 'Associated Images',
     'Manage Images': 'Manage Images',
     'No images associated': 'No images associated',
@@ -459,6 +462,8 @@ export const en = {
       'History, myths, magic systems, laws, or cultural rules.',
     "Anything that doesn't fit strictly into other categories.":
       "Anything that doesn't fit strictly into other categories.",
+    'Time travel events with departure, destination, and timeline branching.':
+      'Time travel events with departure, destination, and timeline branching.',
     this: 'this',
     'Delete Relation': 'Delete Relation',
     'This action is unavailable because no working WRITING model is configured.':
@@ -493,6 +498,9 @@ export const en = {
     Scenes: 'Scenes',
     Pinboard: 'Pinboard',
     Narrative: 'Narrative',
+    'Convergence Map': 'Convergence Map',
+    'No scenes with a defined in-universe date yet':
+      'No scenes with a defined in-universe date yet',
     'Add Scene': 'Add Scene',
     'Delete Scene': 'Delete Scene',
     'Are you sure you want to delete this scene?':
@@ -508,6 +516,26 @@ export const en = {
     Location: 'Location',
     Time: 'Time',
     'Color Tag': 'Color Tag',
+    'Time Travel Events': 'Time Travel Events',
+    'Add Time Travel Event': 'Add Time Travel Event',
+    'No time travel events in this scene.': 'No time travel events in this scene.',
+    'Event {{n}}': 'Event {{n}}',
+    'Delete time travel event': 'Delete time travel event',
+    'Affected Entries': 'Affected Entries',
+    'Travel Destination': 'Travel Destination',
+    'Set travel destination time': 'Set travel destination time',
+    'Relative Description': 'Relative Description',
+    'e.g. 30 years earlier': 'e.g. 30 years earlier',
+    'Set personal timeline position': 'Set personal timeline position',
+    'Set personal age at this scene': 'Set personal age at this scene',
+    'No age recorded': 'No age recorded',
+    'Main Timeline': 'Main Timeline',
+    'Enter age as years/months/days, e.g. 17y, 17y 3m, 5m 12d':
+      'Enter age as years/months/days, e.g. 17y, 17y 3m, 5m 12d',
+    'e.g. 17y 3m': 'e.g. 17y 3m',
+    'Time Travel': 'Time Travel',
+    'Creates new timeline': 'Creates new timeline',
+    'Set origin date (birth / creation)': 'Set origin date (birth / creation)',
     Status: 'Status',
     'Scene status': 'Scene status',
     active: 'active',

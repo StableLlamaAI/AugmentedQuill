@@ -217,6 +217,10 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
       category={state.category}
       synonyms={state.synonyms}
       newSynonym={state.newSynonym}
+      originDate={state.originDate}
+      destinationDatetime={state.destinationDatetime}
+      destinationRelative={state.destinationRelative}
+      createsNewTimeline={state.createsNewTimeline}
       images={state.images}
       relations={state.relations}
       relationNameMap={state.relationNameMap}
@@ -251,6 +255,10 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
       onSynonymInputChange={state.setNewSynonym}
       onAddSynonym={state.addSynonym}
       onRemoveSynonym={state.removeSynonym}
+      onOriginDateChange={state.setOriginDate}
+      onDestinationDatetimeChange={state.setDestinationDatetime}
+      onDestinationRelativeChange={state.setDestinationRelative}
+      onCreatesNewTimelineChange={state.setCreatesNewTimeline}
       onToggleImagesExpanded={(): void =>
         state.setIsImagesExpanded((value: boolean): boolean => !value)
       }

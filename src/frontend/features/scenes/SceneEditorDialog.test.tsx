@@ -22,7 +22,12 @@ import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import i18n from '../app/i18n';
 import { SceneEditorDialog } from './SceneEditorDialog';
 import { useScenes } from '../../stores/storyStore';
-import type { Scene, SceneProseLink, SourcebookEntry } from '../../types';
+import type {
+  Scene,
+  SceneProseLink,
+  SourcebookEntry,
+  SceneTagPersonalDatetime,
+} from '../../types';
 import { TemporalApi } from '../../utils/temporal';
 
 const { sourcebookEntriesState } = vi.hoisted(() => ({
@@ -816,5 +821,150 @@ describe('SceneEditorDialog delete cause', () => {
     });
 
     expect(onDeleteCause).toHaveBeenCalledOnce();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Age picker (tag_personal_datetimes)
+// ---------------------------------------------------------------------------
+
+describe('SceneEditorDialog age picker', () => {
+  const mockedUseScenes = vi.mocked(useScenes);
+
+  const aliceSbEntry: SourcebookEntry = {
+    id: 'Alice',
+    name: 'Alice',
+    synonyms: [],
+    description: 'Protagonist',
+    images: [],
+  };
+
+  /** A TT sourcebook entry that creates a new timeline. */
+  const ttEntry: SourcebookEntry = {
+    id: 'tt-jump-1',
+    name: 'The Jump',
+    synonyms: [],
+    description: 'Time travel event',
+    images: [],
+    category: 'Time Travel',
+    creates_new_timeline: true,
+  };
+
+  /**
+   * Two ISO-8601 datetimes to use so that sceneEarly has an epoch strictly
+   * before sceneLate, which is needed for activeBranchTimelines detection.
+   */
+  const EARLY_TIME = '2020-01-01T00:00:00+00:00[UTC]';
+  const LATE_TIME = '2025-06-01T00:00:00+00:00[UTC]';
+
+  beforeEach(() => {
+    sourcebookEntriesState.push(aliceSbEntry, ttEntry);
+  });
+
+  it('hides the age picker clock button when only one timeline exists', () => {
+    const scene = makeScene({ active_characters: ['Alice'] });
+    wrap(
+      <SceneEditorDialog
+        scene={scene}
+        isOpen
+        onClose={NOOP_CLOSE}
+        onSave={NOOP_SAVE}
+        onDelete={NOOP_DELETE}
+      />
+    );
+
+    // With no TT entries creating timelines active before this scene,
+    // the clock button must not be rendered.
+    const ageBtns = screen.queryAllByRole('button', { name: /Set personal age/i });
+    expect(ageBtns.length).toBe(0);
+  });
+
+  it('opens the age picker modal when the age clock icon is clicked (multi-timeline)', () => {
+    // Set up an earlier scene that references the TT entry, establishing a branch.
+    const sceneEarly = makeScene({
+      id: 'scene-early',
+      active_characters: ['Alice'],
+      sourcebook_entry_ids: ['tt-jump-1'],
+      scene_time: { temporal_zoned_datetime: EARLY_TIME },
+    });
+    mockedUseScenes.mockReturnValue([sceneEarly]);
+
+    const scene = makeScene({
+      id: 'scene-main',
+      active_characters: ['Alice'],
+      scene_time: { temporal_zoned_datetime: LATE_TIME },
+    });
+    wrap(
+      <SceneEditorDialog
+        scene={scene}
+        isOpen
+        onClose={NOOP_CLOSE}
+        onSave={NOOP_SAVE}
+        onDelete={NOOP_DELETE}
+      />
+    );
+
+    const ageBtns = screen.getAllByRole('button', { name: /Set personal age/i });
+    expect(ageBtns.length).toBeGreaterThan(0);
+    fireEvent.click(ageBtns[0]);
+
+    // Age picker dialog should appear
+    const pickerDialogs = screen.getAllByRole('dialog');
+    const agePicker = pickerDialogs.find((d: HTMLElement) =>
+      d.getAttribute('aria-label')?.includes('personal age')
+    );
+    expect(agePicker).toBeTruthy();
+  });
+
+  it('shows known ages as chips per timeline and allows selecting one', async () => {
+    const sceneEarly = makeScene({
+      id: 'scene-early',
+      active_characters: ['Alice'],
+      sourcebook_entry_ids: ['tt-jump-1'],
+      scene_time: { temporal_zoned_datetime: EARLY_TIME },
+      tag_personal_datetimes: [
+        { role: 'active', ref: 'Alice', index: 0, personal_age: '17y' },
+      ],
+    });
+    const sceneMain = makeScene({
+      id: 'scene-main',
+      active_characters: ['Alice'],
+      scene_time: { temporal_zoned_datetime: LATE_TIME },
+    });
+
+    mockedUseScenes.mockReturnValue([sceneEarly, sceneMain]);
+    const onSave = vi.fn<SceneSaveHandler>(async () => undefined);
+
+    wrap(
+      <SceneEditorDialog
+        scene={sceneMain}
+        isOpen
+        onClose={NOOP_CLOSE}
+        onSave={onSave}
+        onDelete={NOOP_DELETE}
+      />
+    );
+
+    // Open age picker for Alice
+    const ageBtns = screen.getAllByRole('button', { name: /Set personal age/i });
+    fireEvent.click(ageBtns[0]);
+
+    // Known age chip "17y" should appear (from the TT-branch timeline)
+    const chip = screen.getByRole('button', { name: '17y' });
+    fireEvent.click(chip);
+
+    // Save and verify the personal_age was set (chip click applies directly)
+    const saveBtn = screen.getByRole('button', { name: /^Save$/i });
+    await act(async () => {
+      fireEvent.click(saveBtn);
+    });
+
+    const arg = onSave.mock.calls[0][0] as Partial<Scene>;
+    const tagDt = arg.tag_personal_datetimes ?? [];
+    const aliceTag = tagDt.find(
+      (t: SceneTagPersonalDatetime) =>
+        t.role === 'active' && t.ref === 'Alice' && t.personal_age === '17y'
+    );
+    expect(aliceTag).toBeTruthy();
   });
 });

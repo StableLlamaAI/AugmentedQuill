@@ -179,6 +179,58 @@ describe('resolveExternalHistorySourceState', () => {
   });
 });
 
+it('patchSourcebook updates the reactive story store immediately', async () => {
+  vi.mocked(api.projects.list).mockResolvedValue({
+    available: [],
+    current: null,
+  } as Awaited<ReturnType<typeof api.projects.list>>);
+  vi.mocked(api.projects.select).mockResolvedValue({ ok: false } as Awaited<
+    ReturnType<typeof api.projects.select>
+  >);
+
+  const hook = await hookWithStory('initial', [buildChapter('1', 'Hello')]);
+
+  act(() => {
+    useStoryStore.getState().setStory(
+      (prev: StoryState): StoryState => ({
+        ...prev,
+        sourcebook: [
+          {
+            id: 'tt-1',
+            name: '1985 -> 1955',
+            description: 'Temporal jump',
+            category: 'Time Travel',
+            synonyms: [],
+            images: [],
+            destination_datetime: '1955-11-05T20:00:00Z',
+            creates_new_timeline: false,
+          },
+        ],
+      })
+    );
+  });
+
+  act(() => {
+    const changed = hook.result.current.patchSourcebook({
+      id: 'tt-1',
+      name: '1985 -> 1955',
+      description: 'Temporal jump',
+      category: 'Time Travel',
+      synonyms: [],
+      images: [],
+      destination_datetime: '2015-10-21T16:29:00Z',
+      creates_new_timeline: true,
+    });
+    expect(changed).toBe(true);
+  });
+
+  const updated = useStoryStore
+    .getState()
+    .story.sourcebook?.find((entry: SourcebookEntry): boolean => entry.id === 'tt-1');
+  expect(updated?.destination_datetime).toBe('2015-10-21T16:29:00Z');
+  expect(updated?.creates_new_timeline).toBe(true);
+});
+
 it('clears chat session mutation tags when undo is used', async () => {
   vi.mocked(api.projects.list).mockResolvedValue({
     available: [],

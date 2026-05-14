@@ -28,6 +28,7 @@ import type {
   StoryState,
   SuggestionGenerationMode,
 } from '../../types';
+import { useStoryStore } from '../../stores/storyStore';
 
 type AppHeaderProps = React.ComponentProps<typeof AppHeader>;
 type AppMainLayoutProps = React.ComponentProps<typeof AppMainLayout>;
@@ -161,7 +162,7 @@ export function useAppHeaderProps(params: UseAppHeaderPropsParams): AppHeaderPro
     nextRedoLabel,
     canUndo,
     canRedo,
-    openImagesDialog,
+    openImagesDialog: _openImagesDialog,
     setIsSettingsOpen,
     setIsImagesOpen,
     setIsDebugLogsOpen,
@@ -293,8 +294,6 @@ export function useAppMainLayoutProps(params: UseAppMainLayoutPropsParams): {
   // values rather than the whole params object (which is a new reference every
   // render and would defeat all memoization).
   const {
-    viewControls,
-    formatControls,
     isSidebarOpen,
     setIsSidebarOpen,
     currentChapterId,
@@ -392,7 +391,13 @@ export function useAppMainLayoutProps(params: UseAppMainLayoutPropsParams): {
         if (existsInBaseline) {
           advanceBaselineToCurrentStory();
         }
-        pushExternalHistoryEntry({ ...mutation, forceNewHistory: true });
+        // Use the freshly patched store snapshot so history never captures a
+        // stale pre-patch sourcebook state.
+        pushExternalHistoryEntry({
+          ...mutation,
+          state: useStoryStore.getState().story,
+          forceNewHistory: true,
+        });
         return;
       }
       if (!existsInBaseline) {

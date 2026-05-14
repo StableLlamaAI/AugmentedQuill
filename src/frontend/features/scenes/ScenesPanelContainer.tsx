@@ -30,6 +30,7 @@ import { notifyError } from '../../services/errorNotifier';
 import { useThemeClasses, useTheme } from '../layout/ThemeContext';
 import { PinboardView } from './PinboardView';
 import { NarrativeView } from './NarrativeView';
+import { ConvergenceMapView } from './ConvergenceMapView';
 import { SceneEditorDialog } from './SceneEditorDialog';
 import type { SceneUpdatePayload } from '../../services/apiClients/scenes';
 import type { ProseDropData } from './types';
@@ -37,7 +38,7 @@ import { useSceneProseSync } from './useSceneProseSync';
 import { uiStoreActions, useUIStore } from '../../stores/uiStore';
 import type { UIStoreState } from '../../stores/uiStore';
 
-type ViewMode = 'pinboard' | 'narrative' | 'chronological';
+type ViewMode = 'pinboard' | 'narrative' | 'chronological' | 'convergence-map';
 
 interface ScenesPanelContainerProps {
   editorRef?: React.RefObject<EditorHandle | null>;
@@ -119,6 +120,7 @@ function applyScenePatches(prevScenes: Scene[], updates: Scene[]): Scene[] {
   );
 }
 
+// eslint-disable-next-line max-lines-per-function
 export const ScenesPanelContainer: React.FC<ScenesPanelContainerProps> = ({
   editorRef,
   currentChapter,
@@ -559,7 +561,7 @@ export const ScenesPanelContainer: React.FC<ScenesPanelContainerProps> = ({
           role="group"
           aria-label={t('View mode')}
         >
-          {(['pinboard', 'narrative', 'chronological'] as const).map(
+          {(['pinboard', 'narrative', 'chronological', 'convergence-map'] as const).map(
             (mode: ViewMode) => (
               <button
                 key={mode}
@@ -581,7 +583,9 @@ export const ScenesPanelContainer: React.FC<ScenesPanelContainerProps> = ({
                     ? 'Pinboard'
                     : mode === 'narrative'
                       ? 'Narrative'
-                      : 'Chronological'
+                      : mode === 'chronological'
+                        ? 'Chronological'
+                        : 'Convergence Map'
                 )}
               </button>
             )
@@ -634,6 +638,19 @@ export const ScenesPanelContainer: React.FC<ScenesPanelContainerProps> = ({
             onReorderScene={
               viewMode === 'narrative' ? handleNarrativeReorder : undefined
             }
+          />
+        )}
+        {viewMode === 'convergence-map' && (
+          <ConvergenceMapView
+            scenes={scenes}
+            sourcebookEntries={story.sourcebook ?? []}
+            projectType={projectType}
+            chapters={chapters}
+            books={books}
+            primarySelectedSceneId={selectedSceneId}
+            onSelectScene={handleSelectScene}
+            onSelectionChange={handleMultipleSelectScenes}
+            onEditScene={setEditingSceneId}
           />
         )}
       </div>

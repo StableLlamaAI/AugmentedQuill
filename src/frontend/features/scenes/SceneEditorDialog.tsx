@@ -13,7 +13,14 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import type { Scene, SceneBeat, SceneProseLink, SourcebookEntry } from '../../types';
+import { Clock } from 'lucide-react';
+import type {
+  Scene,
+  SceneBeat,
+  SceneProseLink,
+  SceneTagPersonalDatetime,
+  SourcebookEntry,
+} from '../../types';
 import { useThemeClasses } from '../layout/ThemeContext';
 import { useFocusTrap } from '../layout/useFocusTrap';
 import { useScenes, useStoryLanguage, useStoryStore } from '../../stores/storyStore';
@@ -22,6 +29,7 @@ import { SourcebookHoverCard } from '../sourcebook/SourcebookHoverCard';
 import { listProjectImages } from '../sourcebook/sourcebookApi';
 import { ProjectImage } from '../../services/apiTypes';
 import { SceneTemporalDialog } from './SceneTemporalDialog';
+import { getSceneEpochNanoseconds } from './sceneSortUtils';
 import {
   parseZonedDateTime,
   toDisplayString,
@@ -50,11 +58,23 @@ const COLOR_SWATCH: Record<string, string> = {
 };
 const EMPTY_SOURCEBOOK: SourcebookEntry[] = [];
 
+type CharToken = {
+  name: string;
+  personal_age: string | null;
+};
+
+type AgeEditTarget =
+  | { type: 'active_tag'; index: number }
+  | { type: 'passive_tag'; index: number }
+  | { type: 'sourcebook_tag'; entryId: string };
+
+type TemporalEditTarget = { type: 'scene' };
+
 type DirtySnapshot = {
   summary: string;
   beats: string;
-  active: string[];
-  passive: string[];
+  activeTokens: string;
+  passiveTokens: string;
   sourcebookIds: string[];
   colorTag: string | null;
   status: Scene['status'];
@@ -102,7 +122,6 @@ export const SceneEditorDialog: React.FC<SceneEditorDialogProps> = ({
 }: SceneEditorDialogProps) => {
   const { t, i18n } = useTranslation();
   const tc = useThemeClasses();
-  const { isLight } = tc;
   const storyLanguage = useStoryLanguage();
   const allScenes = useScenes();
   const sourcebookEntriesMaybe = useStoryStore(
@@ -132,18 +151,153 @@ export const SceneEditorDialog: React.FC<SceneEditorDialogProps> = ({
 
   const [summary, setSummary] = useState(scene.summary);
   const [beats, setBeats] = useState<SceneBeat[]>(scene.beats);
-  const [activeChars, setActiveChars] = useState<string[]>(scene.active_characters);
+  const [activeTokens, setActiveTokens] = useState<CharToken[]>(
+    scene.active_characters.map((name: string): CharToken => {
+      const dt = scene.tag_personal_datetimes?.find(
+        (t: SceneTagPersonalDatetime) =>
+          t.role === 'active' &&
+          t.ref === name &&
+          t.index === scene.active_characters.indexOf(name)
+      );
+      return { name, personal_age: dt?.personal_age ?? null };
+    })
+  );
   const [activeInput, setActiveInput] = useState('');
-  const [passiveChars, setPassiveChars] = useState<string[]>(scene.passive_characters);
+  const [passiveTokens, setPassiveTokens] = useState<CharToken[]>(
+    scene.passive_characters.map((name: string): CharToken => {
+      const dt = scene.tag_personal_datetimes?.find(
+        (t: SceneTagPersonalDatetime) =>
+          t.role === 'passive' &&
+          t.ref === name &&
+          t.index === scene.passive_characters.indexOf(name)
+      );
+      return { name, personal_age: dt?.personal_age ?? null };
+    })
+  );
   const [passiveInput, setPassiveInput] = useState('');
-  const [sourcebookIds, setSourcebookIds] = useState<string[]>(
-    scene.sourcebook_entry_ids ?? []
+  const [sourcebookTags, setSourcebookTags] = useState<
+    Array<{ id: string; personal_age: string | null }>
+  >(
+    (scene.sourcebook_entry_ids ?? []).map((id: string) => {
+      const dt = scene.tag_personal_datetimes?.find(
+        (t: SceneTagPersonalDatetime) => t.role === 'sourcebook' && t.ref === id
+      );
+      return { id, personal_age: dt?.personal_age ?? null };
+    })
   );
   const [sourcebookInput, setSourcebookInput] = useState('');
   const [sceneTimeValue, setSceneTimeValue] = useState<string | null>(
     scene.scene_time?.temporal_zoned_datetime ?? null
   );
-  const [isTemporalDialogOpen, setIsTemporalDialogOpen] = useState(false);
+  const [temporalEditTarget, setTemporalEditTarget] =
+    useState<TemporalEditTarget | null>(null);
+  const [ageEditTarget, setAgeEditTarget] = useState<AgeEditTarget | null>(null);
+  const [ageEditValue, setAgeEditValue] = useState('');
+
+  /**
+   * Time Travel sourcebook entries that create a new timeline AND whose departure
+   * (i.e. at least one scene referencing them) happens at or before this scene's time.
+   * Each element represents one additional active timeline branch.
+   */
+  const activeBranchTimelines = useMemo((): SourcebookEntry[] => {
+    const currentEpoch = getSceneEpochNanoseconds(scene);
+
+    const ttEntries = sourcebookEntries.filter(
+      (e: SourcebookEntry) => e.category === 'Time Travel' && e.creates_new_timeline
+    );
+
+    return ttEntries.filter((entry: SourcebookEntry) =>
+      allScenes.some((s: Scene) => {
+        // A TT branch is "active" at this scene if a departure scene for this entry
+        // exists at or before this scene's chronological position.
+        // NOTE: the current scene itself is intentionally included so that the
+        // departure scene (which IS the TT event) also shows the clock icon.
+        if (!(s.sourcebook_entry_ids ?? []).includes(entry.id)) return false;
+        // If either scene has no epoch time, be inclusive rather than hiding the option.
+        if (currentEpoch === null) return true;
+        const sEpoch = getSceneEpochNanoseconds(s);
+        if (sEpoch === null) return true;
+        return sEpoch <= currentEpoch;
+      })
+    );
+  }, [scene, allScenes, sourcebookEntries]);
+
+  /** Total number of timelines active at this scene (main + branches). */
+  const activeTimelinesAtScene = activeBranchTimelines.length + 1;
+
+  /**
+   * Collect known personal_age values per timeline context.
+   * Key format: `tl:{timelineId}::{role}::{ref}` for branch timelines,
+   * `main::{role}::{ref}` for the main timeline.
+   */
+  const knownAgesForRef = useMemo((): Map<string, string[]> => {
+    const branchIds = new Set(activeBranchTimelines.map((e: SourcebookEntry) => e.id));
+    const map = new Map<string, string[]>();
+
+    allScenes.forEach((s: Scene): void => {
+      // Determine which branch timeline (if any) this scene belongs to.
+      const sceneEntryIds = new Set(s.sourcebook_entry_ids ?? []);
+      const branchId =
+        [...branchIds].find((id: string) => sceneEntryIds.has(id)) ?? null;
+      const tlPrefix = branchId ? `tl:${branchId}` : 'main';
+
+      (s.tag_personal_datetimes ?? []).forEach(
+        (tpd: SceneTagPersonalDatetime): void => {
+          if (!tpd.personal_age) return;
+          const key = `${tlPrefix}::${tpd.role}::${tpd.ref}`;
+          const existing = map.get(key) ?? [];
+          if (!existing.includes(tpd.personal_age)) {
+            map.set(key, [...existing, tpd.personal_age]);
+          }
+        }
+      );
+    });
+    return map;
+  }, [allScenes, activeBranchTimelines]);
+
+  /**
+   * Age options per timeline for the current age edit target.
+   * Returns [{timelineLabel, ages}] — one entry per active timeline.
+   */
+  const ageOptionsByTimeline = useMemo((): Array<{ label: string; ages: string[] }> => {
+    if (!ageEditTarget) return [];
+
+    let role: string;
+    let ref: string;
+    if (ageEditTarget.type === 'active_tag') {
+      role = 'active';
+      ref = activeTokens[ageEditTarget.index]?.name ?? '';
+    } else if (ageEditTarget.type === 'passive_tag') {
+      role = 'passive';
+      ref = passiveTokens[ageEditTarget.index]?.name ?? '';
+    } else {
+      role = 'sourcebook';
+      ref = ageEditTarget.entryId;
+    }
+
+    const result: Array<{ label: string; ages: string[] }> = [
+      {
+        label: t('Main Timeline'),
+        ages: knownAgesForRef.get(`main::${role}::${ref}`) ?? [],
+      },
+    ];
+
+    for (const entry of activeBranchTimelines) {
+      result.push({
+        label: entry.name,
+        ages: knownAgesForRef.get(`tl:${entry.id}::${role}::${ref}`) ?? [],
+      });
+    }
+
+    return result;
+  }, [
+    ageEditTarget,
+    activeTokens,
+    passiveTokens,
+    activeBranchTimelines,
+    knownAgesForRef,
+    t,
+  ]);
   const [colorTag, setColorTag] = useState<string | null>(scene.color_tag ?? null);
   const [status, setStatus] = useState(scene.status);
   const [proseLink, setProseLink] = useState<SceneProseLink | null>(
@@ -165,18 +319,41 @@ export const SceneEditorDialog: React.FC<SceneEditorDialogProps> = ({
   useEffect((): void => {
     if (!isOpen) return;
 
-    const inheritedIds = new Set(scene.sourcebook_entry_ids ?? []);
-
     setSummary(scene.summary);
     setBeats(scene.beats);
-    setActiveChars(scene.active_characters);
+    setActiveTokens(
+      scene.active_characters.map((name: string, i: number): CharToken => {
+        const dt = scene.tag_personal_datetimes?.find(
+          (t: SceneTagPersonalDatetime) =>
+            t.role === 'active' && t.ref === name && t.index === i
+        );
+        return { name, personal_age: dt?.personal_age ?? null };
+      })
+    );
     setActiveInput('');
-    setPassiveChars(scene.passive_characters);
+    setPassiveTokens(
+      scene.passive_characters.map((name: string, i: number): CharToken => {
+        const dt = scene.tag_personal_datetimes?.find(
+          (t: SceneTagPersonalDatetime) =>
+            t.role === 'passive' && t.ref === name && t.index === i
+        );
+        return { name, personal_age: dt?.personal_age ?? null };
+      })
+    );
     setPassiveInput('');
-    setSourcebookIds(Array.from(inheritedIds));
+    setSourcebookTags(
+      (scene.sourcebook_entry_ids ?? []).map((id: string) => {
+        const dt = scene.tag_personal_datetimes?.find(
+          (t: SceneTagPersonalDatetime) => t.role === 'sourcebook' && t.ref === id
+        );
+        return { id, personal_age: dt?.personal_age ?? null };
+      })
+    );
     setSourcebookInput('');
     setSceneTimeValue(scene.scene_time?.temporal_zoned_datetime ?? null);
-    setIsTemporalDialogOpen(false);
+    setTemporalEditTarget(null);
+    setAgeEditTarget(null);
+    setAgeEditValue('');
     setColorTag(scene.color_tag ?? null);
     setStatus(scene.status);
     setProseLink(scene.prose_link ?? null);
@@ -193,9 +370,9 @@ export const SceneEditorDialog: React.FC<SceneEditorDialogProps> = ({
     initialSnapshotRef.current = {
       summary: scene.summary,
       beats: JSON.stringify(scene.beats),
-      active: [...scene.active_characters],
-      passive: [...scene.passive_characters],
-      sourcebookIds: Array.from(inheritedIds),
+      activeTokens: JSON.stringify(scene.active_characters),
+      passiveTokens: JSON.stringify(scene.passive_characters),
+      sourcebookIds: scene.sourcebook_entry_ids ?? [],
       colorTag: scene.color_tag ?? null,
       status: scene.status,
       sceneTimeValue: scene.scene_time?.temporal_zoned_datetime ?? null,
@@ -240,9 +417,14 @@ export const SceneEditorDialog: React.FC<SceneEditorDialogProps> = ({
     return (
       summary !== snapshot.summary ||
       JSON.stringify(beats) !== snapshot.beats ||
-      !arraysEqual(activeChars, snapshot.active) ||
-      !arraysEqual(passiveChars, snapshot.passive) ||
-      !arraysEqual(sourcebookIds, snapshot.sourcebookIds) ||
+      JSON.stringify(activeTokens.map((t: CharToken) => t.name)) !==
+        snapshot.activeTokens ||
+      JSON.stringify(passiveTokens.map((t: CharToken) => t.name)) !==
+        snapshot.passiveTokens ||
+      !arraysEqual(
+        sourcebookTags.map((t: { id: string; personal_age: string | null }) => t.id),
+        snapshot.sourcebookIds
+      ) ||
       colorTag !== snapshot.colorTag ||
       status !== snapshot.status ||
       sceneTimeValue !== snapshot.sceneTimeValue ||
@@ -250,14 +432,30 @@ export const SceneEditorDialog: React.FC<SceneEditorDialogProps> = ({
     );
   })();
 
-  const addCharacterToken = (
-    value: string,
-    setter: React.Dispatch<React.SetStateAction<string[]>>
-  ): void => {
-    const token = value.trim();
+  const addActiveToken = (name: string): void => {
+    const token = name.trim();
     if (!token) return;
-    setter((prev: string[]): string[] =>
-      prev.includes(token) ? prev : [...prev, token]
+    setActiveTokens((prev: CharToken[]) => [
+      ...prev,
+      { name: token, personal_age: null },
+    ]);
+  };
+
+  const addPassiveToken = (name: string): void => {
+    const token = name.trim();
+    if (!token) return;
+    setPassiveTokens((prev: CharToken[]) => [
+      ...prev,
+      { name: token, personal_age: null },
+    ]);
+  };
+
+  type SourcebookTag = { id: string; personal_age: string | null };
+  const addSourcebookTag = (id: string): void => {
+    setSourcebookTags((prev: SourcebookTag[]) =>
+      prev.some((t: SourcebookTag) => t.id === id)
+        ? prev
+        : [...prev, { id, personal_age: null }]
     );
   };
 
@@ -270,7 +468,7 @@ export const SceneEditorDialog: React.FC<SceneEditorDialogProps> = ({
       const inSyn = (entry.synonyms ?? []).some((synonym: string): boolean =>
         normalizeToken(synonym).includes(query)
       );
-      return (inName || inSyn) && !activeChars.includes(entry.name);
+      return inName || inSyn;
     }
   );
 
@@ -283,7 +481,7 @@ export const SceneEditorDialog: React.FC<SceneEditorDialogProps> = ({
       const inSyn = (entry.synonyms ?? []).some((synonym: string): boolean =>
         normalizeToken(synonym).includes(query)
       );
-      return (inName || inSyn) && !passiveChars.includes(entry.name);
+      return inName || inSyn;
     }
   );
 
@@ -295,7 +493,10 @@ export const SceneEditorDialog: React.FC<SceneEditorDialogProps> = ({
       const inSyn = (entry.synonyms ?? []).some((synonym: string): boolean =>
         normalizeToken(synonym).includes(query)
       );
-      return (inName || inSyn) && !sourcebookIds.includes(entry.id);
+      return (
+        (inName || inSyn) &&
+        !sourcebookTags.some((t: SourcebookTag) => t.id === entry.id)
+      );
     }
   );
 
@@ -333,19 +534,115 @@ export const SceneEditorDialog: React.FC<SceneEditorDialogProps> = ({
       if (proseDirty && proseLink && onSaveProseContent) {
         await onSaveProseContent(localProseText);
       }
+      const tagPersonalDatetimes: SceneTagPersonalDatetime[] = [
+        ...activeTokens.flatMap(
+          (t: CharToken, i: number): SceneTagPersonalDatetime[] =>
+            t.personal_age
+              ? [
+                  {
+                    role: 'active',
+                    ref: t.name,
+                    index: i,
+                    personal_age: t.personal_age,
+                  },
+                ]
+              : []
+        ),
+        ...passiveTokens.flatMap(
+          (t: CharToken, i: number): SceneTagPersonalDatetime[] =>
+            t.personal_age
+              ? [
+                  {
+                    role: 'passive',
+                    ref: t.name,
+                    index: i,
+                    personal_age: t.personal_age,
+                  },
+                ]
+              : []
+        ),
+        ...sourcebookTags.flatMap((t: SourcebookTag): SceneTagPersonalDatetime[] =>
+          t.personal_age
+            ? [
+                {
+                  role: 'sourcebook',
+                  ref: t.id,
+                  index: 0,
+                  personal_age: t.personal_age,
+                },
+              ]
+            : []
+        ),
+      ];
       await onSave({
         summary,
         beats,
-        active_characters: activeChars,
-        passive_characters: passiveChars,
-        sourcebook_entry_ids: sourcebookIds,
+        active_characters: activeTokens.map((t: CharToken) => t.name),
+        passive_characters: passiveTokens.map((t: CharToken) => t.name),
+        sourcebook_entry_ids: sourcebookTags.map((t: SourcebookTag) => t.id),
         scene_time: sceneTimeValue ? { temporal_zoned_datetime: sceneTimeValue } : null,
         color_tag: colorTag,
         status,
+        tag_personal_datetimes: tagPersonalDatetimes,
       });
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const getTemporalDialogCurrentValue = (): string | null => {
+    if (!temporalEditTarget) return null;
+    return sceneTimeValue;
+  };
+
+  const applyTemporalDialogValue = (value: string | null): void => {
+    if (!temporalEditTarget) return;
+    setSceneTimeValue(value);
+    setTemporalEditTarget(null);
+  };
+
+  const openAgeEdit = (target: AgeEditTarget): void => {
+    let currentAge: string | null = null;
+    if (target.type === 'active_tag')
+      currentAge = activeTokens[target.index]?.personal_age ?? null;
+    else if (target.type === 'passive_tag')
+      currentAge = passiveTokens[target.index]?.personal_age ?? null;
+    else if (target.type === 'sourcebook_tag') {
+      const found = sourcebookTags.find((t: SourcebookTag) => t.id === target.entryId);
+      currentAge = found?.personal_age ?? null;
+    }
+    setAgeEditValue(currentAge ?? '');
+    setAgeEditTarget(target);
+  };
+
+  const applyAgeEdit = (explicitValue?: string): void => {
+    if (!ageEditTarget) return;
+    const trimmed =
+      (explicitValue !== undefined ? explicitValue : ageEditValue).trim() || null;
+    if (ageEditTarget.type === 'active_tag') {
+      const { index } = ageEditTarget;
+      setActiveTokens((prev: CharToken[]) => {
+        const next = [...prev];
+        next[index] = { ...next[index], personal_age: trimmed };
+        return next;
+      });
+    } else if (ageEditTarget.type === 'passive_tag') {
+      const { index } = ageEditTarget;
+      setPassiveTokens((prev: CharToken[]) => {
+        const next = [...prev];
+        next[index] = { ...next[index], personal_age: trimmed };
+        return next;
+      });
+    } else if (ageEditTarget.type === 'sourcebook_tag') {
+      const { entryId } = ageEditTarget;
+      setSourcebookTags((prev: SourcebookTag[]) =>
+        prev.map((t: SourcebookTag) =>
+          t.id === entryId ? { ...t, personal_age: trimmed } : t
+        )
+      );
+    }
+    setAgeEditTarget(null);
+    setAgeEditValue('');
   };
 
   const handleSave = async (): Promise<void> => {
@@ -465,11 +762,11 @@ export const SceneEditorDialog: React.FC<SceneEditorDialogProps> = ({
               <label className={labelCls}>{t('Active Characters')}</label>
               <div className={`rounded-md border ${tc.border} ${tc.input} p-2`}>
                 <div className="flex flex-wrap gap-2">
-                  {activeChars.map((token: string) => {
-                    const matched = entryByName.get(normalizeToken(token));
+                  {activeTokens.map((token: CharToken, idx: number) => {
+                    const matched = entryByName.get(normalizeToken(token.name));
                     return (
                       <div
-                        key={`active-${token}`}
+                        key={`active-${idx}`}
                         role="button"
                         tabIndex={0}
                         onDoubleClick={(): void =>
@@ -494,7 +791,26 @@ export const SceneEditorDialog: React.FC<SceneEditorDialogProps> = ({
                             : undefined
                         }
                       >
-                        <span className={tc.text}>{token}</span>
+                        <span className={tc.text}>{token.name}</span>
+                        {token.personal_age && (
+                          <span className={`text-[10px] ${tc.muted}`}>
+                            {token.personal_age}
+                          </span>
+                        )}
+                        {matched && activeTimelinesAtScene > 1 && (
+                          <button
+                            type="button"
+                            aria-label={t('Set personal age at this scene')}
+                            title={t('Set personal age at this scene')}
+                            className={`${tc.muted} hover:text-brand-500`}
+                            onClick={(e: React.MouseEvent): void => {
+                              e.stopPropagation();
+                              openAgeEdit({ type: 'active_tag', index: idx });
+                            }}
+                          >
+                            <Clock size={11} />
+                          </button>
+                        )}
                         <button
                           type="button"
                           className={tc.muted}
@@ -502,8 +818,8 @@ export const SceneEditorDialog: React.FC<SceneEditorDialogProps> = ({
                             event: React.MouseEvent<HTMLButtonElement>
                           ): void => {
                             event.stopPropagation();
-                            setActiveChars((prev: string[]): string[] =>
-                              prev.filter((value: string): boolean => value !== token)
+                            setActiveTokens((prev: CharToken[]) =>
+                              prev.filter((_: CharToken, i: number) => i !== idx)
                             );
                           }}
                         >
@@ -524,18 +840,18 @@ export const SceneEditorDialog: React.FC<SceneEditorDialogProps> = ({
                       if (e.key === 'Enter' || e.key === ',') {
                         e.preventDefault();
                         if (activeSuggestions.length > 0) {
-                          addCharacterToken(activeSuggestions[0].name, setActiveChars);
+                          addActiveToken(activeSuggestions[0].name);
                         } else {
-                          addCharacterToken(activeInput, setActiveChars);
+                          addActiveToken(activeInput);
                         }
                         setActiveInput('');
                       }
                       if (
                         e.key === 'Backspace' &&
                         !activeInput &&
-                        activeChars.length > 0
+                        activeTokens.length > 0
                       ) {
-                        setActiveChars((prev: string[]): string[] => prev.slice(0, -1));
+                        setActiveTokens((prev: CharToken[]) => prev.slice(0, -1));
                       }
                     }}
                   />
@@ -551,7 +867,7 @@ export const SceneEditorDialog: React.FC<SceneEditorDialogProps> = ({
                       type="button"
                       className={`w-full text-left px-2 py-1.5 text-xs ${tc.text} hover:bg-brand-500/10`}
                       onClick={(): void => {
-                        addCharacterToken(entry.name, setActiveChars);
+                        addActiveToken(entry.name);
                         setActiveInput('');
                       }}
                     >
@@ -566,11 +882,11 @@ export const SceneEditorDialog: React.FC<SceneEditorDialogProps> = ({
               <label className={labelCls}>{t('Passive Characters')}</label>
               <div className={`rounded-md border ${tc.border} ${tc.input} p-2`}>
                 <div className="flex flex-wrap gap-2">
-                  {passiveChars.map((token: string) => {
-                    const matched = entryByName.get(normalizeToken(token));
+                  {passiveTokens.map((token: CharToken, idx: number) => {
+                    const matched = entryByName.get(normalizeToken(token.name));
                     return (
                       <div
-                        key={`passive-${token}`}
+                        key={`passive-${idx}`}
                         role="button"
                         tabIndex={0}
                         onDoubleClick={(): void =>
@@ -595,7 +911,26 @@ export const SceneEditorDialog: React.FC<SceneEditorDialogProps> = ({
                             : undefined
                         }
                       >
-                        <span className={tc.text}>{token}</span>
+                        <span className={tc.text}>{token.name}</span>
+                        {token.personal_age && (
+                          <span className={`text-[10px] ${tc.muted}`}>
+                            {token.personal_age}
+                          </span>
+                        )}
+                        {matched && activeTimelinesAtScene > 1 && (
+                          <button
+                            type="button"
+                            aria-label={t('Set personal age at this scene')}
+                            title={t('Set personal age at this scene')}
+                            className={`${tc.muted} hover:text-brand-500`}
+                            onClick={(e: React.MouseEvent): void => {
+                              e.stopPropagation();
+                              openAgeEdit({ type: 'passive_tag', index: idx });
+                            }}
+                          >
+                            <Clock size={11} />
+                          </button>
+                        )}
                         <button
                           type="button"
                           className={tc.muted}
@@ -603,8 +938,8 @@ export const SceneEditorDialog: React.FC<SceneEditorDialogProps> = ({
                             event: React.MouseEvent<HTMLButtonElement>
                           ): void => {
                             event.stopPropagation();
-                            setPassiveChars((prev: string[]): string[] =>
-                              prev.filter((value: string): boolean => value !== token)
+                            setPassiveTokens((prev: CharToken[]) =>
+                              prev.filter((_: CharToken, i: number) => i !== idx)
                             );
                           }}
                         >
@@ -625,23 +960,18 @@ export const SceneEditorDialog: React.FC<SceneEditorDialogProps> = ({
                       if (e.key === 'Enter' || e.key === ',') {
                         e.preventDefault();
                         if (passiveSuggestions.length > 0) {
-                          addCharacterToken(
-                            passiveSuggestions[0].name,
-                            setPassiveChars
-                          );
+                          addPassiveToken(passiveSuggestions[0].name);
                         } else {
-                          addCharacterToken(passiveInput, setPassiveChars);
+                          addPassiveToken(passiveInput);
                         }
                         setPassiveInput('');
                       }
                       if (
                         e.key === 'Backspace' &&
                         !passiveInput &&
-                        passiveChars.length > 0
+                        passiveTokens.length > 0
                       ) {
-                        setPassiveChars((prev: string[]): string[] =>
-                          prev.slice(0, -1)
-                        );
+                        setPassiveTokens((prev: CharToken[]) => prev.slice(0, -1));
                       }
                     }}
                   />
@@ -657,7 +987,7 @@ export const SceneEditorDialog: React.FC<SceneEditorDialogProps> = ({
                       type="button"
                       className={`w-full text-left px-2 py-1.5 text-xs ${tc.text} hover:bg-brand-500/10`}
                       onClick={(): void => {
-                        addCharacterToken(entry.name, setPassiveChars);
+                        addPassiveToken(entry.name);
                         setPassiveInput('');
                       }}
                     >
@@ -673,8 +1003,8 @@ export const SceneEditorDialog: React.FC<SceneEditorDialogProps> = ({
             <label className={labelCls}>{t('Sourcebook')}</label>
             <div className={`rounded-md border ${tc.border} ${tc.input} p-2`}>
               <div className="flex flex-wrap gap-2">
-                {sourcebookIds.map((entryId: string) => {
-                  const entry = entryById.get(entryId);
+                {sourcebookTags.map((tag: SourcebookTag) => {
+                  const entry = entryById.get(tag.id);
                   if (!entry) return null;
                   return (
                     <div
@@ -701,13 +1031,32 @@ export const SceneEditorDialog: React.FC<SceneEditorDialogProps> = ({
                       >
                         {mapCategoryLabel(entry.category)}
                       </span>
+                      {tag.personal_age && (
+                        <span className={`text-[10px] ${tc.muted}`}>
+                          {tag.personal_age}
+                        </span>
+                      )}
+                      {activeTimelinesAtScene > 1 && (
+                        <button
+                          type="button"
+                          aria-label={t('Set personal age at this scene')}
+                          title={t('Set personal age at this scene')}
+                          className={`${tc.muted} hover:text-brand-500`}
+                          onClick={(e: React.MouseEvent): void => {
+                            e.stopPropagation();
+                            openAgeEdit({ type: 'sourcebook_tag', entryId: entry.id });
+                          }}
+                        >
+                          <Clock size={11} />
+                        </button>
+                      )}
                       <button
                         type="button"
                         className={tc.muted}
                         onClick={(event: React.MouseEvent<HTMLButtonElement>): void => {
                           event.stopPropagation();
-                          setSourcebookIds((prev: string[]): string[] =>
-                            prev.filter((value: string): boolean => value !== entry.id)
+                          setSourcebookTags((prev: SourcebookTag[]) =>
+                            prev.filter((t: SourcebookTag) => t.id !== entry.id)
                           );
                         }}
                       >
@@ -729,19 +1078,13 @@ export const SceneEditorDialog: React.FC<SceneEditorDialogProps> = ({
                     e.preventDefault();
                     const firstSuggestion = sourcebookSuggestions[0];
                     if (firstSuggestion) {
-                      setSourcebookIds((prev: string[]): string[] =>
-                        prev.includes(firstSuggestion.id)
-                          ? prev
-                          : [...prev, firstSuggestion.id]
-                      );
+                      addSourcebookTag(firstSuggestion.id);
                       setSourcebookInput('');
                       return;
                     }
                     const match = entryByName.get(normalizeToken(sourcebookInput));
                     if (match) {
-                      setSourcebookIds((prev: string[]): string[] =>
-                        prev.includes(match.id) ? prev : [...prev, match.id]
-                      );
+                      addSourcebookTag(match.id);
                       setSourcebookInput('');
                     }
                   }}
@@ -758,9 +1101,7 @@ export const SceneEditorDialog: React.FC<SceneEditorDialogProps> = ({
                     type="button"
                     className={`w-full text-left px-2 py-1.5 text-xs ${tc.text} hover:bg-brand-500/10 flex items-center justify-between`}
                     onClick={(): void => {
-                      setSourcebookIds((prev: string[]): string[] =>
-                        prev.includes(entry.id) ? prev : [...prev, entry.id]
-                      );
+                      addSourcebookTag(entry.id);
                       setSourcebookInput('');
                     }}
                   >
@@ -788,7 +1129,7 @@ export const SceneEditorDialog: React.FC<SceneEditorDialogProps> = ({
                 <button
                   type="button"
                   className="px-2 py-1 rounded-md text-xs bg-brand-500 text-white"
-                  onClick={(): void => setIsTemporalDialogOpen(true)}
+                  onClick={(): void => setTemporalEditTarget({ type: 'scene' })}
                 >
                   {sceneTimeValue ? t('Edit') : t('Set Time')}
                 </button>
@@ -1086,12 +1427,89 @@ export const SceneEditorDialog: React.FC<SceneEditorDialogProps> = ({
       )}
 
       <SceneTemporalDialog
-        isOpen={isTemporalDialogOpen}
-        value={sceneTimeValue}
-        previousValue={previousSceneTimeValue}
-        onClose={(): void => setIsTemporalDialogOpen(false)}
-        onApply={(value: string | null): void => setSceneTimeValue(value)}
+        isOpen={temporalEditTarget !== null}
+        value={getTemporalDialogCurrentValue()}
+        previousValue={
+          temporalEditTarget?.type === 'scene' ? previousSceneTimeValue : sceneTimeValue
+        }
+        onClose={(): void => setTemporalEditTarget(null)}
+        onApply={applyTemporalDialogValue}
       />
+
+      {/* Age picker modal */}
+      {ageEditTarget !== null && (
+        <div
+          className="fixed inset-0 z-60 flex items-center justify-center bg-black/40"
+          role="presentation"
+        >
+          <button
+            type="button"
+            aria-label={t('Close')}
+            className="absolute inset-0"
+            onClick={(): void => setAgeEditTarget(null)}
+          />
+          <div
+            className={`relative rounded-xl shadow-xl border ${tc.border} ${tc.bg} p-5 w-80 space-y-3`}
+            role="dialog"
+            aria-label={t('Set personal age at this scene')}
+          >
+            <p className={`text-sm font-semibold ${tc.text}`}>
+              {t('Set personal age at this scene')}
+            </p>
+            {ageOptionsByTimeline.map(
+              ({ label, ages }: { label: string; ages: string[] }) => (
+                <div key={label} className="space-y-1">
+                  <p className={`text-xs font-medium ${tc.muted}`}>{label}</p>
+                  {ages.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {ages.map((age: string) => (
+                        <button
+                          key={age}
+                          type="button"
+                          onClick={(): void => {
+                            setAgeEditValue(age);
+                            applyAgeEdit(age);
+                          }}
+                          className={`px-2.5 py-1 rounded-full border text-xs font-medium transition-colors ${
+                            ageEditValue === age
+                              ? 'bg-brand-500 text-white border-brand-600'
+                              : `${tc.border} ${tc.text} hover:border-brand-500`
+                          }`}
+                        >
+                          {age}
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className={`text-xs italic ${tc.muted}`}>
+                      {t('No age recorded')}
+                    </p>
+                  )}
+                </div>
+              )
+            )}
+            <div className="flex gap-2 justify-end">
+              <button
+                type="button"
+                className={`px-3 py-1.5 rounded-md border text-xs ${tc.border} ${tc.text}`}
+                onClick={(): void => {
+                  setAgeEditValue('');
+                  applyAgeEdit('');
+                }}
+              >
+                {t('Clear')}
+              </button>
+              <button
+                type="button"
+                className={`px-3 py-1.5 rounded-md border text-xs ${tc.border} ${tc.text}`}
+                onClick={(): void => setAgeEditTarget(null)}
+              >
+                {t('Cancel')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>,
     document.body
   );

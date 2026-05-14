@@ -6597,6 +6597,13 @@
             "type": "string",
             "title": "Status",
             "default": "active"
+          },
+          "tag_personal_datetimes": {
+            "items": {
+              "$ref": "#/components/schemas/SceneTagPersonalDatetime"
+            },
+            "type": "array",
+            "title": "Tag Personal Datetimes"
           }
         },
         "type": "object",
@@ -6764,6 +6771,13 @@
             "type": "string",
             "title": "Status",
             "default": "active"
+          },
+          "tag_personal_datetimes": {
+            "items": {
+              "$ref": "#/components/schemas/SceneTagPersonalDatetime"
+            },
+            "type": "array",
+            "title": "Tag Personal Datetimes"
           }
         },
         "type": "object",
@@ -6952,6 +6966,32 @@
         ],
         "title": "SceneReorderProseResponse",
         "description": "Result of a prose reorder transaction."
+      },
+      "SceneTagPersonalDatetime": {
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": ["active", "passive", "sourcebook"],
+            "title": "Role"
+          },
+          "ref": {
+            "type": "string",
+            "title": "Ref"
+          },
+          "index": {
+            "type": "integer",
+            "title": "Index",
+            "default": 0
+          },
+          "personal_age": {
+            "type": "string",
+            "title": "Personal Age"
+          }
+        },
+        "type": "object",
+        "required": ["role", "ref", "personal_age"],
+        "title": "SceneTagPersonalDatetime",
+        "description": "Personal age override for one specific tag instance in a scene.\n\n``role`` is ``'active'``, ``'passive'``, or ``'sourcebook'``.\n``ref`` is the character name (for active/passive) or sourcebook entry ID\n(for sourcebook).\n``index`` is the 0-based position within the role's list \u2013 this allows\nthe same character to appear multiple times in one scene (e.g. a time\ntraveller meeting their younger self).\n``personal_age`` is a human-readable age string such as ``'17y'``,\n``'17y 3m'``, ``'5m 12d'``, or ``'30d'``."
       },
       "SceneUpdateProseContentRequest": {
         "properties": {
@@ -7147,6 +7187,20 @@
               }
             ],
             "title": "Status"
+          },
+          "tag_personal_datetimes": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/SceneTagPersonalDatetime"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tag Personal Datetimes"
           }
         },
         "type": "object",
@@ -7362,6 +7416,44 @@
             "type": "array",
             "title": "Relations",
             "default": []
+          },
+          "origin_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origin Date"
+          },
+          "destination_datetime": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Destination Datetime"
+          },
+          "destination_relative": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Destination Relative"
+          },
+          "creates_new_timeline": {
+            "type": "boolean",
+            "title": "Creates New Timeline",
+            "default": false
           }
         },
         "type": "object",
@@ -7413,6 +7505,44 @@
             "type": "array",
             "title": "Relations",
             "default": []
+          },
+          "origin_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origin Date"
+          },
+          "destination_datetime": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Destination Datetime"
+          },
+          "destination_relative": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Destination Relative"
+          },
+          "creates_new_timeline": {
+            "type": "boolean",
+            "title": "Creates New Timeline",
+            "default": false
           }
         },
         "type": "object",
@@ -7496,6 +7626,50 @@
               }
             ],
             "title": "Relations"
+          },
+          "origin_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origin Date"
+          },
+          "destination_datetime": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Destination Datetime"
+          },
+          "destination_relative": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Destination Relative"
+          },
+          "creates_new_timeline": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Creates New Timeline"
           }
         },
         "type": "object",
@@ -8116,6 +8290,50 @@
               }
             ],
             "title": "Relations"
+          },
+          "origin_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origin Date"
+          },
+          "destination_datetime": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Destination Datetime"
+          },
+          "destination_relative": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Destination Relative"
+          },
+          "creates_new_timeline": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Creates New Timeline"
           }
         },
         "type": "object",

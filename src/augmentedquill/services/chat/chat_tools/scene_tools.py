@@ -16,6 +16,7 @@ from augmentedquill.models.scene import (
     SceneChronologyTime,
     SceneCreateRequest,
     SceneProseLink,
+    SceneTagPersonalDatetime,
     SceneUpdateRequest,
 )
 from augmentedquill.services.chat.chat_tool_decorator import (
@@ -116,6 +117,18 @@ class ManageScenesUpdateData(BaseModel):
     pinboard_x: float | None = Field(None, description="Optional pinboard x position.")
     pinboard_y: float | None = Field(None, description="Optional pinboard y position.")
     status: str | None = Field(None, description="Optional full replacement status.")
+    tag_personal_datetimes: list[SceneTagPersonalDatetime] | None = Field(
+        None,
+        description=(
+            "Optional list of per-tag personal age overrides. Each entry has: "
+            "role ('active'|'passive'|'sourcebook'), ref (character name for active/passive "
+            "or sourcebook entry ID for sourcebook), index (0-based position within the "
+            "role list, default 0, use >0 for duplicate characters e.g. time travellers), "
+            "and personal_age (age string like '17y', '17y 3m', '5m 12d', '30d'). "
+            "Used by the Convergence Map to sort each entry's scenes by their experienced "
+            "age. Omit to leave unchanged; pass [] to clear all overrides."
+        ),
+    )
 
 
 class ManageScenesParams(BaseModel):
@@ -289,6 +302,7 @@ async def manage_scenes(
             "pinboard_x",
             "pinboard_y",
             "status",
+            "tag_personal_datetimes",
         ):
             if field_name in fields_set:
                 value = getattr(params.update_data, field_name)

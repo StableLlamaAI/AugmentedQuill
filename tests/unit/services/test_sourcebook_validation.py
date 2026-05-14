@@ -356,6 +356,62 @@ class SourcebookValidationTest(TestCase):
         self.assertNotIn("error", updated)
         self.assertEqual(updated.get("keywords", []), [])
 
+    # -------------------------------------------------------------------------
+    # Time Travel category tests
+    # -------------------------------------------------------------------------
+
+    def test_create_time_travel_entry_succeeds(self):
+        """The 'Time Travel' category must be accepted by the backend."""
+        result = sourcebook_create_entry(
+            name="Journey to the Past",
+            description="A portal that sends the protagonist 30 years back.",
+            category="Time Travel",
+        )
+        self.assertNotIn("error", result)
+        self.assertEqual(result["category"], "Time Travel")
+
+    def test_create_time_travel_entry_case_insensitive(self):
+        """Category normalisation must accept 'time travel' (lowercase)."""
+        result = sourcebook_create_entry(
+            name="Future Leap",
+            description="Leaps 10 years forward.",
+            category="time travel",
+        )
+        self.assertNotIn("error", result)
+        self.assertEqual(result["category"], "Time Travel")
+
+    def test_create_time_travel_entry_with_fields(self):
+        """Time Travel specific fields are stored and returned correctly."""
+        result = sourcebook_create_entry(
+            name="Flux Capacitor",
+            description="Makes time travel possible at 88 mph.",
+            category="Time Travel",
+            destination_datetime="1955-11-05T00:00:00Z",
+            destination_relative="30 years earlier",
+            creates_new_timeline=True,
+        )
+        self.assertNotIn("error", result)
+        self.assertEqual(result.get("destination_datetime"), "1955-11-05T00:00:00Z")
+        self.assertEqual(result.get("destination_relative"), "30 years earlier")
+        self.assertTrue(result.get("creates_new_timeline"))
+
+    def test_update_time_travel_entry_fields(self):
+        """Time Travel specific fields can be updated."""
+        created = sourcebook_create_entry(
+            name="Time Vortex",
+            description="A swirling vortex.",
+            category="Time Travel",
+        )
+        self.assertNotIn("error", created)
+        updated = sourcebook_update_entry(
+            name_or_id=created["id"],
+            destination_relative="100 years forward",
+            creates_new_timeline=False,
+        )
+        self.assertNotIn("error", updated)
+        self.assertEqual(updated.get("destination_relative"), "100 years forward")
+        self.assertFalse(updated.get("creates_new_timeline"))
+
     def _get_entries(self):
         story_path = self.pdir / "story.json"
         story = json.loads(story_path.read_text())

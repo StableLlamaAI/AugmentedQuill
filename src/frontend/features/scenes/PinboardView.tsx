@@ -418,7 +418,7 @@ export const PinboardView: React.FC<PinboardViewProps> = ({
         backgroundSize: `${24 * zoom}px ${24 * zoom}px`,
         backgroundPosition: `${pan.x % (24 * zoom)}px ${pan.y % (24 * zoom)}px`,
       }}
-      onMouseDown={handleMouseDown}
+      onPointerDown={handleMouseDown}
       aria-label={t('Pinboard')}
       role="region"
     >
@@ -461,7 +461,7 @@ export const PinboardView: React.FC<PinboardViewProps> = ({
           position: 'absolute',
           inset: 0,
         }}
-        onMouseDown={handleCanvasMouseDown}
+        onPointerDown={handleCanvasMouseDown}
       >
         {/* Cause arrows drawn under the cards */}
         <CauseArrows

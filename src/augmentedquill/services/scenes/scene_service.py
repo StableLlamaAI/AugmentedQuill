@@ -269,6 +269,10 @@ def _normalise_scene(raw: dict[str, Any]) -> dict[str, Any]:
             raw[key] = []
 
     raw.setdefault("scene_time", None)
+    raw.setdefault("tag_personal_datetimes", [])
+    # Drop legacy fields if present
+    raw.pop("personal_datetimes", None)
+    raw.pop("time_travel_events", None)
 
     pinboard_x = raw.get("pinboard_x")
     if not isinstance(pinboard_x, (int, float)):

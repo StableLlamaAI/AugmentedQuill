@@ -16,7 +16,24 @@ from __future__ import annotations
 
 from typing import List, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
+
+from augmentedquill.models.temporal_utils import normalize_temporal_value
+
+
+def _normalize_optional_temporal_text(value: object) -> Optional[str]:
+    """Normalize optional temporal text input while preserving legacy fallbacks."""
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        return None
+    stripped = value.strip()
+    if not stripped:
+        return None
+    try:
+        return normalize_temporal_value(stripped)
+    except ValueError:
+        return stripped
 
 
 class SourcebookRelation(BaseModel):
@@ -42,6 +59,28 @@ class SourcebookEntry(BaseModel):
     images: List[str] = []
     keywords: List[str] = []
     relations: List[SourcebookRelation] = []
+    origin_date: Optional[str] = (
+        None  # ISO 8601 birth/creation date for personal timeline age computation
+    )
+    destination_datetime: Optional[str] = (
+        None  # For Time Travel entries: the absolute destination datetime
+    )
+    destination_relative: Optional[str] = (
+        None  # For Time Travel entries: human-readable offset e.g. '30 years earlier'
+    )
+    creates_new_timeline: bool = (
+        False  # For Time Travel entries: whether a new timeline branch is created
+    )
+
+    @field_validator("origin_date", mode="before")
+    @classmethod
+    def _normalise_origin_date(cls, v: object) -> Optional[str]:
+        return _normalize_optional_temporal_text(v)
+
+    @field_validator("destination_datetime", mode="before")
+    @classmethod
+    def _normalise_destination_datetime(cls, v: object) -> Optional[str]:
+        return _normalize_optional_temporal_text(v)
 
 
 class SourcebookEntryCreate(BaseModel):
@@ -53,6 +92,20 @@ class SourcebookEntryCreate(BaseModel):
     description: str
     images: List[str] = []
     relations: List[SourcebookRelation] = []
+    origin_date: Optional[str] = None
+    destination_datetime: Optional[str] = None
+    destination_relative: Optional[str] = None
+    creates_new_timeline: bool = False
+
+    @field_validator("origin_date", mode="before")
+    @classmethod
+    def _normalise_origin_date(cls, v: object) -> Optional[str]:
+        return _normalize_optional_temporal_text(v)
+
+    @field_validator("destination_datetime", mode="before")
+    @classmethod
+    def _normalise_destination_datetime(cls, v: object) -> Optional[str]:
+        return _normalize_optional_temporal_text(v)
 
 
 class SourcebookEntryUpdate(BaseModel):
@@ -64,6 +117,20 @@ class SourcebookEntryUpdate(BaseModel):
     description: Optional[str] = None
     images: Optional[List[str]] = None
     relations: Optional[List[SourcebookRelation]] = None
+    origin_date: Optional[str] = None
+    destination_datetime: Optional[str] = None
+    destination_relative: Optional[str] = None
+    creates_new_timeline: Optional[bool] = None
+
+    @field_validator("origin_date", mode="before")
+    @classmethod
+    def _normalise_origin_date(cls, v: object) -> Optional[str]:
+        return _normalize_optional_temporal_text(v)
+
+    @field_validator("destination_datetime", mode="before")
+    @classmethod
+    def _normalise_destination_datetime(cls, v: object) -> Optional[str]:
+        return _normalize_optional_temporal_text(v)
 
 
 class SourcebookKeywordsRequest(BaseModel):

@@ -120,6 +120,13 @@ class ManageSourcebookEntryData(BaseModel):
         default_factory=list,
         description="Optional list of image IDs to associate with this entry.",
     )
+    origin_date: str | None = Field(
+        None,
+        description=(
+            "Optional ISO 8601 birth or creation date for this entry (e.g. '1985-11-05'). "
+            "Used to compute the entry's personal timeline age at each scene it appears in."
+        ),
+    )
 
 
 class ManageSourcebookUpdateData(BaseModel):
@@ -145,6 +152,13 @@ class ManageSourcebookUpdateData(BaseModel):
     images_patch: StringListPatch | None = Field(
         None,
         description="Optional patch operation for images (add/remove/set/clear).",
+    )
+    origin_date: str | None = Field(
+        None,
+        description=(
+            "Optional ISO 8601 birth or creation date (e.g. '1985-11-05'). "
+            "Set to clear the existing value or provide a new one."
+        ),
     )
 
 
@@ -283,6 +297,7 @@ async def manage_sourcebook(
             category=params.entry_data.category,
             synonyms=params.entry_data.synonyms,
             images=params.entry_data.images,
+            origin_date=params.entry_data.origin_date,
         )
         if "error" not in new_entry:
             mutations["story_changed"] = True
@@ -308,6 +323,7 @@ async def manage_sourcebook(
             and params.update_data.synonyms_patch is None
             and params.update_data.images is None
             and params.update_data.images_patch is None
+            and params.update_data.origin_date is None
         ):
             return {
                 "error": "No update fields provided. Provide at least one update field in update_data."
@@ -349,6 +365,7 @@ async def manage_sourcebook(
             category=params.update_data.category,
             synonyms=synonyms_value,
             images=images_value,
+            origin_date=params.update_data.origin_date,
         )
         if "error" not in result:
             mutations["story_changed"] = True

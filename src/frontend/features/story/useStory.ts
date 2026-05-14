@@ -1029,48 +1029,16 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
   }, []);
 
   /**
-   * Patch only `latestStoryRef.current.sourcebook` without triggering a React
-   * re-render.  Returns `true` when the entry content actually changed (using
-   * only user-editable fields; auto-generated keywords are excluded so a
-   * background keyword refresh never counts as a change).  Returns `false`
-   * when the content is identical, meaning no state update is needed at all.
+   * Patch sourcebook entries in the reactive story store so consumers like
+   * Scenes/Convergence Map re-render immediately on in-app sourcebook edits.
    *
-   * Callers should only call `pushExternalHistoryEntry` when this returns
-   * `true` — and can pass `forceNewHistory: true` since a content difference
-   * is already confirmed, skipping the expensive areStoriesEqual JSON.stringify.
-   *
-   * Pass `null` for `entry` to remove an entry by `entryId`.
+   * Returns `true` when an actual change was applied, `false` for no-op.
    */
   const patchSourcebook = useCallback(
     (entry: SourcebookEntry | null, entryId?: string): boolean => {
-      if (!latestStoryRef.current) return false;
-      const prev = latestStoryRef.current.sourcebook ?? [];
-      let next: SourcebookEntry[];
-      if (entry === null) {
-        next = prev.filter((e: SourcebookEntry): boolean => e.id !== entryId);
-        if (next.length === prev.length) return false; // entry not found
-      } else {
-        const idx = prev.findIndex((e: SourcebookEntry): boolean => e.id === entry.id);
-        if (idx >= 0) {
-          // Compare only user-editable fields; keywords are auto-generated and
-          // must not cause a spurious content-changed detection.
-          const sig = (e: SourcebookEntry): string =>
-            JSON.stringify({
-              name: e.name,
-              description: e.description,
-              category: e.category,
-              synonyms: e.synonyms,
-              images: e.images,
-              relations: e.relations,
-            });
-          if (sig(prev[idx]) === sig(entry)) return false; // no meaningful change
-          next = [...prev];
-          next[idx] = entry;
-        } else {
-          next = [...prev, entry];
-        }
-      }
-      latestStoryRef.current = { ...latestStoryRef.current, sourcebook: next };
+      const changed = useStoryStore.getState().patchSourcebookEntry(entry, entryId);
+      if (!changed) return false;
+      latestStoryRef.current = useStoryStore.getState().story;
       return true;
     },
     []

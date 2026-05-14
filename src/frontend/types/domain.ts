@@ -68,6 +68,10 @@ export interface SourcebookEntry {
   images: string[];
   keywords?: string[];
   relations?: SourcebookRelation[];
+  origin_date?: string | null;
+  destination_datetime?: string | null;
+  destination_relative?: string | null;
+  creates_new_timeline?: boolean;
 }
 
 export interface Story {
@@ -144,4 +148,12 @@ export interface Scene {
   pinboard_x: number;
   pinboard_y: number;
   status: SceneStatus;
+  tag_personal_datetimes?: SceneTagPersonalDatetime[];
+}
+
+export interface SceneTagPersonalDatetime {
+  role: 'active' | 'passive' | 'sourcebook';
+  ref: string;
+  index: number;
+  personal_age: string;
 }

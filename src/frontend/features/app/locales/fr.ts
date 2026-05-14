@@ -166,6 +166,9 @@ export const fr = {
     Category: 'Catégorie',
     'Synonyms & Nicknames': 'Synonymes et surnoms',
     'Add (+)': 'Ajouter (+)',
+    'Origin Date': "Date d'origine",
+    'ISO date (birth/creation, e.g. 1955-11-05)':
+      'Date ISO (naissance/création, ex. 1955-11-05)',
     'Associated Images': 'Images associées',
     'Manage Images': 'Gérer les images',
     'No images associated': 'Aucune image associée',
@@ -466,6 +469,8 @@ export const fr = {
       'Histoire, mythes, systèmes magiques, lois ou règles culturelles.',
     "Anything that doesn't fit strictly into other categories.":
       'Tout ce qui ne correspond pas strictement aux autres catégories.',
+    'Time travel events with departure, destination, and timeline branching.':
+      'Événements de voyage dans le temps avec départ, destination et embranchement de chronologie.',
     this: 'ceci',
     'Delete Relation': 'Supprimer la relation',
     'This action is unavailable because no working WRITING model is configured.':
@@ -499,6 +504,9 @@ export const fr = {
     // Scenes
     Scenes: 'Scènes',
     Pinboard: "Tableau d'affichage",
+    'Convergence Map': 'Carte de convergence',
+    'No scenes with a defined in-universe date yet':
+      "Aucune scène avec une date d'univers définie pour l'instant",
     'Add Scene': 'Ajouter une scène',
     'Delete Scene': 'Supprimer la scène',
     'Are you sure you want to delete this scene?':
@@ -514,6 +522,30 @@ export const fr = {
     Location: 'Lieu',
     Time: 'Temps',
     'Color Tag': 'Étiquette couleur',
+    'Time Travel Events': 'Événements de voyage dans le temps',
+    'Add Time Travel Event': 'Ajouter un événement de voyage',
+    'No time travel events in this scene.':
+      'Aucun événement de voyage dans cette scène.',
+    'Event {{n}}': 'Événement {{n}}',
+    'Delete time travel event': 'Supprimer cet événement',
+    'Affected Entries': 'Entrées concernées',
+    'Travel Destination': 'Destination du voyage',
+    'Set travel destination time': 'Définir la date de destination',
+    'Relative Description': 'Description relative',
+    'e.g. 30 years earlier': 'p.ex. 30 ans plus tôt',
+    'Set personal timeline position':
+      'Définir la position dans la chronologie personnelle',
+    'Set personal age at this scene': "Définir l'âge personnel dans cette scène",
+    'No age recorded': 'Aucun âge enregistré',
+    'Main Timeline': 'Chronologie principale',
+    'Enter age as years/months/days, e.g. 17y, 17y 3m, 5m 12d':
+      "Saisir l'âge en années/mois/jours, p.ex. 17y, 17y 3m, 5m 12d",
+    'e.g. 17y 3m': 'p.ex. 17y 3m',
+    'Time Travel': 'Voyage dans le temps',
+    'Creates new timeline': 'Crée une nouvelle chronologie',
+    'Set origin date (birth / creation)':
+      "Définir la date d'origine (naissance / création)",
+
     Status: 'Statut',
     'Scene status': 'Statut de la scène',
     active: 'actif',

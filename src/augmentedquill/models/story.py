@@ -65,6 +65,10 @@ class StorySourcebookEntry(BaseModel):
     images: Optional[list[str]] = None
     keywords: Optional[list[str]] = None
     relations: Optional[list[Any]] = None
+    origin_date: Optional[str] = None
+    destination_datetime: Optional[str] = None
+    destination_relative: Optional[str] = None
+    creates_new_timeline: Optional[bool] = None
 
 
 class StoryPayload(BaseModel):

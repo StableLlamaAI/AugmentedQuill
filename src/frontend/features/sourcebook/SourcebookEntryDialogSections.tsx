@@ -13,6 +13,7 @@
 import React from 'react';
 import {
   Book,
+  Calendar,
   X,
   Undo,
   Redo,
@@ -22,7 +23,6 @@ import {
   MapPin,
   Users,
   Package,
-  Calendar,
   BookOpen,
   HelpCircle,
   ChevronDown,
@@ -36,11 +36,13 @@ import {
   LoaderCircle,
   Check,
   Save,
+  Zap,
 } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { SourcebookEntry, SourcebookRelation, AppTheme } from '../../types';
 import { ProjectImage } from '../../services/apiTypes';
 import { CodeMirrorEditor } from '../editor/CodeMirrorEditor';
+import { SceneDatetimePickerButton } from '../scenes/SceneDatetimePickerButton';
 
 const CATEGORY_DETAILS: Record<
   string,
@@ -73,6 +75,11 @@ const CATEGORY_DETAILS: Record<
   Other: {
     icon: HelpCircle,
     description: "Anything that doesn't fit strictly into other categories.",
+  },
+  'Time Travel': {
+    icon: Zap,
+    description:
+      'Time travel events with departure, destination, and timeline branching.',
   },
 };
 
@@ -180,6 +187,10 @@ interface BasicSectionProps {
   category: string;
   synonyms: string[];
   newSynonym: string;
+  originDate: string | null;
+  destinationDatetime: string | null;
+  destinationRelative: string;
+  createsNewTimeline: boolean;
   inputBorderClass: string;
   inputBgClass: string;
   labelClass: string;
@@ -191,6 +202,10 @@ interface BasicSectionProps {
   onSynonymInputChange: (value: string) => void;
   onAddSynonym: () => void;
   onRemoveSynonym: (idx: number) => void;
+  onOriginDateChange: (value: string | null) => void;
+  onDestinationDatetimeChange: (value: string | null) => void;
+  onDestinationRelativeChange: (value: string) => void;
+  onCreatesNewTimelineChange: (value: boolean) => void;
 }
 
 export const SourcebookEntryBasicsSection: React.FC<BasicSectionProps> = ({
@@ -198,6 +213,10 @@ export const SourcebookEntryBasicsSection: React.FC<BasicSectionProps> = ({
   category,
   synonyms,
   newSynonym,
+  originDate,
+  destinationDatetime,
+  destinationRelative,
+  createsNewTimeline,
   inputBorderClass,
   inputBgClass,
   labelClass,
@@ -209,6 +228,10 @@ export const SourcebookEntryBasicsSection: React.FC<BasicSectionProps> = ({
   onSynonymInputChange,
   onAddSynonym,
   onRemoveSynonym,
+  onOriginDateChange,
+  onDestinationDatetimeChange,
+  onDestinationRelativeChange,
+  onCreatesNewTimelineChange,
 }: BasicSectionProps) => (
   <>
     <div className="space-y-4">
@@ -243,7 +266,7 @@ export const SourcebookEntryBasicsSection: React.FC<BasicSectionProps> = ({
         >
           {t('Category')}
         </label>
-        <div className="grid grid-cols-4 sm:grid-cols-7 gap-2">
+        <div className="grid grid-cols-4 sm:grid-cols-8 gap-2">
           {Object.entries(CATEGORY_DETAILS).map(
             ([cat, details]: [
               string,
@@ -327,6 +350,69 @@ export const SourcebookEntryBasicsSection: React.FC<BasicSectionProps> = ({
         </div>
       </div>
     </div>
+
+    <div className="space-y-2">
+      <label className={`text-xs font-semibold uppercase tracking-wider ${labelClass}`}>
+        {t('Origin Date')}
+      </label>
+      <SceneDatetimePickerButton
+        value={originDate}
+        onChange={onOriginDateChange}
+        placeholder={t('Set origin date (birth / creation)')}
+      />
+    </div>
+
+    {category === 'Time Travel' && (
+      <>
+        <div className="space-y-2">
+          <label
+            className={`text-xs font-semibold uppercase tracking-wider ${labelClass}`}
+          >
+            {t('Travel Destination')}
+          </label>
+          <SceneDatetimePickerButton
+            value={destinationDatetime}
+            onChange={onDestinationDatetimeChange}
+            placeholder={t('Set travel destination time')}
+          />
+        </div>
+        <div className="space-y-2">
+          <label
+            className={`text-xs font-semibold uppercase tracking-wider ${labelClass}`}
+          >
+            {t('Relative Description')}
+          </label>
+          <input
+            type="text"
+            value={destinationRelative}
+            onChange={(
+              e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>
+            ): void => onDestinationRelativeChange(e.target.value)}
+            lang={language}
+            spellCheck={false}
+            className={`w-full px-3 py-2 text-sm rounded-md border ${inputBorderClass} ${inputBgClass} focus:outline-none focus:ring-2 focus:ring-brand-500 transition-colors`}
+            placeholder={t('e.g. 30 years earlier')}
+          />
+        </div>
+        <div className="flex items-center gap-3">
+          <input
+            type="checkbox"
+            id="creates-new-timeline"
+            checked={createsNewTimeline}
+            onChange={(
+              e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>
+            ): void => onCreatesNewTimelineChange(e.target.checked)}
+            className="w-4 h-4 rounded border accent-brand-500 cursor-pointer"
+          />
+          <label
+            htmlFor="creates-new-timeline"
+            className={`text-sm cursor-pointer ${isLight ? 'text-brand-gray-700' : 'text-brand-gray-300'}`}
+          >
+            {t('Creates new timeline')}
+          </label>
+        </div>
+      </>
+    )}
   </>
 );
 

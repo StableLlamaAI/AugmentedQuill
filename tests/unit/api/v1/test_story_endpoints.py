@@ -123,6 +123,41 @@ class StoryEndpointsTest(ApiTestCase):
         r = self.client.put("/api/v1/chapters/999/summary", json={"summary": "X"})
         self.assertEqual(r.status_code, 404)
 
+    def test_project_select_story_payload_keeps_time_travel_fields(self):
+        sourcebook = {
+            "1985 -> 1955": {
+                "description": "Temporal jump",
+                "category": "Time Travel",
+                "synonyms": [],
+                "origin_date": "1985-11-05T20:00:00+00:00[UTC][u-ca=gregory]",
+                "destination_datetime": "1955-11-05T20:00:00+00:00[UTC][u-ca=gregory]",
+                "destination_relative": "30 years earlier",
+                "creates_new_timeline": True,
+            }
+        }
+        self._make_project(name="tt_payload", sourcebook=sourcebook)
+
+        r = self.client.post("/api/v1/projects/select", json={"name": "tt_payload"})
+        self.assertEqual(r.status_code, 200, r.text)
+
+        story = (r.json() or {}).get("story") or {}
+        entries = story.get("sourcebook") or []
+        tt_entry = next((e for e in entries if e.get("id") == "1985 -> 1955"), None)
+
+        self.assertIsNotNone(
+            tt_entry, f"Missing time travel entry in payload: {entries}"
+        )
+        self.assertEqual(
+            tt_entry.get("origin_date"),
+            "1985-11-05T20:00:00+00:00[UTC][u-ca=gregory]",
+        )
+        self.assertEqual(
+            tt_entry.get("destination_datetime"),
+            "1955-11-05T20:00:00+00:00[UTC][u-ca=gregory]",
+        )
+        self.assertEqual(tt_entry.get("destination_relative"), "30 years earlier")
+        self.assertTrue(tt_entry.get("creates_new_timeline"))
+
     # ---- Story LLM endpoints with fakes ----
     def _patch_llm(self):
         # Patch credentials and completion in augmentedquill.services.llm.llm

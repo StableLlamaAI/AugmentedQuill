@@ -94,6 +94,10 @@ async def create_sourcebook_entry(
         synonyms=entry.synonyms,
         relations=[r.model_dump() for r in entry.relations],
         images=entry.images,
+        origin_date=entry.origin_date,
+        destination_datetime=entry.destination_datetime,
+        destination_relative=entry.destination_relative,
+        creates_new_timeline=entry.creates_new_timeline,
         active=project_dir,
     )
     if "error" in created:
@@ -128,6 +132,10 @@ async def update_sourcebook_entry(
             else None
         ),
         images=updates.images,
+        origin_date=updates.origin_date,
+        destination_datetime=updates.destination_datetime,
+        destination_relative=updates.destination_relative,
+        creates_new_timeline=updates.creates_new_timeline,
         active=project_dir,
     )
     if "error" in result:

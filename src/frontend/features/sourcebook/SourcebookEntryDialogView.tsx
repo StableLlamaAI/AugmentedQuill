@@ -44,6 +44,10 @@ interface SourcebookEntryDialogViewProps {
   category: string;
   synonyms: string[];
   newSynonym: string;
+  originDate: string | null;
+  destinationDatetime: string | null;
+  destinationRelative: string;
+  createsNewTimeline: boolean;
   images: string[];
   relations: SourcebookRelation[];
   relationNameMap: Record<string, string>;
@@ -78,6 +82,10 @@ interface SourcebookEntryDialogViewProps {
   onSynonymInputChange: (value: string) => void;
   onAddSynonym: () => void;
   onRemoveSynonym: (index: number) => void;
+  onOriginDateChange: (value: string | null) => void;
+  onDestinationDatetimeChange: (value: string | null) => void;
+  onDestinationRelativeChange: (value: string) => void;
+  onCreatesNewTimelineChange: (value: boolean) => void;
   onToggleImagesExpanded: () => void;
   onOpenImagePicker: () => void;
   onToggleImage: (filename: string) => void;
@@ -151,6 +159,14 @@ export const SourcebookEntryDialogView: React.FC<SourcebookEntryDialogViewProps>
     onSynonymInputChange,
     onAddSynonym,
     onRemoveSynonym,
+    originDate,
+    destinationDatetime,
+    destinationRelative,
+    createsNewTimeline,
+    onOriginDateChange,
+    onDestinationDatetimeChange,
+    onDestinationRelativeChange,
+    onCreatesNewTimelineChange,
     onToggleImagesExpanded,
     onOpenImagePicker,
     onToggleImage,
@@ -203,6 +219,10 @@ export const SourcebookEntryDialogView: React.FC<SourcebookEntryDialogViewProps>
               category={category}
               synonyms={synonyms}
               newSynonym={newSynonym}
+              originDate={originDate}
+              destinationDatetime={destinationDatetime}
+              destinationRelative={destinationRelative}
+              createsNewTimeline={createsNewTimeline}
               inputBorderClass={inputBorderClass}
               inputBgClass={inputBgClass}
               labelClass={labelClass}
@@ -214,6 +234,10 @@ export const SourcebookEntryDialogView: React.FC<SourcebookEntryDialogViewProps>
               onSynonymInputChange={onSynonymInputChange}
               onAddSynonym={onAddSynonym}
               onRemoveSynonym={onRemoveSynonym}
+              onOriginDateChange={onOriginDateChange}
+              onDestinationDatetimeChange={onDestinationDatetimeChange}
+              onDestinationRelativeChange={onDestinationRelativeChange}
+              onCreatesNewTimelineChange={onCreatesNewTimelineChange}
             />
 
             <SourcebookEntryImagesSection

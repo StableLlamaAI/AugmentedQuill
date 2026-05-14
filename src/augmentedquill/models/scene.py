@@ -19,55 +19,44 @@ offset may be stale.
 
 from __future__ import annotations
 
-import re
 import uuid
-from typing import Optional
+from typing import Literal, Optional
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
-_BRACKET_TOKEN_RE = re.compile(r"\[[^\]]+\]")
-_DATE_ONLY_RE = re.compile(r"^[+-]?\d{4,}-\d{2}-\d{2}$")
-_DATE_TIME_MINUTE_RE = re.compile(
-    r"^(?P<prefix>[+-]?\d{4,}-\d{2}-\d{2}[T ]\d{2}:\d{2})(?P<suffix>Z|[+-]\d{2}:?\d{2})?$"
-)
-_OFFSET_NO_COLON_RE = re.compile(r"([+-]\d{2})(\d{2})$")
+from augmentedquill.models.temporal_utils import normalize_temporal_value
+
+# Keep a private alias for backward compat within this module
+_normalize_scene_temporal_value = normalize_temporal_value
 
 
-def _normalize_scene_temporal_value(raw_value: str) -> str:
-    """Normalize common date/time shorthand into a stable ISO-like string.
+class SceneTagPersonalDatetime(BaseModel):
+    """Personal age override for one specific tag instance in a scene.
 
-    Accepted shorthand examples:
-    - ``1985-11-05`` -> ``1985-11-05T12:00:00Z``
-    - ``1985-11-05T20:00`` -> ``1985-11-05T20:00:00Z``
-    - ``1985-11-05 20:00`` -> ``1985-11-05T20:00:00Z``
-    - ``1985-11-05T20:00:00`` -> ``1985-11-05T20:00:00Z``
+    ``role`` is ``'active'``, ``'passive'``, or ``'sourcebook'``.
+    ``ref`` is the character name (for active/passive) or sourcebook entry ID
+    (for sourcebook).
+    ``index`` is the 0-based position within the role's list – this allows
+    the same character to appear multiple times in one scene (e.g. a time
+    traveller meeting their younger self).
+    ``personal_age`` is a human-readable age string such as ``'17y'``,
+    ``'17y 3m'``, ``'5m 12d'``, or ``'30d'``.
     """
-    value = raw_value.strip()
-    if not value:
-        raise ValueError("scene_time value cannot be empty")
 
-    if _DATE_ONLY_RE.fullmatch(value):
-        return f"{value}T12:00:00Z"
+    role: Literal["active", "passive", "sourcebook"]
+    ref: str
+    index: int = 0
+    personal_age: str
 
-    normalized = value.replace(" ", "T", 1)
-    minute_match = _DATE_TIME_MINUTE_RE.fullmatch(normalized)
-    if minute_match:
-        prefix = minute_match.group("prefix")
-        suffix = minute_match.group("suffix") or "Z"
-        normalized = f"{prefix}:00{suffix}"
-
-    if normalized.endswith("z"):
-        normalized = f"{normalized[:-1]}Z"
-
-    if _OFFSET_NO_COLON_RE.search(normalized):
-        normalized = _OFFSET_NO_COLON_RE.sub(r"\1:\2", normalized)
-
-    base_no_brackets = _BRACKET_TOKEN_RE.sub("", normalized)
-    has_offset_or_z = bool(re.search(r"(Z|[+-]\d{2}:\d{2})$", base_no_brackets))
-    if "T" in base_no_brackets and not has_offset_or_z:
-        normalized = f"{normalized}Z"
-
-    return normalized
+    @field_validator("personal_age", mode="before")
+    @classmethod
+    def _normalise(cls, v: object) -> str:
+        if not isinstance(v, str):
+            raise ValueError("personal_age must be a string")
+        stripped = v.strip()
+        if not stripped:
+            raise ValueError("personal_age must not be empty")
+        return stripped
 
 
 class SceneProseLink(BaseModel):
@@ -160,6 +149,9 @@ class Scene(BaseModel):
     pinboard_x: float = 100.0
     pinboard_y: float = 100.0
     status: str = "active"  # 'active' | 'inactive' | 'draft'
+    tag_personal_datetimes: list[SceneTagPersonalDatetime] = Field(
+        default_factory=list
+    )  # per-tag personal age overrides (supports duplicate characters)
 
 
 # ---------------------------------------------------------------------------
@@ -185,6 +177,7 @@ class SceneCreateRequest(BaseModel):
     pinboard_x: float = 100.0
     pinboard_y: float = 100.0
     status: str = "active"
+    tag_personal_datetimes: list[SceneTagPersonalDatetime] = Field(default_factory=list)
 
 
 class SceneUpdateRequest(BaseModel):
@@ -205,6 +198,9 @@ class SceneUpdateRequest(BaseModel):
     pinboard_x: Optional[float] = None
     pinboard_y: Optional[float] = None
     status: Optional[str] = None
+    tag_personal_datetimes: Optional[list[SceneTagPersonalDatetime]] = (
+        None  # None = no change
+    )
 
 
 class SceneLinkProseRequest(BaseModel):

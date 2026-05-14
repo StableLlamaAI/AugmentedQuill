@@ -2771,6 +2771,8 @@ export interface components {
        * @default active
        */
       status: string;
+      /** Tag Personal Datetimes */
+      tag_personal_datetimes?: components['schemas']['SceneTagPersonalDatetime'][];
     };
     /**
      * SceneBeat
@@ -2854,6 +2856,8 @@ export interface components {
        * @default active
        */
       status: string;
+      /** Tag Personal Datetimes */
+      tag_personal_datetimes?: components['schemas']['SceneTagPersonalDatetime'][];
     };
     /**
      * SceneLinkProseRequest
@@ -2954,6 +2958,35 @@ export interface components {
       rebuilt_text: string;
     };
     /**
+     * SceneTagPersonalDatetime
+     * @description Personal age override for one specific tag instance in a scene.
+     *
+     *     ``role`` is ``'active'``, ``'passive'``, or ``'sourcebook'``.
+     *     ``ref`` is the character name (for active/passive) or sourcebook entry ID
+     *     (for sourcebook).
+     *     ``index`` is the 0-based position within the role's list – this allows
+     *     the same character to appear multiple times in one scene (e.g. a time
+     *     traveller meeting their younger self).
+     *     ``personal_age`` is a human-readable age string such as ``'17y'``,
+     *     ``'17y 3m'``, ``'5m 12d'``, or ``'30d'``.
+     */
+    SceneTagPersonalDatetime: {
+      /**
+       * Role
+       * @enum {string}
+       */
+      role: 'active' | 'passive' | 'sourcebook';
+      /** Ref */
+      ref: string;
+      /**
+       * Index
+       * @default 0
+       */
+      index: number;
+      /** Personal Age */
+      personal_age: string;
+    };
+    /**
      * SceneUpdateProseContentRequest
      * @description Payload for replacing the prose text at a scene's linked offsets.
      */
@@ -2994,6 +3027,10 @@ export interface components {
       pinboard_y?: number | null;
       /** Status */
       status?: string | null;
+      /** Tag Personal Datetimes */
+      tag_personal_datetimes?:
+        | components['schemas']['SceneTagPersonalDatetime'][]
+        | null;
     };
     /**
      * SearchMatch
@@ -3151,6 +3188,17 @@ export interface components {
        * @default []
        */
       relations: components['schemas']['SourcebookRelation'][];
+      /** Origin Date */
+      origin_date?: string | null;
+      /** Destination Datetime */
+      destination_datetime?: string | null;
+      /** Destination Relative */
+      destination_relative?: string | null;
+      /**
+       * Creates New Timeline
+       * @default false
+       */
+      creates_new_timeline: boolean;
     };
     /**
      * SourcebookEntryCreate
@@ -3178,6 +3226,17 @@ export interface components {
        * @default []
        */
       relations: components['schemas']['SourcebookRelation'][];
+      /** Origin Date */
+      origin_date?: string | null;
+      /** Destination Datetime */
+      destination_datetime?: string | null;
+      /** Destination Relative */
+      destination_relative?: string | null;
+      /**
+       * Creates New Timeline
+       * @default false
+       */
+      creates_new_timeline: boolean;
     };
     /**
      * SourcebookEntryUpdate
@@ -3196,6 +3255,14 @@ export interface components {
       images?: string[] | null;
       /** Relations */
       relations?: components['schemas']['SourcebookRelation'][] | null;
+      /** Origin Date */
+      origin_date?: string | null;
+      /** Destination Datetime */
+      destination_datetime?: string | null;
+      /** Destination Relative */
+      destination_relative?: string | null;
+      /** Creates New Timeline */
+      creates_new_timeline?: boolean | null;
     };
     /**
      * SourcebookKeywordsRequest
@@ -3359,6 +3426,14 @@ export interface components {
       keywords?: string[] | null;
       /** Relations */
       relations?: unknown[] | null;
+      /** Origin Date */
+      origin_date?: string | null;
+      /** Destination Datetime */
+      destination_datetime?: string | null;
+      /** Destination Relative */
+      destination_relative?: string | null;
+      /** Creates New Timeline */
+      creates_new_timeline?: boolean | null;
     };
     /**
      * StorySummaryResponse
