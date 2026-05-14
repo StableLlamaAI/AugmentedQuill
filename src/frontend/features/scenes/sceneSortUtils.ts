@@ -16,6 +16,10 @@ import { parseZonedDateTime } from '../../utils/temporal';
 
 export type ProjectType = 'short-story' | 'novel' | 'series';
 
+function getNarrativeOrderIndex(scene: Scene): number {
+  return Number.isFinite(scene.order_index) ? (scene.order_index as number) : scene.id;
+}
+
 function normalizeId(value: unknown): string | null {
   if (typeof value === 'string') {
     const trimmed = value.trim();
@@ -113,7 +117,7 @@ export function sceneSortKey(
   chapterOrderMap: Map<string, number>
 ): [number, number] {
   const link = scene.prose_link;
-  if (!link) return [Infinity, Infinity];
+  if (!link) return [Infinity, getNarrativeOrderIndex(scene)];
   if (link.scope_type === 'story') return [-1, link.start_offset];
   const chapterId = normalizeChapterId(link.chapter_id);
   const chIdx = chapterOrderMap.get(chapterId) ?? Infinity;
@@ -129,6 +133,9 @@ export function proseSort(
   const [bChIdx, bOff] = sceneSortKey(sceneB, chapterOrderMap);
   if (aChIdx !== bChIdx) return aChIdx < bChIdx ? -1 : 1;
   if (aOff !== bOff) return aOff - bOff;
+  const aOrder = getNarrativeOrderIndex(sceneA);
+  const bOrder = getNarrativeOrderIndex(sceneB);
+  if (aOrder !== bOrder) return aOrder - bOrder;
   return sceneA.id - sceneB.id;
 }
 

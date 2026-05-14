@@ -277,6 +277,17 @@ def _next_scene_id(scenes_dict: dict[SceneId, Any]) -> SceneId:
     return max(scenes_dict.keys(), default=0) + 1
 
 
+def _next_scene_order_index(scenes_dict: dict[SceneId, Any]) -> int:
+    """Allocate the next narrative order index for scenes without prose links."""
+    current = [
+        value.get("order_index")
+        for value in scenes_dict.values()
+        if isinstance(value, dict)
+    ]
+    numeric = [idx for idx in current if isinstance(idx, int)]
+    return max(numeric, default=0) + 1
+
+
 def _validate_scene_ordering_constraints(
     scene_id: SceneId,
     order_before: object,
@@ -314,6 +325,9 @@ def _normalise_scene(raw: dict[str, Any]) -> dict[str, Any]:
 
     raw["order_before"] = _coerce_scene_id_list(raw.get("order_before"))
     raw["order_after"] = _coerce_scene_id_list(raw.get("order_after"))
+
+    order_index = raw.get("order_index")
+    raw["order_index"] = order_index if isinstance(order_index, int) else scene_id
 
     raw.setdefault("scene_time", None)
     raw.setdefault("tag_personal_datetimes", [])
@@ -403,6 +417,8 @@ def create_scene(project_dir: Path, payload: SceneCreateRequest) -> dict[str, An
     scene_id = _next_scene_id(scenes_dict)
     data = payload.model_dump(exclude_none=False)
     data.pop("id", None)  # id is derived, not stored in dict value
+    if not isinstance(data.get("order_index"), int) or data.get("order_index") == 0:
+        data["order_index"] = _next_scene_order_index(scenes_dict)
     _validate_scene_ordering_constraints(
         scene_id,
         data.get("order_before"),

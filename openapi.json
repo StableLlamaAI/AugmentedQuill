@@ -6583,6 +6583,11 @@
             "title": "Order After",
             "default": []
           },
+          "order_index": {
+            "type": "integer",
+            "title": "Order Index",
+            "default": 0
+          },
           "pinboard_x": {
             "type": "number",
             "title": "Pinboard X",
@@ -6756,6 +6761,11 @@
             "type": "array",
             "title": "Order After",
             "default": []
+          },
+          "order_index": {
+            "type": "integer",
+            "title": "Order Index",
+            "default": 0
           },
           "pinboard_x": {
             "type": "number",
@@ -7154,6 +7164,17 @@
               }
             ],
             "title": "Order After"
+          },
+          "order_index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Order Index"
           },
           "pinboard_x": {
             "anyOf": [

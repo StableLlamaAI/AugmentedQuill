@@ -2757,6 +2757,11 @@ export interface components {
        */
       order_after: number[];
       /**
+       * Order Index
+       * @default 0
+       */
+      order_index: number;
+      /**
        * Pinboard X
        * @default 100
        */
@@ -2841,6 +2846,11 @@ export interface components {
        * @default []
        */
       order_after: number[];
+      /**
+       * Order Index
+       * @default 0
+       */
+      order_index: number;
       /**
        * Pinboard X
        * @default 100
@@ -3021,6 +3031,8 @@ export interface components {
       order_before?: number[] | null;
       /** Order After */
       order_after?: number[] | null;
+      /** Order Index */
+      order_index?: number | null;
       /** Pinboard X */
       pinboard_x?: number | null;
       /** Pinboard Y */

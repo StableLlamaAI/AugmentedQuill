@@ -36,6 +36,7 @@ export interface SceneCreatePayload {
   prose_link?: SceneProseLink | null;
   order_before?: SceneId[];
   order_after?: SceneId[];
+  order_index?: number;
   pinboard_x?: number;
   pinboard_y?: number;
   status?: string;

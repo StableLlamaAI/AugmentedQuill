@@ -148,6 +148,7 @@ class Scene(BaseModel):
     prose_link: Optional[SceneProseLink] = None  # used when beats is empty
     order_before: list[SceneId] = []  # scene IDs this scene must precede
     order_after: list[SceneId] = []  # scene IDs this scene must follow
+    order_index: int = 0  # narrative order for scenes without prose links
     pinboard_x: float = 100.0
     pinboard_y: float = 100.0
     status: str = "active"  # 'active' | 'inactive' | 'draft'
@@ -176,6 +177,7 @@ class SceneCreateRequest(BaseModel):
     prose_link: Optional[SceneProseLink] = None
     order_before: list[SceneId] = []
     order_after: list[SceneId] = []
+    order_index: int = 0
     pinboard_x: float = 100.0
     pinboard_y: float = 100.0
     status: str = "active"
@@ -197,6 +199,7 @@ class SceneUpdateRequest(BaseModel):
     prose_link: Optional[SceneProseLink] = None
     order_before: Optional[list[SceneId]] = None
     order_after: Optional[list[SceneId]] = None
+    order_index: Optional[int] = None
     pinboard_x: Optional[float] = None
     pinboard_y: Optional[float] = None
     status: Optional[str] = None

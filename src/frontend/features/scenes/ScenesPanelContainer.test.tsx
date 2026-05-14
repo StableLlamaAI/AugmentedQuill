@@ -1292,6 +1292,33 @@ describe('handleNarrativeReorder (drag-reorder user interaction)', () => {
     expect(apiMock.scenes.reorderProse).not.toHaveBeenCalled();
   });
 
+  it('[VALID] persists unlinked scene reorder using order_index updates', async () => {
+    const sceneA = makeScene({ id: 'a', prose_link: null, order_index: 1 });
+    const sceneB = makeScene({ id: 'b', prose_link: null, order_index: 2 });
+
+    apiMock.scenes.update
+      .mockResolvedValueOnce({ ...sceneB, order_index: 1 })
+      .mockResolvedValueOnce({ ...sceneA, order_index: 2 });
+
+    await renderNarrative([sceneA, sceneB]);
+
+    await act(async () => {
+      await nv().onReorderScene?.('b', 'a', true);
+    });
+
+    expect(apiMock.scenes.reorderProse).not.toHaveBeenCalled();
+    expect(apiMock.scenes.update).toHaveBeenNthCalledWith(
+      1,
+      'b',
+      expect.objectContaining({ order_index: 1 })
+    );
+    expect(apiMock.scenes.update).toHaveBeenNthCalledWith(
+      2,
+      'a',
+      expect.objectContaining({ order_index: 2 })
+    );
+  });
+
   it('[VALID] forwards reorder intent for different prose scopes', async () => {
     const sceneA = makeScene({
       id: 'a',

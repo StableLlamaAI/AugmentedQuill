@@ -233,6 +233,60 @@ describe('NarrativeView drag reorder interactions', () => {
       expect(onReorderScene).not.toHaveBeenCalled();
     });
   });
+
+  it('uses last drag-over hint for placeBefore and text/plain drag payload fallback', async () => {
+    const onReorderScene = vi.fn(async () => undefined);
+    const sceneA = makeScene({ id: 1, summary: 'A' });
+    const sceneB = makeScene({ id: 2, summary: 'B' });
+
+    const { getByText } = render(
+      <I18nextProvider i18n={i18n}>
+        <NarrativeView
+          scenes={[sceneA, sceneB]}
+          projectType="novel"
+          chapters={[]}
+          books={[]}
+          primarySelectedSceneId={null}
+          onSelectScene={vi.fn()}
+          onSelectionChange={vi.fn()}
+          onEditScene={vi.fn()}
+          onReorderScene={onReorderScene}
+        />
+      </I18nextProvider>
+    );
+
+    const sourceWrapper = getByText('A').parentElement as HTMLDivElement;
+    const targetWrapper = getByText('B').parentElement as HTMLDivElement;
+    const transfer = makeDataTransfer();
+
+    vi.spyOn(targetWrapper, 'getBoundingClientRect').mockReturnValue({
+      x: 0,
+      y: 100,
+      width: 200,
+      height: 80,
+      top: 100,
+      left: 0,
+      right: 200,
+      bottom: 180,
+      toJSON: () => ({}),
+    });
+
+    fireEvent.dragStart(sourceWrapper, { dataTransfer: transfer });
+
+    // Emulate a browser that only preserves text/plain in the drop payload.
+    transfer.clearData('application/x-augmentedquill-scene-id');
+
+    // Drag over lower half => placeBefore should be false and reused on drop.
+    fireEvent.dragOver(targetWrapper, { dataTransfer: transfer, clientY: 179 });
+
+    // Drop with a conflicting coordinate: if handler ignored hint, this would
+    // wrongly reorder as placeBefore=true.
+    fireEvent.drop(targetWrapper, { dataTransfer: transfer, clientY: 101 });
+
+    await waitFor(() => {
+      expect(onReorderScene).toHaveBeenCalledWith(1, 2, false);
+    });
+  });
 });
 
 describe('NarrativeView series sorting and grouping', () => {

@@ -522,6 +522,17 @@ export const NarrativeView: React.FC<NarrativeViewProps> = ({
     id: SceneId;
     placeBefore: boolean;
   } | null>(null);
+  const resolveDraggedSceneId = useCallback(
+    (eventData: DataTransfer): SceneId | null => {
+      return (
+        dragSceneIdRef.current ||
+        parseSceneId(eventData.getData(DRAG_SCENE_MIME)) ||
+        parseSceneId(eventData.getData('text/plain')) ||
+        dragSceneId
+      );
+    },
+    [DRAG_SCENE_MIME, dragSceneId, parseSceneId]
+  );
   const applyLaneScrollDelta = useCallback((delta: number): boolean => {
     const scroller = bottomLaneScrollRef.current;
     if (!scroller) return false;
@@ -587,10 +598,7 @@ export const NarrativeView: React.FC<NarrativeViewProps> = ({
 
   const handleSceneDragOver = useCallback(
     (e: React.DragEvent<HTMLDivElement>, sceneId: SceneId): void => {
-      const sourceId =
-        dragSceneIdRef.current ||
-        parseSceneId(e.dataTransfer.getData(DRAG_SCENE_MIME)) ||
-        dragSceneId;
+      const sourceId = resolveDraggedSceneId(e.dataTransfer);
       if (!sourceId || sourceId === sceneId) return;
       e.preventDefault();
       const rect = e.currentTarget.getBoundingClientRect();
@@ -601,25 +609,24 @@ export const NarrativeView: React.FC<NarrativeViewProps> = ({
         return { id: sceneId, placeBefore };
       });
     },
-    [DRAG_SCENE_MIME, dragSceneId, parseSceneId]
+    [resolveDraggedSceneId]
   );
 
   const handleSceneDrop = useCallback(
     async (e: React.DragEvent<HTMLDivElement>, targetId: SceneId): Promise<void> => {
       e.preventDefault();
-      const sourceId =
-        dragSceneIdRef.current ||
-        parseSceneId(e.dataTransfer.getData(DRAG_SCENE_MIME)) ||
-        dragSceneId;
+      const sourceId = resolveDraggedSceneId(e.dataTransfer);
       if (!sourceId || sourceId === targetId) return;
+      const hintedPlaceBefore =
+        dropHint && dropHint.id === targetId ? dropHint.placeBefore : null;
       const rect = e.currentTarget.getBoundingClientRect();
-      const placeBefore = e.clientY < rect.top + rect.height / 2;
+      const placeBefore = hintedPlaceBefore ?? e.clientY < rect.top + rect.height / 2;
       dragSceneIdRef.current = null;
       setDropHint(null);
       setDragSceneId(null);
       await onReorderScene?.(sourceId, targetId, placeBefore);
     },
-    [DRAG_SCENE_MIME, dragSceneId, onReorderScene, parseSceneId]
+    [dropHint, onReorderScene, resolveDraggedSceneId]
   );
 
   useEffect(() => {

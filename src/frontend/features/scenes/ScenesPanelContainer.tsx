@@ -35,6 +35,7 @@ import { SceneEditorDialog } from './SceneEditorDialog';
 import type { SceneUpdatePayload } from '../../services/apiClients/scenes';
 import type { ProseDropData } from './types';
 import { useSceneProseSync } from './useSceneProseSync';
+import { buildChapterOrderMap, proseSort } from './sceneSortUtils';
 import { uiStoreActions, useUIStore } from '../../stores/uiStore';
 import type { UIStoreState } from '../../stores/uiStore';
 
@@ -57,6 +58,11 @@ type BoundaryAdjustment = {
   link: SceneProseLink;
   newStart: number;
   newEnd: number;
+};
+
+type NarrativeOrderUpdate = {
+  id: SceneId;
+  order_index: number;
 };
 
 function collectBoundaryAdjustments(
@@ -118,6 +124,24 @@ function applyScenePatches(prevScenes: Scene[], updates: Scene[]): Scene[] {
       applyScenePatch(nextScenes, nextScene),
     prevScenes
   );
+}
+
+function getNarrativeOrderIndex(scene: Scene): number {
+  return Number.isFinite(scene.order_index) ? (scene.order_index as number) : scene.id;
+}
+
+function reorderByPlacement<T>(
+  items: T[],
+  sourceIndex: number,
+  targetIndex: number,
+  placeBefore: boolean
+): T[] {
+  const next = [...items];
+  const [moved] = next.splice(sourceIndex, 1);
+  let insertIndex = targetIndex + (placeBefore ? 0 : 1);
+  if (sourceIndex < insertIndex) insertIndex -= 1;
+  next.splice(insertIndex, 0, moved);
+  return next;
 }
 
 // eslint-disable-next-line max-lines-per-function
@@ -389,17 +413,85 @@ export const ScenesPanelContainer: React.FC<ScenesPanelContainerProps> = ({
   );
 
   // ---- Narrative reorder (drag in list + move linked prose text) ----
-  const handleNarrativeReorder = useCallback(
+  const handleUnlinkedNarrativeReorder = useCallback(
     async (
       sourceSceneId: SceneId,
       targetSceneId: SceneId,
       placeBefore: boolean
     ): Promise<void> => {
-      if (sourceSceneId === targetSceneId) return;
+      const chapterOrderMap = buildChapterOrderMap(projectType, chapters, books);
+      const sortedScenes = [...scenes].sort((a: Scene, b: Scene) =>
+        proseSort(a, b, chapterOrderMap)
+      );
 
-      const sourceScene = scenes.find((s: Scene) => s.id === sourceSceneId);
-      const targetScene = scenes.find((s: Scene) => s.id === targetSceneId);
-      if (!sourceScene?.prose_link || !targetScene?.prose_link) return;
+      const unlinked = sortedScenes.filter((s: Scene) => !s.prose_link);
+      const sourceIndex = unlinked.findIndex((s: Scene) => s.id === sourceSceneId);
+      const targetIndex = unlinked.findIndex((s: Scene) => s.id === targetSceneId);
+      if (sourceIndex < 0 || targetIndex < 0) return;
+
+      const reordered = reorderByPlacement(
+        unlinked,
+        sourceIndex,
+        targetIndex,
+        placeBefore
+      );
+      const nextOrderById = new Map<SceneId, number>(
+        reordered.map((scene: Scene, index: number) => [scene.id, index + 1])
+      );
+
+      const updates = reordered
+        .map((scene: Scene): NarrativeOrderUpdate | null => {
+          const nextOrder = nextOrderById.get(scene.id);
+          if (nextOrder === undefined) return null;
+          if (getNarrativeOrderIndex(scene) === nextOrder) return null;
+          return { id: scene.id, order_index: nextOrder };
+        })
+        .filter(
+          (update: NarrativeOrderUpdate | null): update is NarrativeOrderUpdate =>
+            update !== null
+        );
+
+      if (updates.length === 0) return;
+
+      const previousById = new Map<SceneId, Scene>(
+        scenes.map((scene: Scene): [SceneId, Scene] => [scene.id, scene])
+      );
+      updates.forEach((update: NarrativeOrderUpdate): void => {
+        const prev = previousById.get(update.id);
+        if (!prev) return;
+        patchScene({ ...prev, order_index: update.order_index });
+      });
+
+      try {
+        const persisted = await Promise.all(
+          updates.map((update: NarrativeOrderUpdate) =>
+            api.scenes.update(update.id, {
+              order_index: update.order_index,
+            } as SceneUpdatePayload)
+          )
+        );
+        persisted.forEach((scene: Scene): void => patchScene(scene));
+        recordSceneHistory(
+          'Reorder scene narrative',
+          applyScenePatches(scenes, persisted)
+        );
+      } catch (err) {
+        updates.forEach((update: NarrativeOrderUpdate): void => {
+          const prev = previousById.get(update.id);
+          if (prev) patchScene(prev);
+        });
+        notifyError(t('Save'), err);
+      }
+    },
+    [books, chapters, patchScene, projectType, recordSceneHistory, scenes, t]
+  );
+
+  const handleLinkedProseNarrativeReorder = useCallback(
+    async (
+      sourceSceneId: SceneId,
+      targetSceneId: SceneId,
+      placeBefore: boolean
+    ): Promise<void> => {
       try {
         const reorderResult = await api.scenes.reorderProse({
           source_scene_id: sourceSceneId,
@@ -436,7 +528,34 @@ export const ScenesPanelContainer: React.FC<ScenesPanelContainerProps> = ({
         notifyError(t('Save'), err);
       }
     },
-    [scenes, patchScene, recordSceneHistory, editorRef, currentChapter, t]
+    [currentChapter, editorRef, patchScene, recordSceneHistory, scenes, t]
+  );
+
+  const handleNarrativeReorder = useCallback(
+    async (
+      sourceSceneId: SceneId,
+      targetSceneId: SceneId,
+      placeBefore: boolean
+    ): Promise<void> => {
+      if (sourceSceneId === targetSceneId) return;
+
+      const sourceScene = scenes.find((s: Scene) => s.id === sourceSceneId);
+      const targetScene = scenes.find((s: Scene) => s.id === targetSceneId);
+      if (!sourceScene || !targetScene) return;
+
+      if (!sourceScene.prose_link && !targetScene.prose_link) {
+        await handleUnlinkedNarrativeReorder(sourceSceneId, targetSceneId, placeBefore);
+        return;
+      }
+
+      if (!sourceScene.prose_link || !targetScene.prose_link) return;
+      await handleLinkedProseNarrativeReorder(
+        sourceSceneId,
+        targetSceneId,
+        placeBefore
+      );
+    },
+    [handleLinkedProseNarrativeReorder, handleUnlinkedNarrativeReorder, scenes]
   );
 
   // ---- Prose-link boundary drag (update start/end offset) ----
