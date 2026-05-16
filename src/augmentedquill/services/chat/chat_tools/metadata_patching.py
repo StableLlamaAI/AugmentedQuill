@@ -14,6 +14,22 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
+class ConflictEntry(BaseModel):
+    """Structured conflict entry used by chapter and story metadata tools."""
+
+    description: str = Field(
+        ..., description="Short description of the unresolved story conflict."
+    )
+    resolution: str | None = Field(
+        None,
+        description="Optional proposed or current resolution for the conflict.",
+    )
+    resolved: bool = Field(
+        False,
+        description="Set to true when the conflict has been resolved and should no longer be treated as active.",
+    )
+
+
 class TextPatch(BaseModel):
     """Patch operation for text fields."""
 
@@ -103,7 +119,7 @@ class ConflictPatchOperation(BaseModel):
             "For append/add, omit index."
         ),
     )
-    conflict: dict[str, Any] | None = Field(
+    conflict: ConflictEntry | dict[str, Any] | None = Field(
         None,
         description=(
             "Conflict payload for add/insert/replace operations. "
@@ -237,13 +253,21 @@ def apply_conflict_list_patch(
     """Apply ordered conflict-list operations."""
     result = [dict(item) for item in (current or []) if isinstance(item, dict)]
 
+    def _as_dict(value: Any) -> dict[str, Any]:
+        if hasattr(value, "model_dump"):
+            dumped = value.model_dump()
+            return dumped if isinstance(dumped, dict) else {}
+        if isinstance(value, dict):
+            return dict(value)
+        return {}
+
     for op in patch.operations:
         if op.op == "clear":
             result = []
             continue
 
         if op.op == "add":
-            result.append(dict(op.conflict or {}))
+            result.append(_as_dict(op.conflict))
             continue
 
         if op.index is None:
@@ -254,13 +278,13 @@ def apply_conflict_list_patch(
             )
 
         if op.op == "insert":
-            result.insert(op.index, dict(op.conflict or {}))
+            result.insert(op.index, _as_dict(op.conflict))
         elif op.op == "replace":
             if op.index >= len(result):
                 raise ValueError(
                     f"replace index {op.index} is out of bounds for size {len(result)}"
                 )
-            result[op.index] = dict(op.conflict or {})
+            result[op.index] = _as_dict(op.conflict)
         elif op.op == "update":
             if op.index >= len(result):
                 raise ValueError(

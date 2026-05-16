@@ -46,10 +46,22 @@ class SceneTagPersonalDatetime(BaseModel):
     ``'17y 3m'``, ``'5m 12d'``, or ``'30d'``.
     """
 
-    role: Literal["active", "passive", "sourcebook"]
-    ref: str
-    index: int = 0
-    personal_age: str
+    role: Literal["active", "passive", "sourcebook"] = Field(
+        ..., description="Which tag list this override applies to."
+    )
+    ref: str = Field(
+        ..., description="Character name or sourcebook entry ID for the tag."
+    )
+    index: int = Field(
+        default=0,
+        description=(
+            "0-based position within the chosen tag list. Use this when the same "
+            "character appears multiple times."
+        ),
+    )
+    personal_age: str = Field(
+        ..., description="Human-readable age such as '17y', '17y 3m', or '30d'."
+    )
 
     @field_validator("personal_age", mode="before")
     @classmethod
@@ -76,26 +88,51 @@ class SceneProseLink(BaseModel):
     and are excluded from disk storage.
     """
 
-    scope_type: str  # 'story' | 'chapter'
-    chapter_id: Optional[str] = None
-    book_id: Optional[str] = None
+    scope_type: str = Field(
+        ...,
+        description="Which content scope the scene is linked to: 'story' or 'chapter'.",
+    )
+    chapter_id: Optional[str] = Field(
+        None,
+        description="Chapter ID when scope_type='chapter'. Leave empty for story scope.",
+    )
+    book_id: Optional[str] = Field(
+        None,
+        description="Book ID when the linked prose belongs to a book chapter.",
+    )
     # Computed at read time from file markers; never written to story.json.
-    start_offset: Optional[int] = None
-    end_offset: Optional[int] = None
+    start_offset: Optional[int] = Field(
+        None,
+        description="Computed start offset within the linked content file.",
+    )
+    end_offset: Optional[int] = Field(
+        None,
+        description="Computed end offset within the linked content file.",
+    )
 
 
 class SceneBeat(BaseModel):
     """A single beat within a scene – a discrete micro-action or plot step."""
 
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    text: str
-    prose_link: Optional[SceneProseLink] = None
+    id: str = Field(
+        default_factory=lambda: str(uuid.uuid4()),
+        description="Stable beat identifier. Usually generated automatically.",
+    )
+    text: str = Field(
+        ..., description="Short description of the beat's action or event."
+    )
+    prose_link: Optional[SceneProseLink] = Field(
+        None,
+        description="Optional link from this beat to a specific prose range.",
+    )
 
 
 class SceneChronologyTime(BaseModel):
     """Scene-local timeline point represented as a Temporal ZonedDateTime string."""
 
-    temporal_zoned_datetime: str
+    temporal_zoned_datetime: str = Field(
+        ..., description="Normalized ISO 8601 timestamp for the scene's chronology."
+    )
 
     @model_validator(mode="before")
     @classmethod
@@ -165,47 +202,182 @@ class Scene(BaseModel):
 class SceneCreateRequest(BaseModel):
     """Payload for creating a new scene."""
 
-    summary: str = ""
-    beats: list[SceneBeat] = []
-    active_characters: list[str] = []
-    passive_characters: list[str] = []
-    sourcebook_entry_ids: list[str] = []
-    location: Optional[str] = None
-    time: Optional[str] = None
-    scene_time: Optional[SceneChronologyTime] = None
-    color_tag: Optional[str] = None
-    prose_link: Optional[SceneProseLink] = None
-    order_before: list[SceneId] = []
-    order_after: list[SceneId] = []
-    order_index: Optional[float] = None
-    pinboard_x: float = 100.0
-    pinboard_y: float = 100.0
-    status: str = "active"
-    tag_personal_datetimes: list[SceneTagPersonalDatetime] = Field(default_factory=list)
+    summary: str = Field(
+        default="",
+        description=(
+            "Scene summary / label. Scenes do not have a separate title field; "
+            "use this field instead. Keep it short, specific, and suitable for a "
+            "scene card heading."
+        ),
+    )
+    beats: list[SceneBeat] = Field(
+        default_factory=list,
+        description=(
+            "Optional ordered beats inside the scene. Use when the scene needs a "
+            "micro-beat breakdown."
+        ),
+    )
+    active_characters: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Character IDs actively participating in the scene. Use sourcebook/"
+            "character IDs, not display names, when available."
+        ),
+    )
+    passive_characters: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Character IDs present but not actively driving the scene. Use "
+            "sourcebook/character IDs, not display names, when available."
+        ),
+    )
+    sourcebook_entry_ids: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Sourcebook entry IDs needed to ground the scene's facts, setting, or "
+            "canon references."
+        ),
+    )
+    location: Optional[str] = Field(
+        None,
+        description="Location identifier or location name for where the scene occurs.",
+    )
+    time: Optional[str] = Field(
+        None,
+        description="Human-readable scene time string when a formal chronology is not needed.",
+    )
+    scene_time: Optional[SceneChronologyTime] = Field(
+        None,
+        description=(
+            "Formal timeline position for the scene. Prefer this when ordering "
+            "matters. Accepts ISO-like timestamps and normalizes them."
+        ),
+    )
+    color_tag: Optional[str] = Field(
+        None,
+        description="Optional color label for the scene card, usually a hex string.",
+    )
+    prose_link: Optional[SceneProseLink] = Field(
+        None,
+        description=(
+            "Optional prose link showing which content file the scene is linked to "
+            "prose. Use this when the scene is already anchored to prose."
+        ),
+    )
+    order_before: list[SceneId] = Field(
+        default_factory=list,
+        description=(
+            "IDs of scenes that should come before this one in narrative order."
+        ),
+    )
+    order_after: list[SceneId] = Field(
+        default_factory=list,
+        description=(
+            "IDs of scenes that should come after this one in narrative order."
+        ),
+    )
+    order_index: Optional[float] = Field(
+        None,
+        description=(
+            "Optional explicit narrative sort key. Leave empty unless the scene "
+            "must be placed precisely in sequence."
+        ),
+    )
+    pinboard_x: float = Field(
+        default=100.0,
+        description="Pinboard X position in logical canvas units.",
+    )
+    pinboard_y: float = Field(
+        default=100.0,
+        description="Pinboard Y position in logical canvas units.",
+    )
+    status: str = Field(
+        default="active",
+        description="Scene lifecycle status such as active, inactive, or draft.",
+    )
+    tag_personal_datetimes: list[SceneTagPersonalDatetime] = Field(
+        default_factory=list,
+        description=(
+            "Per-tag personal age overrides used for time-travel or age-specific "
+            "ordering. Leave empty unless you need those overrides."
+        ),
+    )
 
 
 class SceneUpdateRequest(BaseModel):
     """Payload for updating an existing scene (full replacement)."""
 
-    summary: Optional[str] = None
-    beats: Optional[list[SceneBeat]] = None
-    active_characters: Optional[list[str]] = None
-    passive_characters: Optional[list[str]] = None
-    sourcebook_entry_ids: Optional[list[str]] = None
-    location: Optional[str] = None
-    time: Optional[str] = None
-    scene_time: Optional[SceneChronologyTime] = None
-    color_tag: Optional[str] = None
-    prose_link: Optional[SceneProseLink] = None
-    order_before: Optional[list[SceneId]] = None
-    order_after: Optional[list[SceneId]] = None
-    order_index: Optional[float] = None
-    pinboard_x: Optional[float] = None
-    pinboard_y: Optional[float] = None
-    status: Optional[str] = None
-    tag_personal_datetimes: Optional[list[SceneTagPersonalDatetime]] = (
-        None  # None = no change
+    summary: Optional[str] = Field(
+        None,
+        description="Replacement scene label/summary. Use this instead of a title.",
     )
+    beats: Optional[list[SceneBeat]] = Field(
+        None,
+        description="Full replacement beat list for the scene.",
+    )
+    active_characters: Optional[list[str]] = Field(
+        None,
+        description="Full replacement list of active character IDs.",
+    )
+    passive_characters: Optional[list[str]] = Field(
+        None,
+        description="Full replacement list of passive character IDs.",
+    )
+    sourcebook_entry_ids: Optional[list[str]] = Field(
+        None,
+        description="Full replacement list of sourcebook entry IDs.",
+    )
+    location: Optional[str] = Field(
+        None,
+        description="Replacement location identifier or name.",
+    )
+    time: Optional[str] = Field(
+        None,
+        description="Replacement human-readable time string.",
+    )
+    scene_time: Optional[SceneChronologyTime] = Field(
+        None,
+        description="Replacement formal chronology timestamp for the scene.",
+    )
+    color_tag: Optional[str] = Field(
+        None,
+        description="Replacement card color tag.",
+    )
+    prose_link: Optional[SceneProseLink] = Field(
+        None,
+        description="Replacement prose link for the scene.",
+    )
+    order_before: Optional[list[SceneId]] = Field(
+        None,
+        description="Replacement list of scene IDs that should come before this scene.",
+    )
+    order_after: Optional[list[SceneId]] = Field(
+        None,
+        description="Replacement list of scene IDs that should come after this scene.",
+    )
+    order_index: Optional[float] = Field(
+        None,
+        description="Replacement narrative sort key.",
+    )
+    pinboard_x: Optional[float] = Field(
+        None,
+        description="Replacement pinboard X position.",
+    )
+    pinboard_y: Optional[float] = Field(
+        None,
+        description="Replacement pinboard Y position.",
+    )
+    status: Optional[str] = Field(
+        None,
+        description="Replacement lifecycle status such as active, inactive, or draft.",
+    )
+    tag_personal_datetimes: Optional[list[SceneTagPersonalDatetime]] = Field(
+        default=None,
+        description=(
+            "Replacement per-tag personal age overrides. Use None to leave the "
+            "field unchanged, or an explicit list to replace it."
+        ),
+    )  # None = no change
 
 
 class SceneLinkProseRequest(BaseModel):

@@ -275,6 +275,51 @@ class ChatToolContractsTest(TestCase):
         self.assertIn("ISO 8601 datetime string", scene_time_description)
         self.assertIn("gracefully normalized", scene_time_description)
 
+    def test_manage_scenes_create_schema_uses_summary_not_title(self):
+        tools = get_registered_tool_schemas(model_type="CHAT", project_type="series")
+        tool = next(
+            (t for t in tools if t["function"]["name"] == "manage_scenes"),
+            None,
+        )
+        self.assertIsNotNone(tool, "manage_scenes schema should exist")
+
+        create_schema = (
+            tool.get("function", {})
+            .get("parameters", {})
+            .get("properties", {})
+            .get("create_data", {})
+        )
+        create_props = create_schema.get("properties", {})
+        self.assertNotIn("title", create_props)
+        summary_schema = create_props.get("summary", {})
+        summary_description = summary_schema.get("description", "")
+        self.assertIn("separate title field", summary_description)
+        self.assertIn("use this field instead", summary_description)
+
+        beats_description = create_props.get("beats", {}).get("description", "")
+        self.assertIn("micro-beat breakdown", beats_description)
+
+        active_description = create_props.get("active_characters", {}).get(
+            "description", ""
+        )
+        self.assertIn("sourcebook/character IDs", active_description)
+
+        passive_description = create_props.get("passive_characters", {}).get(
+            "description", ""
+        )
+        self.assertIn("sourcebook/character IDs", passive_description)
+
+        scene_time_description = create_props.get("scene_time", {}).get(
+            "description", ""
+        )
+        self.assertIn("Formal timeline position", scene_time_description)
+        self.assertIn("normalizes them", scene_time_description)
+
+        prose_link_description = create_props.get("prose_link", {}).get(
+            "description", ""
+        )
+        self.assertIn("linked to prose", prose_link_description)
+
     def test_registered_tool_schemas_inline_refs_and_omit_defs(self):
         tools = get_registered_tool_schemas(model_type="CHAT", project_type="series")
 
@@ -500,6 +545,31 @@ class ChatToolContractsTest(TestCase):
         description = conflicts_patch.get("description", "")
         self.assertIn("append new conflict", description)
         self.assertIn("index:<0-based>", description)
+
+        conflicts_schema = (update_data.get("properties", {}) or {}).get(
+            "conflicts", {}
+        )
+        conflicts_items = conflicts_schema.get("items", {}).get("properties", {})
+        self.assertIn("description", conflicts_items)
+        self.assertIn("resolution", conflicts_items)
+        self.assertIn("resolved", conflicts_items)
+
+    def test_update_chapter_metadata_conflicts_schema_is_structured(self):
+        tools = get_registered_tool_schemas(model_type="CHAT", project_type="series")
+        tool = next(
+            (t for t in tools if t["function"]["name"] == "update_chapter_metadata"),
+            None,
+        )
+        self.assertIsNotNone(tool, "update_chapter_metadata schema should exist")
+
+        params_schema = (
+            tool.get("function", {}).get("parameters", {}).get("properties", {})
+        )
+        conflicts_schema = params_schema.get("conflicts", {})
+        conflicts_items = conflicts_schema.get("items", {}).get("properties", {})
+        self.assertIn("description", conflicts_items)
+        self.assertIn("resolution", conflicts_items)
+        self.assertIn("resolved", conflicts_items)
 
     def test_manage_story_core_conflicts_patch_invalid_update_has_actionable_error(
         self,

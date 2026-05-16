@@ -35,6 +35,7 @@ from augmentedquill.services.projects.projects import (
     write_editing_scratchpad as _write_editing_scratchpad,
 )
 from augmentedquill.services.chat.chat_tools.metadata_patching import (
+    ConflictEntry,
     ConflictListPatch,
     StringListPatch,
     TextPatch,
@@ -151,9 +152,12 @@ class ManageStoryCoreUpdateData(BaseModel):
         None,
         description="Optional patch operation for tags (add/remove/set/clear).",
     )
-    conflicts: list[dict] | None = Field(
+    conflicts: list[ConflictEntry] | None = Field(
         None,
-        description="List of active story conflicts with description and optional resolution.",
+        description=(
+            "List of active story conflicts. Each entry should include a "
+            "description, optional resolution, and resolved flag."
+        ),
     )
     conflicts_patch: ConflictListPatch | None = Field(
         None,
@@ -293,6 +297,11 @@ async def manage_story_core(
                 story.get("conflicts") or [],
                 params.update_data.conflicts_patch,
             )
+        elif isinstance(conflicts_value, list):
+            conflicts_value = [
+                conflict.model_dump() if hasattr(conflict, "model_dump") else conflict
+                for conflict in conflicts_value
+            ]
 
         _update_story_metadata(
             title=params.update_data.title,

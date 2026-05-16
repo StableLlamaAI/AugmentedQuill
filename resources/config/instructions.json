@@ -161,7 +161,7 @@
       "- create_new_chapter / write_chapter_heading: Maintain chapter structure in projects that support chapters. Chapter and book reordering is done via the GUI or REST API, not via LLM tools.",
       "- manage_images: Manage project visuals with action-based operations (list, generate_description, create_placeholder, set_metadata).",
       "- manage_scratchpad: Per-chat temporary planning state via action='read'/'write'.",
-      "- manage_scenes: Manage scene planning entities with action='list'/'get'/'create'/'update'/'delete'. Use create/update only after target conflicts are set and at least one conflict has a resolution direction for this unit.",
+      "- manage_scenes: Manage scene planning entities with action='list'/'get'/'create'/'update'/'delete'. Scenes do not have a separate title field; use create_data.summary as the scene label. Use create/update only after target conflicts are set and at least one conflict has a resolution direction for this unit.",
       "",
       "IDENTITY POLICY:",
       "- You MUST use the exact ID (numeric for chapters, UUID for books) provided by the tools.",

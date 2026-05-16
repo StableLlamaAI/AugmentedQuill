@@ -163,12 +163,13 @@ class ManageScenesParams(BaseModel):
 
 @chat_tool(
     description=(
-        "Unified scenes manager with full GUI schema parity. Use action='list' to "
-        "list scenes, action='get' with scene_id to retrieve one scene, "
-        "action='create' with create_data to create a scene, action='update' with "
-        "scene_id and update_data to modify a scene, and action='delete' with "
-        "scene_id to remove a scene. For update_data.scene_time, you can pass "
-        "a Temporal object, {'value': ...}, or a plain ISO-like string such as "
+        "Unified scenes manager with full GUI schema parity. Scenes do not have "
+        "a separate title field; use create_data.summary as the scene label. Use "
+        "action='list' to list scenes, action='get' with scene_id to retrieve one "
+        "scene, action='create' with create_data to create a scene, action='update' "
+        "with scene_id and update_data to modify a scene, and action='delete' with "
+        "scene_id to remove a scene. For update_data.scene_time, you can pass a "
+        "Temporal object, {'value': ...}, or a plain ISO-like string such as "
         "'1985-11-05', '1985-11-05T20:00', or '1985-11-05T20:00:00Z'."
     ),
     allowed_roles=(CHAT_ROLE, EDITING_ROLE),
