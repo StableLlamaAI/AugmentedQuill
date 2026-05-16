@@ -88,6 +88,98 @@ class ScenesApiTest(ApiTestCase):
         body = resp.json()
         self.assertEqual(body["id"], scene["id"])
 
+    def test_reorder_prose_reorders_two_linked_scenes(self) -> None:
+        first = self._create(summary="First")
+        second = self._create(summary="Second")
+
+        pdir = self.projects_root / self.pname
+        (pdir / "content.md").write_text(
+            (
+                f"<!--scene:{first['id']}:start-->Alpha<!--scene:{first['id']}:end-->"
+                f"\n"
+                f"<!--scene:{second['id']}:start-->Bravo<!--scene:{second['id']}:end-->"
+            ),
+            encoding="utf-8",
+        )
+
+        reorder = self.client.post(
+            self._url("/reorder-prose"),
+            json={
+                "source_scene_id": second["id"],
+                "target_scene_id": first["id"],
+                "place_before": True,
+            },
+        )
+        self.assertEqual(reorder.status_code, 200, reorder.text)
+
+        payload = reorder.json()
+        self.assertEqual(payload["scope_type"], "story")
+        self.assertEqual(
+            [scene["id"] for scene in payload["scenes"]],
+            [
+                second["id"],
+                first["id"],
+            ],
+        )
+
+    def test_reorder_prose_moves_between_story_and_chapter_scopes(self) -> None:
+        source = self._create(summary="Source")
+        target = self._create(summary="Target")
+
+        pdir = self.projects_root / self.pname
+        story_path = pdir / "story.json"
+        story = json.loads(story_path.read_text(encoding="utf-8"))
+        story["chapters"] = [{"id": "1", "filename": "0001.txt"}]
+        story_path.write_text(json.dumps(story), encoding="utf-8")
+
+        chapters_dir = pdir / "chapters"
+        chapters_dir.mkdir(parents=True, exist_ok=True)
+        (chapters_dir / "0001.txt").write_text(
+            "Chapter text for the reordered scene.",
+            encoding="utf-8",
+        )
+
+        source_link = self.client.post(
+            self._url(f"/{source['id']}/link-prose"),
+            json={
+                "scope_type": "chapter",
+                "chapter_id": "1",
+                "start_offset": 0,
+                "end_offset": 7,
+            },
+        )
+        self.assertEqual(source_link.status_code, 200, source_link.text)
+
+        target_link = self.client.post(
+            self._url(f"/{target['id']}/link-prose"),
+            json={"scope_type": "story", "start_offset": 0, "end_offset": 6},
+        )
+        self.assertEqual(target_link.status_code, 200, target_link.text)
+
+        reorder = self.client.post(
+            self._url("/reorder-prose"),
+            json={
+                "source_scene_id": source["id"],
+                "target_scene_id": target["id"],
+                "place_before": True,
+            },
+        )
+        self.assertEqual(reorder.status_code, 200, reorder.text)
+
+        payload = reorder.json()
+        self.assertEqual(payload["scope_type"], "story")
+        self.assertEqual(
+            [scene["id"] for scene in payload["scenes"]],
+            [
+                source["id"],
+                target["id"],
+            ],
+        )
+        story_text = (pdir / "content.md").read_text(encoding="utf-8")
+        chapter_text = (chapters_dir / "0001.txt").read_text(encoding="utf-8")
+        self.assertIn(f"<!--scene:{source['id']}:start-->", story_text)
+        self.assertNotIn(f"<!--scene:{source['id']}:start-->", chapter_text)
+
     def test_detect_boundaries_links_single_scene(self) -> None:
         scene = self._create(summary="Boundary")
         resp = self.client.post(

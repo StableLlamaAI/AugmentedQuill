@@ -155,15 +155,7 @@ async def reorder_scene_prose_route(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return SceneReorderProseResponse(
-        scenes=[Scene(**s) for s in updated.scenes],
-        scope_type=updated.scope_type,
-        chapter_id=updated.chapter_id,
-        book_id=updated.book_id,
-        scope_start=updated.scope_start,
-        scope_end=updated.scope_end,
-        rebuilt_text=updated.rebuilt_text,
-    )
+    return updated
 
 
 @router.patch("/scenes/{scene_id}/prose-content", response_model=Scene)
