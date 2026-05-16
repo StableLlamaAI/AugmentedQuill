@@ -33,6 +33,90 @@ function setsEqual(a: ReadonlySet<SceneId>, b: ReadonlySet<SceneId>): boolean {
   return true;
 }
 
+const INLINE_SCENE_MARKER_REGEX = /<!--scene:\d+:(?:start|end)-->/;
+
+function sceneMarkerLength(sceneId: SceneId, edge: 'start' | 'end'): number {
+  return `<!--scene:${String(sceneId)}:${edge}-->`.length;
+}
+
+function linkMatchesChapter(link: SceneProseLink, chapter: WritingUnit): boolean {
+  return link.scope_type === 'story'
+    ? chapter.scope === 'story'
+    : link.scope_type === 'chapter' && link.chapter_id === chapter.id;
+}
+
+function shouldAdjustOffsets(chapter: WritingUnit, scenes: readonly Scene[]): boolean {
+  if (INLINE_SCENE_MARKER_REGEX.test(chapter.content)) {
+    return false;
+  }
+
+  const scoped = scenes
+    .map((scene: Scene) => ({ sceneId: scene.id, link: scene.prose_link }))
+    .filter(
+      (item: {
+        sceneId: SceneId;
+        link: SceneProseLink | null | undefined;
+      }): item is { sceneId: SceneId; link: SceneProseLink } =>
+        item.link != null && linkMatchesChapter(item.link, chapter)
+    );
+
+  if (scoped.length === 0) {
+    return false;
+  }
+
+  if (
+    scoped.some(
+      ({ link }: { sceneId: SceneId; link: SceneProseLink }) => link.start_offset === 0
+    )
+  ) {
+    return false;
+  }
+
+  return scoped.every(
+    ({ sceneId, link }: { sceneId: SceneId; link: SceneProseLink }) =>
+      link.start_offset >= sceneMarkerLength(sceneId, 'start')
+  );
+}
+
+function toVisibleOffset(
+  offset: number,
+  chapter: WritingUnit,
+  scenes: readonly Scene[]
+): number {
+  if (!shouldAdjustOffsets(chapter, scenes)) {
+    return offset;
+  }
+
+  let removedBefore = 0;
+  for (const scene of scenes) {
+    const link = scene.prose_link;
+    if (!link || !linkMatchesChapter(link, chapter)) continue;
+
+    if (link.start_offset <= offset) {
+      removedBefore += sceneMarkerLength(scene.id, 'start');
+    }
+    if (link.end_offset != null && link.end_offset < offset) {
+      removedBefore += sceneMarkerLength(scene.id, 'end');
+    }
+  }
+
+  return Math.max(0, offset - removedBefore);
+}
+
+function toVisibleRange(
+  scene: Scene,
+  chapter: WritingUnit,
+  scenes: readonly Scene[]
+): { from: number; to: number } | null {
+  const link = scene.prose_link;
+  if (!link || link.end_offset == null) return null;
+  if (!linkMatchesChapter(link, chapter)) return null;
+
+  const from = toVisibleOffset(link.start_offset, chapter, scenes);
+  const to = toVisibleOffset(link.end_offset, chapter, scenes);
+  return from < to ? { from, to } : null;
+}
+
 export interface SceneProseSyncResult {
   selectedSceneId: SceneId | null;
   handleSelectScene: (id: SceneId | null) => void;
@@ -78,16 +162,9 @@ export function useSceneProseSync(
       const found = scenesRef.current.find((s: Scene): boolean => {
         const link: SceneProseLink | null | undefined = s.prose_link;
         if (!link) return false;
-        const matchesScope =
-          link.scope_type === 'story'
-            ? chapter.scope === 'story'
-            : link.scope_type === 'chapter' && link.chapter_id === chapter.id;
-        return (
-          matchesScope &&
-          cursor >= link.start_offset &&
-          link.end_offset != null &&
-          cursor < link.end_offset
-        );
+        const visibleRange = toVisibleRange(s, chapter, scenesRef.current);
+        if (!visibleRange) return false;
+        return cursor >= visibleRange.from && cursor < visibleRange.to;
       });
       const foundId = found?.id ?? null;
       setSelectedSceneId(foundId);
@@ -116,14 +193,10 @@ export function useSceneProseSync(
     const entries: ProseHighlightRange[] = [];
     for (const sceneId of highlightSceneIds) {
       const scene = scenesRef.current.find((s: Scene): boolean => s.id === sceneId);
-      const link: SceneProseLink | null | undefined = scene?.prose_link;
-      if (!link || link.end_offset == null) continue;
-      const matchesScope =
-        link.scope_type === 'story'
-          ? currentChapter.scope === 'story'
-          : link.scope_type === 'chapter' && link.chapter_id === currentChapter.id;
-      if (!matchesScope) continue;
-      entries.push({ sceneId, from: link.start_offset, to: link.end_offset });
+      if (!scene) continue;
+      const visibleRange = toVisibleRange(scene, currentChapter, scenesRef.current);
+      if (!visibleRange) continue;
+      entries.push({ sceneId, from: visibleRange.from, to: visibleRange.to });
     }
 
     if (entries.length === 0) {

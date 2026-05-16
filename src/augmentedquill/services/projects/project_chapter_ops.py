@@ -19,6 +19,7 @@ from augmentedquill.services.chapters.chapter_helpers import (
     _get_chapter_metadata_entry,
     _scan_chapter_files,
 )
+from augmentedquill.services.scenes.scene_markers import transfer_scene_markers
 from augmentedquill.utils.json_repair import apply_typographic_quotes
 
 
@@ -27,6 +28,7 @@ def write_chapter_content_in_project(
 ) -> None:
     """Write content to a chapter by its ID."""
     _, path, _ = _chapter_by_id_or_404(chap_id, active=active)
+    existing_content = path.read_text(encoding="utf-8") if path.exists() else ""
 
     story_root = path
     for _ in range(5):
@@ -39,7 +41,8 @@ def write_chapter_content_in_project(
     project_lang = str(story.get("language", "en") or "en")
 
     converted_content = apply_typographic_quotes(content, language=project_lang)
-    path.write_text(converted_content, encoding="utf-8")
+    preserved = transfer_scene_markers(existing_content, converted_content)
+    path.write_text(preserved, encoding="utf-8")
 
 
 def update_chapter_metadata_in_project(

@@ -534,6 +534,83 @@ class StoryEndpointsTest(ApiTestCase):
             "Instructed mode source text", seen_messages["value"][1]["content"]
         )
 
+    def test_sourcebook_relevance_uses_scene_lookup_without_llm(self):
+        pdir = self._make_project(
+            name="scene_relevance",
+            sourcebook={
+                "Hero": {
+                    "description": "Hero profile.",
+                    "category": "Character",
+                    "synonyms": [],
+                },
+                "Town": {
+                    "description": "Town profile.",
+                    "category": "Location",
+                    "synonyms": [],
+                },
+                "Villain": {
+                    "description": "Villain profile.",
+                    "category": "Character",
+                    "synonyms": [],
+                },
+            },
+        )
+
+        import json
+
+        story_path = pdir / "story.json"
+        story = json.loads(story_path.read_text(encoding="utf-8"))
+        story["scenes"] = {
+            "1": {
+                "summary": "Arrival",
+                "active_characters": ["Hero"],
+                "passive_characters": [],
+                "sourcebook_entry_ids": [],
+                "location": "Town",
+                "order_index": 1,
+                "prose_link": {
+                    "scope_type": "chapter",
+                    "chapter_id": "1",
+                    "start_offset": 0,
+                    "end_offset": 12,
+                },
+            },
+            "2": {
+                "summary": "Threat",
+                "active_characters": ["Villain"],
+                "passive_characters": [],
+                "sourcebook_entry_ids": [],
+                "location": "Town",
+                "order_index": 2,
+                "prose_link": {
+                    "scope_type": "chapter",
+                    "chapter_id": "1",
+                    "start_offset": 12,
+                    "end_offset": 24,
+                },
+            },
+        }
+        story_path.write_text(json.dumps(story), encoding="utf-8")
+
+        orig_complete = llm.unified_chat_complete
+
+        async def fail_if_called(**kwargs):  # type: ignore
+            raise AssertionError("sourcebook relevance should not call the LLM")
+
+        llm.unified_chat_complete = fail_if_called  # type: ignore
+
+        def _undo():
+            llm.unified_chat_complete = orig_complete  # type: ignore
+
+        self.addCleanup(_undo)
+
+        r = self.client.post(
+            "/api/v1/story/sourcebook/relevance",
+            json={"chap_id": 1, "current_text": "Arrival text"},
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertEqual(r.json(), {"relevant": ["Hero", "Town", "Villain"]})
+
     def test_suggest_loop_detection_truncates_repetitive_output(self):
         """Loop detection truncates repetitive text to the last clean prefix without retrying."""
         self._make_project(name="novel_loop_guard")

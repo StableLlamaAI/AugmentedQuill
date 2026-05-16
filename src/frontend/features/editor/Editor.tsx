@@ -339,7 +339,7 @@ export const Editor = React.memo(
         isAiLoading,
         isWritingAvailable = true,
         onCancelAiAction,
-        isProseStreaming = false,
+        isProseStreaming: _isProseStreaming = false,
       } = aiControls;
 
       const {
@@ -975,6 +975,7 @@ export const Editor = React.memo(
                       enterBehavior="softbreak"
                       selectionBg={selectionBg}
                       proseHighlightBg={proseHighlightBg}
+                      hideSceneMarkers={true}
                       onProseBoundaryChange={(
                         sceneId: SceneId,
                         edge: 'start' | 'end',

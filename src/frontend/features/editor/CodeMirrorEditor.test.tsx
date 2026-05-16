@@ -202,6 +202,27 @@ describe('CodeMirrorEditor', () => {
     expect(ref.current?.state.doc.toString()).toBe(value);
   });
 
+  it('hides scene marker comments when hideSceneMarkers is enabled, while preserving document text', async () => {
+    const ref = React.createRef<EditorView | null>();
+    const value = '<!--scene:3:start-->Visible prose<!--scene:3:end-->';
+    const { container } = render(
+      <CodeMirrorEditor
+        ref={ref}
+        value={value}
+        onChange={vi.fn()}
+        viewMode="raw"
+        hideSceneMarkers={true}
+      />
+    );
+
+    await act(async () => {});
+
+    expect(ref.current?.state.doc.toString()).toBe(value);
+    expect(container.textContent ?? '').not.toContain('<!--scene:3:start-->');
+    expect(container.textContent ?? '').not.toContain('<!--scene:3:end-->');
+    expect(container.textContent ?? '').toContain('Visible prose');
+  });
+
   it('toggling showWhitespace does not crash or corrupt the document', async () => {
     const ref = React.createRef<EditorView | null>();
     const { rerender } = render(
@@ -815,7 +836,7 @@ describe('prose-link highlight plugin', () => {
     act(() => {
       ref.current!.dispatch({ effects: setProseHighlightEffect.of([]) });
     });
-    const { container } = await act(async () =>
+    await act(async () =>
       render(<CodeMirrorEditor ref={ref} value="Hello world" onChange={vi.fn()} />)
     );
     // After clearing there should be no handle elements.

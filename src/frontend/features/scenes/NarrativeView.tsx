@@ -73,35 +73,11 @@ type NarrativeItem =
   | { kind: 'scene'; scene: Scene; sortIndex: number }
   | { kind: 'book-break'; bookId: string; bookTitle: string }
   | { kind: 'chapter-break'; chapterId: string; chapterTitle: string }
-  | { kind: 'unlinked-header' };
+  | { kind: 'unlinked-break' };
 
 interface BreakState {
   prevChapterId: string | null | undefined;
   prevBookId: string | null | undefined;
-  unlinkedHeaderShown: boolean;
-}
-
-function isUnlinkedWithoutChronology(
-  scene: Scene,
-  sortMode: 'narrative' | 'chronological',
-  sceneEpochNanosecondsById: Map<SceneId, bigint>
-): boolean {
-  if (scene.prose_link) return false;
-  if (sortMode !== 'chronological') return true;
-  return !sceneEpochNanosecondsById.has(scene.id);
-}
-
-function appendUnlinkedItem(
-  items: NarrativeItem[],
-  scene: Scene,
-  sortIndex: number,
-  state: BreakState
-): void {
-  if (!state.unlinkedHeaderShown) {
-    items.push({ kind: 'unlinked-header' });
-    state.unlinkedHeaderShown = true;
-  }
-  items.push({ kind: 'scene', scene, sortIndex });
 }
 
 function appendChapterBreakItems(
@@ -151,23 +127,20 @@ function buildItems(
   const state: BreakState = {
     prevChapterId: undefined,
     prevBookId: undefined,
-    unlinkedHeaderShown: false,
   };
+  let insertedUnlinkedBreak = false;
 
   sortedScenes.forEach((scene: Scene, sortIndex: number) => {
     const link = scene.prose_link;
+    const hasValidTime = sceneEpochNanosecondsById.has(scene.id);
+    const isChronologicalExtra = sortMode === 'chronological' && !link && !hasValidTime;
 
-    if (isUnlinkedWithoutChronology(scene, sortMode, sceneEpochNanosecondsById)) {
-      appendUnlinkedItem(items, scene, sortIndex, state);
-      return;
+    if (isChronologicalExtra && !insertedUnlinkedBreak) {
+      items.push({ kind: 'unlinked-break' });
+      insertedUnlinkedBreak = true;
     }
 
-    if (!link) {
-      items.push({ kind: 'scene', scene, sortIndex });
-      return;
-    }
-
-    if (link.scope_type === 'chapter') {
+    if (link && link.scope_type === 'chapter') {
       const chapterId = link.chapter_id ?? null;
       appendChapterBreakItems(
         items,
@@ -241,23 +214,23 @@ const ChapterBreak: React.FC<ChapterBreakProps> = ({ title }: ChapterBreakProps)
   );
 };
 
-interface UnlinkedHeaderProps {}
-
-const UnlinkedHeader: React.FC<UnlinkedHeaderProps> = () => {
+const UnlinkedBreak: React.FC = () => {
   const { t } = useTranslation();
   const { isLight } = useTheme();
   return (
     <div
-      className={`flex items-center gap-2 py-2 mt-2 ${isLight ? 'text-brand-gray-400' : 'text-brand-gray-500'}`}
+      className={`flex items-center gap-2 py-2 ${isLight ? 'text-brand-gray-500' : 'text-brand-gray-400'}`}
       role="separator"
       aria-label={t('Scenes not yet linked to prose')}
     >
       <div
-        className={`flex-1 h-px border-dashed border-t ${isLight ? 'border-brand-gray-300' : 'border-brand-gray-600'}`}
+        className={`flex-1 h-px ${isLight ? 'bg-brand-gray-200' : 'bg-brand-gray-700'}`}
       />
-      <span className="text-xs italic">{t('Not yet linked')}</span>
+      <span className="text-xs font-medium truncate max-w-xs">
+        {t('Scenes not yet linked to prose')}
+      </span>
       <div
-        className={`flex-1 h-px border-dashed border-t ${isLight ? 'border-brand-gray-300' : 'border-brand-gray-600'}`}
+        className={`flex-1 h-px ${isLight ? 'bg-brand-gray-200' : 'bg-brand-gray-700'}`}
       />
     </div>
   );
@@ -739,8 +712,8 @@ export const NarrativeView: React.FC<NarrativeViewProps> = ({
                 />
               );
             }
-            if (item.kind === 'unlinked-header') {
-              return <UnlinkedHeader key="unlinked-header" />;
+            if (item.kind === 'unlinked-break') {
+              return <UnlinkedBreak key={`unlinked-${renderIdx}`} />;
             }
 
             const { scene } = item;

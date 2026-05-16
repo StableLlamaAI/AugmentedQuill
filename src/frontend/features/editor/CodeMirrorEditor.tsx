@@ -23,6 +23,7 @@ import {
   DecorationSet,
   drawSelection,
   WidgetType,
+  MatchDecorator,
 } from '@codemirror/view';
 import {
   EditorState,
@@ -263,6 +264,35 @@ const mdHighlightStyle = HighlightStyle.define([
   { tag: tags.contentSeparator, opacity: '0.5' },
   { tag: tags.labelName, opacity: '0.55' },
 ]);
+
+const sceneMarkerHideDecorator = new MatchDecorator({
+  regexp: /<!--scene:\d+:(?:start|end)-->/g,
+  decoration: Decoration.replace({}),
+});
+
+function buildSceneMarkerHideExtension(enabled: boolean): Extension {
+  if (!enabled) return [];
+
+  return ViewPlugin.fromClass(
+    class {
+      decorations: DecorationSet;
+
+      constructor(view: EditorView) {
+        this.decorations = sceneMarkerHideDecorator.createDeco(view);
+      }
+
+      update(update: ViewUpdate): void {
+        this.decorations = sceneMarkerHideDecorator.updateDeco(
+          update,
+          this.decorations
+        );
+      }
+    },
+    {
+      decorations: (v: { decorations: DecorationSet }): DecorationSet => v.decorations,
+    }
+  );
+}
 
 // ─── Base theme ──────────────────────────────────────────────────────────────
 // Makes CodeMirror transparent so the host element's styles (font, colour, bg)
@@ -559,6 +589,8 @@ export interface CodeMirrorEditorProps {
    * character offset.  Use this to persist updated start_offset / end_offset.
    */
   onProseBoundaryChange?: ProseBoundaryCallback;
+  /** When true, scene marker comments are hidden in the rendered editor view. */
+  hideSceneMarkers?: boolean;
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -590,6 +622,7 @@ export const CodeMirrorEditor = React.forwardRef<
       proseHighlightBg,
       onDragStart,
       onProseBoundaryChange,
+      hideSceneMarkers = false,
     }: CodeMirrorEditorProps,
     ref: React.ForwardedRef<EditorView | null>
   ) => {
@@ -633,6 +666,7 @@ export const CodeMirrorEditor = React.forwardRef<
     const placeholderCompartment = useRef(new Compartment());
     const attributesCompartment = useRef(new Compartment());
     const mdDecorationCompartment = useRef(new Compartment());
+    const markerHideCompartment = useRef(new Compartment());
     const selectionBgCompartment = useRef(new Compartment());
     const proseHighlightBgCompartment = useRef(new Compartment());
 
@@ -826,6 +860,9 @@ export const CodeMirrorEditor = React.forwardRef<
         ),
         placeholderCompartment.current.of(buildPlaceholderExtension(placeholder)),
         mdDecorationCompartment.current.of(buildMdDecorationExtension(viewMode)),
+        markerHideCompartment.current.of(
+          buildSceneMarkerHideExtension(hideSceneMarkers)
+        ),
         selectionBgCompartment.current.of(buildSelectionBgExtension(selectionBg)),
         proseHighlightBgCompartment.current.of(
           buildProseHighlightBgExtension(proseHighlightBg)
@@ -893,6 +930,14 @@ export const CodeMirrorEditor = React.forwardRef<
         ),
       });
     }, [viewMode]);
+
+    useEffect((): void => {
+      viewRef.current?.dispatch({
+        effects: markerHideCompartment.current.reconfigure(
+          buildSceneMarkerHideExtension(hideSceneMarkers)
+        ),
+      });
+    }, [hideSceneMarkers]);
 
     useEffect((): void => {
       viewRef.current?.dispatch({

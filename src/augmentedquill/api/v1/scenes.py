@@ -17,16 +17,18 @@ from fastapi import APIRouter, HTTPException
 
 from augmentedquill.api.v1.dependencies import ProjectDep
 from augmentedquill.models.scene import (
-    ProseConflictError,
     Scene,
     SceneCreateRequest,
+    SceneDetectBoundariesRequest,
+    SceneDetectBoundariesResponse,
     SceneId,
     SceneLinkProseRequest,
-    SceneProseLink,
     SceneReorderProseRequest,
     SceneReorderProseResponse,
     SceneUpdateProseContentRequest,
     SceneUpdateRequest,
+    SceneWriteRequest,
+    SceneWriteResponse,
 )
 from augmentedquill.services.scenes.scene_service import (
     create_scene,
@@ -35,9 +37,14 @@ from augmentedquill.services.scenes.scene_service import (
     link_prose,
     list_scenes,
     reorder_scene_prose,
+    unlink_prose,
     update_prose_content,
-    update_prose_link_hash,
     update_scene,
+)
+from augmentedquill.services.scenes.scene_generation_service import (
+    detect_scene_boundaries_and_link,
+    auto_link_scope_text,
+    write_scene_and_link,
 )
 
 router = APIRouter(prefix="/projects/{project_name}", tags=["Scenes"])
@@ -87,26 +94,16 @@ async def delete_existing_scene(project_dir: ProjectDep, scene_id: SceneId) -> N
         raise HTTPException(status_code=404, detail=f"Scene '{scene_id}' not found")
 
 
-class RefreshProseHashRequest(SceneProseLink):
-    """Body for the prose-link hash refresh endpoint."""
+class AutoLinkScopeRequest(SceneDetectBoundariesRequest):
+    """Body for auto-linking a saved prose scope to its scenes."""
 
-    beat_id: str | None = None
+    current_text: str
 
 
-@router.post("/scenes/{scene_id}/refresh-hash", response_model=SceneProseLink)
-async def refresh_prose_hash(
-    project_dir: ProjectDep,
-    scene_id: SceneId,
-    payload: RefreshProseHashRequest,
-) -> SceneProseLink:
-    """Recompute and persist the content hash for a prose link.
+class AutoLinkScopeResponse(SceneDetectBoundariesResponse):
+    """Response for auto-linking a saved prose scope to its scenes."""
 
-    The frontend calls this after the user repositions a scene/beat marker so
-    that the hash is up-to-date and the stale flag is cleared.
-    """
-    beat_id = payload.beat_id
-    link = SceneProseLink(**payload.model_dump(exclude={"beat_id"}))
-    return update_prose_link_hash(project_dir, scene_id, beat_id, link)
+    pass
 
 
 @router.post("/scenes/{scene_id}/link-prose", response_model=List[Scene])
@@ -115,12 +112,7 @@ async def link_scene_prose(
     scene_id: SceneId,
     payload: SceneLinkProseRequest,
 ) -> List[Scene]:
-    """Assign a prose-text range to a scene.
-
-    Validates that the new range does not create a hole in any existing linked
-    scene.  Overlapping scenes are adjusted (their range trimmed or unlinked).
-    Returns all scenes that were modified.
-    """
+    """Assign a prose-text range to a scene using inline file markers."""
     if payload.start_offset >= payload.end_offset:
         raise HTTPException(
             status_code=422, detail="start_offset must be less than end_offset"
@@ -130,13 +122,24 @@ async def link_scene_prose(
         raise HTTPException(status_code=404, detail=f"Scene '{scene_id}' not found")
     try:
         updated = link_prose(project_dir, scene_id, payload)
-    except ProseConflictError as exc:
-        raise HTTPException(
-            status_code=409,
-            detail=f"Selection creates a hole in scene '{exc.conflicting_scene_id}'",
-        ) from exc
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return [Scene(**s) for s in updated]
+
+
+@router.post("/scenes/{scene_id}/unlink-prose", response_model=List[Scene])
+async def unlink_scene_prose(
+    project_dir: ProjectDep,
+    scene_id: SceneId,
+) -> List[Scene]:
+    """Remove the prose link from a scene, preserving its narrative position.
+
+    Returns all scenes whose order_index was updated during normalization.
+    """
+    scene = get_scene(project_dir, scene_id)
+    if scene is None:
+        raise HTTPException(status_code=404, detail=f"Scene '{scene_id}' not found")
+    updated = unlink_prose(project_dir, scene_id)
     return [Scene(**s) for s in updated]
 
 
@@ -145,7 +148,7 @@ async def reorder_scene_prose_route(
     project_dir: ProjectDep,
     payload: SceneReorderProseRequest,
 ) -> SceneReorderProseResponse:
-    """Reorder linked prose blocks and persist the rewritten offsets."""
+    """Reorder linked prose blocks and persist marker-aware offsets."""
     try:
         updated = reorder_scene_prose(project_dir, payload)
     except LookupError as exc:
@@ -153,13 +156,13 @@ async def reorder_scene_prose_route(
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return SceneReorderProseResponse(
-        scenes=[Scene(**s) for s in updated["scenes"]],
-        scope_type=updated["scope_type"],
-        chapter_id=updated.get("chapter_id"),
-        book_id=updated.get("book_id"),
-        scope_start=updated["scope_start"],
-        scope_end=updated["scope_end"],
-        rebuilt_text=updated["rebuilt_text"],
+        scenes=[Scene(**s) for s in updated.scenes],
+        scope_type=updated.scope_type,
+        chapter_id=updated.chapter_id,
+        book_id=updated.book_id,
+        scope_start=updated.scope_start,
+        scope_end=updated.scope_end,
+        rebuilt_text=updated.rebuilt_text,
     )
 
 
@@ -169,15 +172,80 @@ async def update_scene_prose_content(
     scene_id: SceneId,
     payload: SceneUpdateProseContentRequest,
 ) -> Scene:
-    """Replace the text at a scene's linked prose offsets.
-
-    Writes the new text to disk, updates ``end_offset`` and ``content_hash``,
-    and returns the refreshed scene.
-    """
-    try:
-        result = update_prose_content(project_dir, scene_id, payload.text)
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    """Replace the text between a scene's inline start/end markers."""
+    result = update_prose_content(project_dir, scene_id, payload)
     if result is None:
         raise HTTPException(status_code=404, detail=f"Scene '{scene_id}' not found")
     return Scene(**result)
+
+
+@router.post("/scenes/detect-boundaries", response_model=SceneDetectBoundariesResponse)
+async def detect_boundaries_for_scenes(
+    project_dir: ProjectDep,
+    payload: SceneDetectBoundariesRequest,
+) -> SceneDetectBoundariesResponse:
+    """Detect scene boundaries in a prose segment and relink affected scenes."""
+    try:
+        result = await detect_scene_boundaries_and_link(
+            project_dir=project_dir,
+            request=payload,
+            payload={},
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    return SceneDetectBoundariesResponse(
+        assignments=result["assignments"],
+        scenes=[Scene(**scene) for scene in result["scenes"]],
+    )
+
+
+@router.post("/scenes/{scene_id}/write", response_model=SceneWriteResponse)
+async def write_scene_prose(
+    project_dir: ProjectDep,
+    scene_id: SceneId,
+    payload: SceneWriteRequest,
+) -> SceneWriteResponse:
+    """Generate prose for one scene and automatically link generated boundaries."""
+    try:
+        result = await write_scene_and_link(
+            project_dir=project_dir,
+            scene_id=scene_id,
+            request=payload,
+            payload={},
+        )
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    return SceneWriteResponse(
+        scene=Scene(**result["scene"]),
+        generated_text=result["generated_text"],
+        assignments=result["assignments"],
+        scenes=[Scene(**scene) for scene in result["scenes"]],
+    )
+
+
+@router.post("/scenes/auto-link-scope", response_model=AutoLinkScopeResponse)
+async def auto_link_saved_scope(
+    project_dir: ProjectDep,
+    payload: AutoLinkScopeRequest,
+) -> AutoLinkScopeResponse:
+    """Auto-link a saved prose scope to the scenes that belong to it."""
+    try:
+        result = await auto_link_scope_text(
+            project_dir=project_dir,
+            scope_type=payload.scope_type,
+            chapter_id=payload.chapter_id,
+            book_id=payload.book_id,
+            current_text=payload.current_text,
+            payload={},
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    return AutoLinkScopeResponse(
+        assignments=result["assignments"],
+        scenes=[Scene(**scene) for scene in result["scenes"]],
+    )

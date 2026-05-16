@@ -18,8 +18,8 @@
 
 import React, { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Clock3 } from 'lucide-react';
-import type { Scene, SceneBeat, SceneId } from '../../types';
+import { Clock3, FileX } from 'lucide-react';
+import type { Scene, SceneId } from '../../types';
 import type { ProseDropData } from './types';
 import { useTheme } from '../layout/ThemeContext';
 import { toDisplayString, toInternationalDisplayString } from '../../utils/temporal';
@@ -321,10 +321,6 @@ export const SceneCard: React.FC<SceneCardProps> = ({
         ? 'bg-yellow-400'
         : 'bg-brand-gray-400';
 
-  const hasStaleLink =
-    scene.prose_link?.is_stale ||
-    scene.beats.some((b: SceneBeat) => b.prose_link?.is_stale);
-
   const sceneTimeRaw = scene.scene_time?.temporal_zoned_datetime;
   const storyTimeDisplay = toDisplayString(sceneTimeRaw, i18n.language);
   const internationalTimeDisplay = toInternationalDisplayString(
@@ -402,6 +398,17 @@ export const SceneCard: React.FC<SceneCardProps> = ({
         </span>
       )}
 
+      {!scene.prose_link && (
+        <span
+          data-no-prose-indicator="true"
+          className={`absolute top-2 ${hasSceneTime ? 'right-8' : 'right-2'} ${isLight ? 'text-brand-gray-400' : 'text-brand-gray-500'}`}
+          title={t('Not yet linked to prose')}
+          aria-label={t('Scene has no prose link')}
+        >
+          <FileX size={14} aria-hidden="true" />
+        </span>
+      )}
+
       {/* color stripe at top */}
       {colorKey && (
         <div
@@ -410,20 +417,12 @@ export const SceneCard: React.FC<SceneCardProps> = ({
       )}
 
       <div className="p-3">
-        {/* status dot + stale warning */}
+        {/* status dot */}
         <div className="flex items-center gap-1.5 mb-1.5">
           <span
             className={`w-2 h-2 rounded-full flex-shrink-0 ${statusDot}`}
             title={t('Scene status')}
           />
-          {hasStaleLink && (
-            <span
-              className={`text-xs font-semibold ${isLight ? 'text-amber-700' : 'text-amber-400'}`}
-              title={t('Stale (file changed externally)')}
-            >
-              ⚠
-            </span>
-          )}
         </div>
 
         {/* summary */}

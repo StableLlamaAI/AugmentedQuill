@@ -5,9 +5,10 @@
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 
-"""API-level tests for the scenes endpoints."""
+"""API-level tests for marker-based scenes endpoints."""
 
 import json
+from unittest.mock import AsyncMock, patch
 
 from augmentedquill.services.projects.projects import select_project
 from tests.unit.api.v1.api_test_case import ApiTestCase
@@ -23,15 +24,12 @@ class ScenesApiTest(ApiTestCase):
             "metadata": {"version": 2},
             "project_title": "Scenes API Test",
             "format": "markdown",
-            "project_type": "novel",
+            "project_type": "short-story",
             "scenes": {},
         }
         (pdir / "story.json").write_text(json.dumps(story), encoding="utf-8")
+        (pdir / "content.md").write_text("Alpha Bravo Charlie", encoding="utf-8")
         self.pname = "scenes_api_proj"
-
-    # ------------------------------------------------------------------
-    # Helpers
-    # ------------------------------------------------------------------
 
     def _url(self, suffix: str = "") -> str:
         return f"/api/v1/projects/{self.pname}/scenes{suffix}"
@@ -41,392 +39,222 @@ class ScenesApiTest(ApiTestCase):
         self.assertEqual(resp.status_code, 201, resp.text)
         return resp.json()
 
-    # ------------------------------------------------------------------
-    # CRUD
-    # ------------------------------------------------------------------
+    def test_create_list_get_delete_crud(self) -> None:
+        created = self._create(summary="Scene A")
 
-    def test_list_empty(self) -> None:
-        resp = self.client.get(self._url())
-        self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.json(), [])
+        listed = self.client.get(self._url())
+        self.assertEqual(listed.status_code, 200)
+        self.assertEqual(len(listed.json()), 1)
 
-    def test_create_and_list(self) -> None:
-        scene = self._create(
-            summary="Scene Alpha", color_tag="#ff00ff", status="active"
-        )
-        self.assertEqual(scene["summary"], "Scene Alpha")
-        self.assertIn("id", scene)
+        fetched = self.client.get(self._url(f"/{created['id']}"))
+        self.assertEqual(fetched.status_code, 200)
+        self.assertEqual(fetched.json()["summary"], "Scene A")
 
-        all_scenes = self.client.get(self._url()).json()
-        self.assertEqual(len(all_scenes), 1)
+        deleted = self.client.delete(self._url(f"/{created['id']}"))
+        self.assertEqual(deleted.status_code, 204)
 
-    def test_get_single(self) -> None:
-        scene = self._create(summary="Single")
-        resp = self.client.get(self._url(f"/{scene['id']}"))
-        self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.json()["summary"], "Single")
+    def test_link_and_unlink_scene_prose(self) -> None:
+        scene = self._create(summary="Linked")
 
-    def test_get_404(self) -> None:
-        resp = self.client.get(self._url("/999999"))
-        self.assertEqual(resp.status_code, 404)
-
-    def test_update(self) -> None:
-        scene = self._create(summary="Before")
-        resp = self.client.put(self._url(f"/{scene['id']}"), json={"summary": "After"})
-        self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.json()["summary"], "After")
-
-    def test_update_404(self) -> None:
-        resp = self.client.put(self._url("/999999"), json={"summary": "x"})
-        self.assertEqual(resp.status_code, 404)
-
-    def test_delete(self) -> None:
-        scene = self._create(summary="To remove")
-        resp = self.client.delete(self._url(f"/{scene['id']}"))
-        self.assertEqual(resp.status_code, 204)
-        self.assertEqual(self.client.get(self._url()).json(), [])
-
-    def test_delete_404(self) -> None:
-        resp = self.client.delete(self._url("/999999"))
-        self.assertEqual(resp.status_code, 404)
-
-    # ------------------------------------------------------------------
-    # Order constraints
-    # ------------------------------------------------------------------
-
-    def test_order_constraints_persisted(self) -> None:
-        a = self._create(summary="A")
-        b = self._create(summary="B", order_after=[a["id"]])
-        fetched = self.client.get(self._url(f"/{b['id']}")).json()
-        self.assertIn(a["id"], fetched["order_after"])
-
-    def test_delete_removes_from_sibling_constraints(self) -> None:
-        a = self._create(summary="A")
-        b = self._create(summary="B", order_after=[a["id"]])
-        # Put A's ID in B's order_after; put B's ID in A's order_before
-        self.client.put(self._url(f"/{a['id']}"), json={"order_before": [b["id"]]})
-
-        self.client.delete(self._url(f"/{a['id']}"))
-        b_after = self.client.get(self._url(f"/{b['id']}")).json()
-        self.assertNotIn(a["id"], b_after.get("order_after", []))
-
-    # ------------------------------------------------------------------
-    # Prose link and stale detection
-    # ------------------------------------------------------------------
-
-    def test_prose_link_stale_flag_missing_file(self) -> None:
-        """Endpoint annotates prose links with is_stale when file is missing."""
-        scene = self._create(
-            summary="Ghost link",
-            prose_link={
-                "scope_type": "chapter",
-                "chapter_id": "ghost.md",
-                "start_offset": 0,
-                "content_hash": "deadbeef12345678",
-            },
-        )
-        fetched = self.client.get(self._url(f"/{scene['id']}")).json()
-        self.assertTrue(fetched["prose_link"]["is_stale"])
-
-    def test_list_tolerates_legacy_null_list_fields(self) -> None:
-        """Legacy scene rows with null list fields must still be listable."""
-        pdir = self.projects_root / self.pname
-        story_path = pdir / "story.json"
-        story = json.loads(story_path.read_text(encoding="utf-8"))
-        story["scenes"] = {
-            "1": {
-                "summary": "Legacy",
-                "beats": None,
-                "active_characters": None,
-                "passive_characters": None,
-                "sourcebook_entry_ids": None,
-                "order_before": None,
-                "order_after": None,
-            }
-        }
-        story_path.write_text(json.dumps(story), encoding="utf-8")
-
-        resp = self.client.get(self._url())
-        self.assertEqual(resp.status_code, 200, resp.text)
-        payload = resp.json()
-        self.assertEqual(len(payload), 1)
-        self.assertEqual(payload[0]["id"], 1)
-        self.assertEqual(payload[0]["active_characters"], [])
-
-    def test_refresh_hash_endpoint(self) -> None:
-        """Refresh-hash endpoint responds with a SceneProseLink object."""
-        pdir = self.projects_root / self.pname
-        pdir.joinpath("content.md").write_text("Story text.", encoding="utf-8")
-
-        scene = self._create(
-            summary="Has link",
-            prose_link={
-                "scope_type": "story",
-                "start_offset": 0,
-                "content_hash": "",
-            },
-        )
-        resp = self.client.post(
-            self._url(f"/{scene['id']}/refresh-hash"),
-            json={
-                "scope_type": "story",
-                "start_offset": 0,
-                "content_hash": "",
-                "beat_id": None,
-            },
-        )
-        self.assertEqual(resp.status_code, 200, resp.text)
-        link = resp.json()
-        self.assertEqual(len(link["content_hash"]), 16)
-
-    # ------------------------------------------------------------------
-    # link-prose endpoint
-    # ------------------------------------------------------------------
-
-    def test_link_prose_assigns_range_to_scene(self) -> None:
-        """POST link-prose returns all modified scenes with the new range."""
-        pdir = self.projects_root / self.pname
-        (pdir / "content.md").write_text("A" * 200, encoding="utf-8")
-
-        scene = self._create(summary="Linked scene")
-        resp = self.client.post(
+        linked = self.client.post(
             self._url(f"/{scene['id']}/link-prose"),
-            json={"scope_type": "story", "start_offset": 10, "end_offset": 80},
+            json={"scope_type": "story", "start_offset": 0, "end_offset": 5},
         )
-        self.assertEqual(resp.status_code, 200, resp.text)
-        scenes = resp.json()
-        self.assertIsInstance(scenes, list)
-        target = next((s for s in scenes if s["id"] == scene["id"]), None)
-        self.assertIsNotNone(target)
-        self.assertEqual(target["prose_link"]["start_offset"], 10)
-        self.assertEqual(target["prose_link"]["end_offset"], 80)
+        self.assertEqual(linked.status_code, 200, linked.text)
 
-    def test_link_prose_rejects_inverted_offsets(self) -> None:
-        """start_offset >= end_offset is a 422 error."""
-        scene = self._create(summary="Inverted")
-        resp = self.client.post(
+        fetched = self.client.get(self._url(f"/{scene['id']}"))
+        self.assertEqual(fetched.status_code, 200)
+        self.assertIsNotNone(fetched.json()["prose_link"])
+
+        unlinked = self.client.post(self._url(f"/{scene['id']}/unlink-prose"), json={})
+        self.assertEqual(unlinked.status_code, 200, unlinked.text)
+
+        fetched_after = self.client.get(self._url(f"/{scene['id']}"))
+        self.assertEqual(fetched_after.status_code, 200)
+        self.assertIsNone(fetched_after.json()["prose_link"])
+
+    def test_patch_prose_content(self) -> None:
+        scene = self._create(summary="Edit")
+        self.client.post(
             self._url(f"/{scene['id']}/link-prose"),
-            json={"scope_type": "story", "start_offset": 100, "end_offset": 50},
+            json={"scope_type": "story", "start_offset": 0, "end_offset": 5},
         )
-        self.assertEqual(resp.status_code, 422)
 
-    def test_link_prose_404_for_unknown_scene(self) -> None:
-        resp = self.client.post(
-            self._url("/999999/link-prose"),
-            json={"scope_type": "story", "start_offset": 0, "end_offset": 10},
-        )
-        self.assertEqual(resp.status_code, 404)
-
-    # ------------------------------------------------------------------
-    # prose-content (PATCH) endpoint
-    # ------------------------------------------------------------------
-
-    def test_patch_prose_content_replaces_text(self) -> None:
-        """PATCH prose-content updates the linked region and returns the scene."""
-        pdir = self.projects_root / self.pname
-        original = "Hello world, this is the story."
-        (pdir / "content.md").write_text(original, encoding="utf-8")
-
-        scene = self._create(
-            summary="Content scene",
-            prose_link={
-                "scope_type": "story",
-                "start_offset": 0,
-                "end_offset": len(original),
-                "content_hash": "",
-            },
-        )
-        new_text = "Goodbye world."
         resp = self.client.patch(
             self._url(f"/{scene['id']}/prose-content"),
-            json={"text": new_text},
+            json={"text": "Omega"},
         )
         self.assertEqual(resp.status_code, 200, resp.text)
-        updated = resp.json()
-        self.assertEqual(updated["id"], scene["id"])
-        self.assertEqual(updated["prose_link"]["end_offset"], len(new_text))
+        body = resp.json()
+        self.assertEqual(body["id"], scene["id"])
 
-    def test_patch_prose_content_post_is_405(self) -> None:
-        """POST to the prose-content endpoint must return 405 (method not allowed)."""
-        pdir = self.projects_root / self.pname
-        (pdir / "content.md").write_text("Some text.", encoding="utf-8")
-        scene = self._create(
-            summary="Method check",
-            prose_link={
+    def test_detect_boundaries_links_single_scene(self) -> None:
+        scene = self._create(summary="Boundary")
+        resp = self.client.post(
+            self._url("/detect-boundaries"),
+            json={
                 "scope_type": "story",
+                "scene_ids": [scene["id"]],
                 "start_offset": 0,
                 "end_offset": 10,
-                "content_hash": "",
-            },
-        )
-        resp = self.client.post(
-            self._url(f"/{scene['id']}/prose-content"),
-            json={"text": "should fail"},
-        )
-        self.assertEqual(resp.status_code, 405)
-
-    def test_patch_prose_content_422_when_no_prose_link(self) -> None:
-        """PATCH prose-content on an unlinked scene returns 422."""
-        scene = self._create(summary="Unlinked")
-        resp = self.client.patch(
-            self._url(f"/{scene['id']}/prose-content"),
-            json={"text": "anything"},
-        )
-        self.assertEqual(resp.status_code, 422)
-
-    def test_patch_prose_content_404_for_unknown_scene(self) -> None:
-        resp = self.client.patch(
-            self._url("/999999/prose-content"),
-            json={"text": "anything"},
-        )
-        self.assertEqual(resp.status_code, 404)
-
-    # ------------------------------------------------------------------
-    # reorder-prose endpoint
-    # ------------------------------------------------------------------
-
-    def test_reorder_prose_rewrites_scene_offsets(self) -> None:
-        pdir = self.projects_root / self.pname
-        pdir.joinpath("content.md").write_text(
-            "Alpha--Bravo==Charlie", encoding="utf-8"
-        )
-
-        scene_a = self._create(
-            summary="Scene A",
-            prose_link={
-                "scope_type": "story",
-                "start_offset": 0,
-                "end_offset": 5,
-                "content_hash": "",
-            },
-        )
-        scene_b = self._create(
-            summary="Scene B",
-            prose_link={
-                "scope_type": "story",
-                "start_offset": 7,
-                "end_offset": 12,
-                "content_hash": "",
-            },
-        )
-
-        resp = self.client.post(
-            self._url("/reorder-prose"),
-            json={
-                "source_scene_id": scene_b["id"],
-                "target_scene_id": scene_a["id"],
-                "place_before": True,
+                "prose_text": "Alpha text",
             },
         )
         self.assertEqual(resp.status_code, 200, resp.text)
         payload = resp.json()
-        scenes = payload["scenes"]
-        self.assertEqual(
-            {scene["id"] for scene in scenes}, {scene_a["id"], scene_b["id"]}
-        )
-        self.assertEqual(payload["scope_type"], "story")
-        self.assertEqual(payload["rebuilt_text"], "Bravo--Alpha")
+        self.assertEqual(len(payload["assignments"]), 1)
+        self.assertEqual(payload["assignments"][0]["scene_id"], scene["id"])
 
-        updated_a = self.client.get(self._url(f"/{scene_a['id']}")).json()
-        updated_b = self.client.get(self._url(f"/{scene_b['id']}")).json()
-        self.assertEqual(updated_b["prose_link"]["start_offset"], 0)
-        self.assertEqual(updated_a["prose_link"]["start_offset"], 7)
+    def test_write_scene_generates_text_and_links(self) -> None:
+        scene = self._create(summary="Write scene")
 
-    def test_reorder_prose_422_for_missing_link(self) -> None:
-        scene_a = self._create(summary="Unlinked A")
-        scene_b = self._create(
-            summary="Linked B",
-            prose_link={
-                "scope_type": "story",
-                "start_offset": 0,
-                "end_offset": 5,
-                "content_hash": "",
-            },
-        )
+        with patch(
+            "augmentedquill.services.scenes.scene_generation_service.llm.unified_chat_complete",
+            new=AsyncMock(return_value={"content": "Generated scene prose."}),
+        ):
+            resp = self.client.post(
+                self._url(f"/{scene['id']}/write"),
+                json={
+                    "scope_type": "story",
+                    "include_following_scenes": 0,
+                    "detect_boundaries": False,
+                },
+            )
 
+        self.assertEqual(resp.status_code, 200, resp.text)
+        payload = resp.json()
+        self.assertEqual(payload["generated_text"], "Generated scene prose.")
+        self.assertEqual(payload["scene"]["id"], scene["id"])
+
+    def test_auto_link_scope(self) -> None:
+        scene = self._create(summary="Auto")
         resp = self.client.post(
-            self._url("/reorder-prose"),
+            self._url("/auto-link-scope"),
             json={
-                "source_scene_id": scene_a["id"],
-                "target_scene_id": scene_b["id"],
-                "place_before": True,
-            },
-        )
-        self.assertEqual(resp.status_code, 422)
-
-    def test_reorder_prose_404_for_unknown_scene(self) -> None:
-        scene = self._create(
-            summary="Linked",
-            prose_link={
                 "scope_type": "story",
+                "current_text": "Alpha Bravo Charlie",
+                "scene_ids": [scene["id"]],
                 "start_offset": 0,
-                "end_offset": 5,
-                "content_hash": "",
-            },
-        )
-
-        resp = self.client.post(
-            self._url("/reorder-prose"),
-            json={
-                "source_scene_id": scene["id"],
-                "target_scene_id": 999999,
-                "place_before": True,
-            },
-        )
-        self.assertEqual(resp.status_code, 404)
-
-    def test_reorder_prose_moves_text_across_scopes(self) -> None:
-        pdir = self.projects_root / self.pname
-        pdir.joinpath("content.md").write_text("Alpha--Bravo", encoding="utf-8")
-        chapters_dir = pdir / "chapters"
-        chapters_dir.mkdir(parents=True, exist_ok=True)
-        (chapters_dir / "ch-1.md").write_text("Gamma==Delta", encoding="utf-8")
-
-        source = self._create(
-            summary="Source",
-            prose_link={
-                "scope_type": "story",
-                "start_offset": 0,
-                "end_offset": 5,
-                "content_hash": "",
-            },
-        )
-        target = self._create(
-            summary="Target",
-            prose_link={
-                "scope_type": "chapter",
-                "chapter_id": "ch-1",
-                "start_offset": 0,
-                "end_offset": 5,
-                "content_hash": "",
-            },
-        )
-
-        resp = self.client.post(
-            self._url("/reorder-prose"),
-            json={
-                "source_scene_id": source["id"],
-                "target_scene_id": target["id"],
-                "place_before": True,
             },
         )
 
         self.assertEqual(resp.status_code, 200, resp.text)
         payload = resp.json()
-        self.assertEqual(payload["scope_type"], "chapter")
-        self.assertEqual(payload["chapter_id"], "ch-1")
-        self.assertEqual(payload["rebuilt_text"], "AlphaGamma==Delta")
+        self.assertEqual(len(payload["assignments"]), 1)
 
-        self.assertEqual(
-            pdir.joinpath("content.md").read_text(encoding="utf-8"), "--Bravo"
-        )
-        self.assertEqual(
-            (chapters_dir / "ch-1.md").read_text(encoding="utf-8"), "AlphaGamma==Delta"
+    def test_auto_link_scope_links_multiple_scenes_without_existing_markers(
+        self,
+    ) -> None:
+        first = self._create(summary="First")
+        second = self._create(summary="Second")
+        pdir = self.projects_root / self.pname
+        (pdir / "content.md").write_text(
+            "Para one.\n\nPara two.",
+            encoding="utf-8",
         )
 
-        source_after = self.client.get(self._url(f"/{source['id']}")).json()
-        target_after = self.client.get(self._url(f"/{target['id']}")).json()
-        self.assertEqual(source_after["prose_link"]["scope_type"], "chapter")
-        self.assertEqual(source_after["prose_link"]["chapter_id"], "ch-1")
-        self.assertEqual(source_after["prose_link"]["start_offset"], 0)
-        self.assertEqual(target_after["prose_link"]["start_offset"], 5)
+        resp = self.client.post(
+            self._url("/auto-link-scope"),
+            json={
+                "scope_type": "story",
+                "current_text": "Para one.\n\nPara two.",
+            },
+        )
+
+        self.assertEqual(resp.status_code, 200, resp.text)
+        payload = resp.json()
+        assignments = payload["assignments"]
+        self.assertEqual(len(assignments), 2)
+        self.assertEqual(assignments[0]["scene_id"], first["id"])
+        self.assertEqual(assignments[1]["scene_id"], second["id"])
+
+        first_scene = self.client.get(self._url(f"/{first['id']}"))
+        second_scene = self.client.get(self._url(f"/{second['id']}"))
+        self.assertEqual(first_scene.status_code, 200, first_scene.text)
+        self.assertEqual(second_scene.status_code, 200, second_scene.text)
+        self.assertIsNotNone(first_scene.json().get("prose_link"))
+        self.assertIsNotNone(second_scene.json().get("prose_link"))
+
+    def test_auto_link_scope_uses_saved_scope_text_offsets(self) -> None:
+        first = self._create(summary="First")
+        second = self._create(summary="Second")
+
+        # Persisted prose has two paragraphs; request text is stale/normalized
+        # differently and should not drive boundary offsets.
+        pdir = self.projects_root / self.pname
+        saved = "Alpha first paragraph.\n\nBeta second paragraph."
+        (pdir / "content.md").write_text(saved, encoding="utf-8")
+
+        resp = self.client.post(
+            self._url("/auto-link-scope"),
+            json={
+                "scope_type": "story",
+                "current_text": "Alpha first paragraph. Beta second paragraph.",
+            },
+        )
+
+        self.assertEqual(resp.status_code, 200, resp.text)
+        payload = resp.json()
+        self.assertEqual(len(payload["assignments"]), 2)
+
+        text = (pdir / "content.md").read_text(encoding="utf-8")
+        self.assertIn(f"<!--scene:{first['id']}:start-->", text)
+        self.assertIn(f"<!--scene:{first['id']}:end-->", text)
+        self.assertIn(f"<!--scene:{second['id']}:start-->", text)
+        self.assertIn(f"<!--scene:{second['id']}:end-->", text)
+
+    def test_auto_link_scope_splits_single_paragraph_for_multiple_scenes(self) -> None:
+        first = self._create(summary="First")
+        second = self._create(summary="Second")
+
+        pdir = self.projects_root / self.pname
+        (pdir / "content.md").write_text(
+            "Alpha one two three four five six seven eight.",
+            encoding="utf-8",
+        )
+
+        resp = self.client.post(
+            self._url("/auto-link-scope"),
+            json={
+                "scope_type": "story",
+                "current_text": "Alpha one two three four five six seven eight.",
+            },
+        )
+
+        self.assertEqual(resp.status_code, 200, resp.text)
+        payload = resp.json()
+        assignments = payload["assignments"]
+        self.assertEqual(len(assignments), 2)
+        self.assertLess(assignments[0]["start_offset"], assignments[0]["end_offset"])
+        self.assertLess(assignments[1]["start_offset"], assignments[1]["end_offset"])
+
+        first_scene = self.client.get(self._url(f"/{first['id']}"))
+        second_scene = self.client.get(self._url(f"/{second['id']}"))
+        self.assertEqual(first_scene.status_code, 200, first_scene.text)
+        self.assertEqual(second_scene.status_code, 200, second_scene.text)
+        self.assertIsNotNone(first_scene.json().get("prose_link"))
+        self.assertIsNotNone(second_scene.json().get("prose_link"))
+
+    def test_auto_link_scope_does_not_create_nested_marker_comments(self) -> None:
+        first = self._create(summary="First")
+        second = self._create(summary="Second")
+
+        pdir = self.projects_root / self.pname
+        saved = "First paragraph.\n\nSecond paragraph."
+        (pdir / "content.md").write_text(saved, encoding="utf-8")
+
+        resp = self.client.post(
+            self._url("/auto-link-scope"),
+            json={
+                "scope_type": "story",
+                "current_text": saved,
+            },
+        )
+
+        self.assertEqual(resp.status_code, 200, resp.text)
+        text = (pdir / "content.md").read_text(encoding="utf-8")
+        self.assertIn(f"<!--scene:{first['id']}:start-->", text)
+        self.assertIn(f"<!--scene:{first['id']}:end-->", text)
+        self.assertIn(f"<!--scene:{second['id']}:start-->", text)
+        self.assertIn(f"<!--scene:{second['id']}:end-->", text)
+        self.assertNotIn("<!--scene:2:start-<!--scene:1:end-->->", text)

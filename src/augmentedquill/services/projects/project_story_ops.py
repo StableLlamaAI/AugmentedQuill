@@ -15,6 +15,7 @@ from typing import List
 
 from augmentedquill.core.config import load_story_config, save_story_config
 from augmentedquill.services.projects.project_locks import run_locked
+from augmentedquill.services.scenes.scene_markers import transfer_scene_markers
 from augmentedquill.utils.json_repair import apply_typographic_quotes
 
 
@@ -149,9 +150,12 @@ def write_story_content_in_project(active: Path, content: str) -> None:
     else:
         content_path = active / "story_content.md"
 
-    content_path.write_text(
-        apply_typographic_quotes(content, language=project_lang), encoding="utf-8"
+    existing_content = (
+        content_path.read_text(encoding="utf-8") if content_path.exists() else ""
     )
+    converted_content = apply_typographic_quotes(content, language=project_lang)
+    preserved = transfer_scene_markers(existing_content, converted_content)
+    content_path.write_text(preserved, encoding="utf-8")
 
 
 def read_scratchpad_in_project(active: Path) -> str:

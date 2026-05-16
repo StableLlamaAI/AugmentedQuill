@@ -109,16 +109,17 @@ export type SceneId = number;
 export type SceneStatus = 'active' | 'inactive' | 'draft';
 export type SceneScopeType = 'story' | 'chapter';
 
-/** A link between a scene/beat and a character-offset range in a prose file. */
+/** A link between a scene/beat and a prose scope file.
+
+Offsets are computed from inline scene markers at read time and are not
+persisted in story.json.
+ */
 export interface SceneProseLink {
   scope_type: SceneScopeType;
   chapter_id?: string | null;
   book_id?: string | null;
   start_offset: number;
   end_offset?: number | null;
-  content_hash: string;
-  /** Computed at load time – true when content_hash no longer matches the file. */
-  is_stale?: boolean;
 }
 
 export interface SceneBeat {

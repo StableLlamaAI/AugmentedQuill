@@ -374,6 +374,30 @@ describe('CodeMirrorEditor Diff Highlighting', () => {
     expect(deletedSpan?.textContent).toContain('\t');
   });
 
+  it('does not render inline scene markers in deleted diff payload', async () => {
+    const marker = '<!--scene:11:start-->';
+    const { container } = render(
+      <CodeMirrorEditor
+        value={'Alpha'}
+        baselineValue={`${marker}Alpha`}
+        showWhitespace={false}
+        showDiff={true}
+        hideSceneMarkers={true}
+        onChange={vi.fn()}
+      />
+    );
+
+    await act(async () => {});
+
+    const deletedSpans = Array.from(
+      container.querySelectorAll<HTMLSpanElement>('.cm-diff-deleted')
+    );
+    const deletedText = deletedSpans
+      .map((span: HTMLSpanElement) => span.textContent ?? '')
+      .join('');
+    expect(deletedText).not.toContain('<!--scene:11:start-->');
+  });
+
   it('keeps highlighted DOM sequence identical for space+text+space between green and red', async () => {
     const changedPart = ' seen—of ';
     const fullText = `Start${changedPart}Finish`;

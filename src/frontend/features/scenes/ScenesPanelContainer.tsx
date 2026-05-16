@@ -32,7 +32,10 @@ import { PinboardView } from './PinboardView';
 import { NarrativeView } from './NarrativeView';
 import { ConvergenceMapView } from './ConvergenceMapView';
 import { SceneEditorDialog } from './SceneEditorDialog';
-import type { SceneUpdatePayload } from '../../services/apiClients/scenes';
+import type {
+  SceneBoundaryAssignment,
+  SceneUpdatePayload,
+} from '../../services/apiClients/scenes';
 import type { ProseDropData } from './types';
 import { useSceneProseSync } from './useSceneProseSync';
 import { buildChapterOrderMap, proseSort } from './sceneSortUtils';
@@ -80,8 +83,8 @@ function collectBoundaryAdjustments(
     if (ol.scope_type !== link.scope_type) continue;
     if (link.scope_type === 'chapter' && ol.chapter_id !== link.chapter_id) continue;
 
-    const otherStart = ol.start_offset;
-    const otherEnd = ol.end_offset ?? otherStart;
+    const otherStart = Number(ol.start_offset ?? 0);
+    const otherEnd = Number(ol.end_offset ?? otherStart);
     if (otherEnd <= startOffset || otherStart >= endOffset) continue;
 
     const newOtherStart = edge === 'end' ? endOffset : otherStart;
@@ -126,7 +129,7 @@ function applyScenePatches(prevScenes: Scene[], updates: Scene[]): Scene[] {
   );
 }
 
-function getNarrativeOrderIndex(scene: Scene): number {
+function _getNarrativeOrderIndex(scene: Scene): number {
   return Number.isFinite(scene.order_index) ? (scene.order_index as number) : scene.id;
 }
 
@@ -424,34 +427,53 @@ export const ScenesPanelContainer: React.FC<ScenesPanelContainerProps> = ({
         proseSort(a, b, chapterOrderMap)
       );
 
-      const unlinked = sortedScenes.filter((s: Scene) => !s.prose_link);
-      const sourceIndex = unlinked.findIndex((s: Scene) => s.id === sourceSceneId);
-      const targetIndex = unlinked.findIndex((s: Scene) => s.id === targetSceneId);
-      if (sourceIndex < 0 || targetIndex < 0) return;
+      const sourceScene = scenes.find((s: Scene) => s.id === sourceSceneId);
+      const targetScene = scenes.find((s: Scene) => s.id === targetSceneId);
+      if (!sourceScene || !targetScene) return;
 
+      // Find positions in the globally sorted list (both linked and unlinked).
+      const sourcePos = sortedScenes.findIndex((s: Scene) => s.id === sourceSceneId);
+      const targetPos = sortedScenes.findIndex((s: Scene) => s.id === targetSceneId);
+      if (sourcePos < 0 || targetPos < 0) return;
+
+      // Reorder in the global sorted list
       const reordered = reorderByPlacement(
-        unlinked,
-        sourceIndex,
-        targetIndex,
+        sortedScenes,
+        sourcePos,
+        targetPos,
         placeBefore
       );
-      const nextOrderById = new Map<SceneId, number>(
-        reordered.map((scene: Scene, index: number) => [scene.id, index + 1])
-      );
 
-      const updates = reordered
-        .map((scene: Scene): NarrativeOrderUpdate | null => {
-          const nextOrder = nextOrderById.get(scene.id);
-          if (nextOrder === undefined) return null;
-          if (getNarrativeOrderIndex(scene) === nextOrder) return null;
-          return { id: scene.id, order_index: nextOrder };
-        })
-        .filter(
-          (update: NarrativeOrderUpdate | null): update is NarrativeOrderUpdate =>
-            update !== null
-        );
+      // Compute new order_index for the moved scene, preserving interleaving between linked scenes.
+      const newPos = reordered.findIndex((s: Scene) => s.id === sourceSceneId);
+      if (newPos < 0) return;
 
-      if (updates.length === 0) return;
+      let newOrderIndex: number | null = null;
+
+      if (newPos === 0) {
+        // Moved to start – place before the first scene's order_index (or at 0.0 if it's also unlinked).
+        const firstScene = reordered[0];
+        if (firstScene.prose_link) {
+          newOrderIndex = (firstScene.order_index ?? Infinity) - 1.0;
+        } else {
+          newOrderIndex = 0.0;
+        }
+      } else if (newPos === reordered.length - 1) {
+        // Moved to end – place after the last scene's order_index (or Infinity if no linked scenes).
+        const lastScene = reordered[reordered.length - 1];
+        newOrderIndex = (lastScene.order_index ?? Infinity) + 1.0;
+      } else {
+        // Between two scenes – use midpoint of their order_indices.
+        const prevScene = reordered[newPos - 1];
+        const nextScene = reordered[newPos + 1];
+        const prevOrder = prevScene.order_index ?? Infinity;
+        const nextOrder = nextScene.order_index ?? Infinity;
+        newOrderIndex = (prevOrder + nextOrder) / 2.0;
+      }
+
+      if (newOrderIndex === null) return;
+
+      const updates = [{ id: sourceSceneId, order_index: newOrderIndex }];
 
       const previousById = new Map<SceneId, Scene>(
         scenes.map((scene: Scene): [SceneId, Scene] => [scene.id, scene])
@@ -566,9 +588,25 @@ export const ScenesPanelContainer: React.FC<ScenesPanelContainerProps> = ({
       const scene = scenes.find((s: Scene): boolean => s.id === sceneId);
       if (!scene?.prose_link) return;
       const link = scene.prose_link;
-      const startOffset = edge === 'start' ? offset : link.start_offset;
-      const endOffset = edge === 'end' ? offset : (link.end_offset ?? offset);
-      if (startOffset >= endOffset) return;
+      const currentStart = Number(link.start_offset ?? 0);
+      const currentEnd = Number(link.end_offset ?? currentStart);
+      const startOffset = edge === 'start' ? offset : currentStart;
+      const endOffset = edge === 'end' ? offset : currentEnd;
+
+      // If the drag would trim the scene to zero-size, unlink it instead
+      if (startOffset >= endOffset) {
+        try {
+          const updated = await api.scenes.unlinkProse(sceneId);
+          updated.forEach((s: Scene) => patchScene(s));
+          recordSceneHistory(
+            'Unlink prose (boundary drag)',
+            applyScenePatches(scenes, updated)
+          );
+        } catch (err) {
+          notifyError(t('Unlink prose'), err);
+        }
+        return;
+      }
 
       const toAdjust = collectBoundaryAdjustments(
         scenes,
@@ -632,7 +670,7 @@ export const ScenesPanelContainer: React.FC<ScenesPanelContainerProps> = ({
       const doc = view.state.doc;
       const end = link.end_offset ?? doc.length;
       return doc.sliceString(
-        Math.min(link.start_offset, doc.length),
+        Math.min(Number(link.start_offset ?? 0), doc.length),
         Math.min(end, doc.length)
       );
     },
@@ -658,7 +696,7 @@ export const ScenesPanelContainer: React.FC<ScenesPanelContainerProps> = ({
         const view: EditorView | null = editorRef.current.getEditorView();
         if (view) {
           const docLen = view.state.doc.length;
-          const from = Math.min(proseLink.start_offset, docLen);
+          const from = Math.min(Number(proseLink.start_offset ?? 0), docLen);
           const to = Math.min(proseLink.end_offset ?? docLen, docLen);
           view.dispatch({ changes: { from, to, insert: text } });
         }
@@ -666,6 +704,85 @@ export const ScenesPanelContainer: React.FC<ScenesPanelContainerProps> = ({
     },
     [editingSceneId, patchScene, recordSceneHistory, scenes, editorRef]
   );
+
+  const handleWriteScene = useCallback(async (): Promise<void> => {
+    if (!editingSceneId) return;
+
+    const payload =
+      currentChapter?.scope === 'chapter'
+        ? {
+            scope_type: 'chapter' as const,
+            chapter_id: currentChapter.id,
+            book_id: currentChapter.book_id ?? null,
+            include_following_scenes: 1,
+            detect_boundaries: true,
+          }
+        : {
+            scope_type: 'story' as const,
+            include_following_scenes: 1,
+            detect_boundaries: true,
+          };
+
+    const result = await api.scenes.writeScene(editingSceneId, payload);
+    // Capture whether the scene was previously unlinked before patching the store,
+    // so we can decide whether to include the surrounding scene markers in the
+    // editor dispatch below.
+    const sceneBeforeWrite = scenes.find((s: Scene) => s.id === editingSceneId);
+    const isNewWrite = !sceneBeforeWrite?.prose_link;
+    const updates = [result.scene, ...result.scenes];
+    updates.forEach((scene: Scene): void => {
+      patchScene(scene);
+    });
+    recordSceneHistory('Write scene prose', applyScenePatches(scenes, updates));
+
+    const editedAssignment = result.assignments.find(
+      (assignment: SceneBoundaryAssignment): boolean =>
+        assignment.scene_id === editingSceneId
+    );
+    const view: EditorView | null = editorRef?.current?.getEditorView() ?? null;
+    if (!editedAssignment || !view || !currentChapter) return;
+
+    const isScopeMatch =
+      payload.scope_type === 'story'
+        ? currentChapter.scope === 'story'
+        : currentChapter.scope === 'chapter' &&
+          currentChapter.id === (payload.chapter_id ?? currentChapter.id);
+    if (!isScopeMatch) return;
+
+    const docLen = view.state.doc.length;
+
+    if (isNewWrite) {
+      // For a new scene write the backend appended the text and injected the
+      // surrounding markers into the file.  The editor must mirror this exactly
+      // (including the separator and markers) so the in-editor content stays in
+      // sync with the file on disk and the scene highlight offset is correct.
+      const currentContent = view.state.doc.toString();
+      const separator =
+        currentContent.length > 0 && !currentContent.endsWith('\n') ? '\n' : '';
+      const startMarker = `<!--scene:${String(editingSceneId)}:start-->`;
+      const endMarker = `<!--scene:${String(editingSceneId)}:end-->`;
+      view.dispatch({
+        changes: {
+          from: docLen,
+          to: docLen,
+          insert: separator + startMarker + result.generated_text + endMarker,
+        },
+      });
+    } else {
+      // For an existing linked scene the markers are already in the editor;
+      // only the prose text between them needs to be replaced.
+      const from = Math.min(Math.max(editedAssignment.start_offset, 0), docLen);
+      const to = Math.min(Math.max(editedAssignment.end_offset, from), docLen);
+      view.dispatch({ changes: { from, to, insert: result.generated_text } });
+    }
+  }, [
+    currentChapter,
+    editingSceneId,
+    editorRef,
+    patchScene,
+    recordSceneHistory,
+    scenes,
+  ]);
 
   return (
     <div className="flex flex-col w-full h-full">
@@ -787,6 +904,16 @@ export const ScenesPanelContainer: React.FC<ScenesPanelContainerProps> = ({
           onDeleteCause={handleDeleteCause}
           getLinkedProseText={editorRef ? getLinkedProseText : undefined}
           onSaveProseContent={editorRef ? handleSaveProseContent : undefined}
+          onWriteScene={(): Promise<void> => handleWriteScene()}
+          onUnlinkProse={async (sceneId: SceneId): Promise<void> => {
+            try {
+              const updated = await api.scenes.unlinkProse(sceneId);
+              updated.forEach((s: Scene) => patchScene(s));
+              recordSceneHistory('Unlink prose', applyScenePatches(scenes, updated));
+            } catch (err) {
+              notifyError(t('Unlink prose'), err);
+            }
+          }}
           onOpenSourcebookEntry={(entryId: string): void => {
             setIsSidebarOpen(true);
             uiStoreActions.openSourcebookDialog(entryId);

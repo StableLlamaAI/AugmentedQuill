@@ -833,11 +833,10 @@ export interface paths {
     put?: never;
     /**
      * Api Story Sourcebook Relevance
-     * @description Ask the WRITING model which sourcebook entries are relevant.
+     * @description Return scene-derived sourcebook entries relevant to the active prose end.
      *
-     *     This is a lightweight helper used by the frontend to keep checkboxes
-     *     in sync.  It is deliberately separate from the prose suggestion call so
-     *     that we can run it in the background on every text change.
+     *     This runs in the background while the user types, so it must stay
+     *     deterministic, cheap, and free of LLM latency.
      */
     post: operations['api_story_sourcebook_relevance_api_v1_projects__project_name__story_sourcebook_relevance_post'];
     delete?: never;
@@ -960,6 +959,29 @@ export interface paths {
      * @description Stream generic AI Actions (Extend/Rewrite/Summary update).
      */
     post: operations['api_story_action_stream_api_v1_projects__project_name__story_action_stream_post'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/projects/{project_name}/chapters/{chap_id}/rewrite-and-relink': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Api Chapter Rewrite And Relink
+     * @description Atomically rewrite a chapter and auto-link scenes in one transaction.
+     *
+     *     This endpoint streams the generated content and persists it,
+     *     then performs scene auto-linking on the resulting text.
+     */
+    post: operations['api_chapter_rewrite_and_relink_api_v1_projects__project_name__chapters__chap_id__rewrite_and_relink_post'];
     delete?: never;
     options?: never;
     head?: never;
@@ -1599,29 +1621,6 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
-  '/api/v1/projects/{project_name}/scenes/{scene_id}/refresh-hash': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * Refresh Prose Hash
-     * @description Recompute and persist the content hash for a prose link.
-     *
-     *     The frontend calls this after the user repositions a scene/beat marker so
-     *     that the hash is up-to-date and the stale flag is cleared.
-     */
-    post: operations['refresh_prose_hash_api_v1_projects__project_name__scenes__scene_id__refresh_hash_post'];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
   '/api/v1/projects/{project_name}/scenes/{scene_id}/link-prose': {
     parameters: {
       query?: never;
@@ -1633,13 +1632,31 @@ export interface paths {
     put?: never;
     /**
      * Link Scene Prose
-     * @description Assign a prose-text range to a scene.
-     *
-     *     Validates that the new range does not create a hole in any existing linked
-     *     scene.  Overlapping scenes are adjusted (their range trimmed or unlinked).
-     *     Returns all scenes that were modified.
+     * @description Assign a prose-text range to a scene using inline file markers.
      */
     post: operations['link_scene_prose_api_v1_projects__project_name__scenes__scene_id__link_prose_post'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/projects/{project_name}/scenes/{scene_id}/unlink-prose': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Unlink Scene Prose
+     * @description Remove the prose link from a scene, preserving its narrative position.
+     *
+     *     Returns all scenes whose order_index was updated during normalization.
+     */
+    post: operations['unlink_scene_prose_api_v1_projects__project_name__scenes__scene_id__unlink_prose_post'];
     delete?: never;
     options?: never;
     head?: never;
@@ -1657,7 +1674,7 @@ export interface paths {
     put?: never;
     /**
      * Reorder Scene Prose Route
-     * @description Reorder linked prose blocks and persist the rewritten offsets.
+     * @description Reorder linked prose blocks and persist marker-aware offsets.
      */
     post: operations['reorder_scene_prose_route_api_v1_projects__project_name__scenes_reorder_prose_post'];
     delete?: never;
@@ -1681,12 +1698,69 @@ export interface paths {
     head?: never;
     /**
      * Update Scene Prose Content
-     * @description Replace the text at a scene's linked prose offsets.
-     *
-     *     Writes the new text to disk, updates ``end_offset`` and ``content_hash``,
-     *     and returns the refreshed scene.
+     * @description Replace the text between a scene's inline start/end markers.
      */
     patch: operations['update_scene_prose_content_api_v1_projects__project_name__scenes__scene_id__prose_content_patch'];
+    trace?: never;
+  };
+  '/api/v1/projects/{project_name}/scenes/detect-boundaries': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Detect Boundaries For Scenes
+     * @description Detect scene boundaries in a prose segment and relink affected scenes.
+     */
+    post: operations['detect_boundaries_for_scenes_api_v1_projects__project_name__scenes_detect_boundaries_post'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/projects/{project_name}/scenes/{scene_id}/write': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Write Scene Prose
+     * @description Generate prose for one scene and automatically link generated boundaries.
+     */
+    post: operations['write_scene_prose_api_v1_projects__project_name__scenes__scene_id__write_post'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/projects/{project_name}/scenes/auto-link-scope': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Auto Link Saved Scope
+     * @description Auto-link a saved prose scope to the scenes that belong to it.
+     */
+    post: operations['auto_link_saved_scope_api_v1_projects__project_name__scenes_auto_link_scope_post'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
     trace?: never;
   };
   '/api/v1/health': {
@@ -1730,6 +1804,45 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
   schemas: {
+    /**
+     * AutoLinkScopeRequest
+     * @description Body for auto-linking a saved prose scope to its scenes.
+     */
+    AutoLinkScopeRequest: {
+      /**
+       * Scope Type
+       * @default chapter
+       * @enum {string}
+       */
+      scope_type: 'story' | 'chapter';
+      /** Chapter Id */
+      chapter_id?: string | null;
+      /** Book Id */
+      book_id?: string | null;
+      /** Scene Ids */
+      scene_ids?: number[];
+      /**
+       * Start Offset
+       * @default 0
+       */
+      start_offset: number;
+      /** End Offset */
+      end_offset?: number | null;
+      /** Prose Text */
+      prose_text?: string | null;
+      /** Current Text */
+      current_text: string;
+    };
+    /**
+     * AutoLinkScopeResponse
+     * @description Response for auto-linking a saved prose scope to its scenes.
+     */
+    AutoLinkScopeResponse: {
+      /** Assignments */
+      assignments?: components['schemas']['SceneBoundaryAssignment'][];
+      /** Scenes */
+      scenes?: components['schemas']['Scene'][];
+    };
     /** Body_api_projects_images_upload_api_v1_projects_images_upload_post */
     Body_api_projects_images_upload_api_v1_projects_images_upload_post: {
       /** File */
@@ -2528,37 +2641,6 @@ export interface components {
       project_language?: string | null;
     };
     /**
-     * RefreshProseHashRequest
-     * @description Body for the prose-link hash refresh endpoint.
-     */
-    RefreshProseHashRequest: {
-      /** Scope Type */
-      scope_type: string;
-      /** Chapter Id */
-      chapter_id?: string | null;
-      /** Book Id */
-      book_id?: string | null;
-      /**
-       * Start Offset
-       * @default 0
-       */
-      start_offset: number;
-      /** End Offset */
-      end_offset?: number | null;
-      /**
-       * Content Hash
-       * @default
-       */
-      content_hash: string;
-      /**
-       * Is Stale
-       * @default false
-       */
-      is_stale: boolean;
-      /** Beat Id */
-      beat_id?: string | null;
-    };
-    /**
      * ReplaceAllRequest
      * @description Request to replace all occurrences of a search query.
      */
@@ -2756,11 +2838,8 @@ export interface components {
        * @default []
        */
       order_after: number[];
-      /**
-       * Order Index
-       * @default 0
-       */
-      order_index: number;
+      /** Order Index */
+      order_index?: number | null;
       /**
        * Pinboard X
        * @default 100
@@ -2789,6 +2868,18 @@ export interface components {
       /** Text */
       text: string;
       prose_link?: components['schemas']['SceneProseLink'] | null;
+    };
+    /**
+     * SceneBoundaryAssignment
+     * @description One scene-to-prose boundary mapping in absolute offsets.
+     */
+    SceneBoundaryAssignment: {
+      /** Scene Id */
+      scene_id: number;
+      /** Start Offset */
+      start_offset: number;
+      /** End Offset */
+      end_offset: number;
     };
     /**
      * SceneChronologyTime
@@ -2846,11 +2937,8 @@ export interface components {
        * @default []
        */
       order_after: number[];
-      /**
-       * Order Index
-       * @default 0
-       */
-      order_index: number;
+      /** Order Index */
+      order_index?: number | null;
       /**
        * Pinboard X
        * @default 100
@@ -2868,6 +2956,43 @@ export interface components {
       status: string;
       /** Tag Personal Datetimes */
       tag_personal_datetimes?: components['schemas']['SceneTagPersonalDatetime'][];
+    };
+    /**
+     * SceneDetectBoundariesRequest
+     * @description Payload for boundary detection + optional automatic scene relinking.
+     */
+    SceneDetectBoundariesRequest: {
+      /**
+       * Scope Type
+       * @default chapter
+       * @enum {string}
+       */
+      scope_type: 'story' | 'chapter';
+      /** Chapter Id */
+      chapter_id?: string | null;
+      /** Book Id */
+      book_id?: string | null;
+      /** Scene Ids */
+      scene_ids?: number[];
+      /**
+       * Start Offset
+       * @default 0
+       */
+      start_offset: number;
+      /** End Offset */
+      end_offset?: number | null;
+      /** Prose Text */
+      prose_text?: string | null;
+    };
+    /**
+     * SceneDetectBoundariesResponse
+     * @description Result of boundary detection + link updates.
+     */
+    SceneDetectBoundariesResponse: {
+      /** Assignments */
+      assignments?: components['schemas']['SceneBoundaryAssignment'][];
+      /** Scenes */
+      scenes?: components['schemas']['Scene'][];
     };
     /**
      * SceneLinkProseRequest
@@ -2893,19 +3018,17 @@ export interface components {
     };
     /**
      * SceneProseLink
-     * @description A link between a scene (or beat) and a specific text range in the prose.
+     * @description A link between a scene (or beat) and a specific content file.
      *
      *     ``scope_type`` distinguishes between:
      *     - ``'story'`` – the main story content file (short-story projects)
      *     - ``'chapter'`` – a specific chapter file (novel / series projects)
      *
-     *     ``start_offset`` and ``end_offset`` are UTF-8 character offsets within the
-     *     content of the referenced file.  ``end_offset`` being ``None`` means the
-     *     scene/beat runs to the end of the file from ``start_offset``.
-     *
-     *     ``content_hash`` is the first 16 hex characters of the SHA-256 digest of
-     *     the file content at the time the link was last saved.  The frontend
-     *     compares this against the current content hash to detect external changes.
+     *     Only the file identity is persisted.  ``start_offset`` and ``end_offset``
+     *     are character positions derived at read time by parsing the inline HTML
+     *     comment markers embedded in the content file (see ``scene_markers.py``).
+     *     They are populated by the service layer before returning scenes to the API
+     *     and are excluded from disk storage.
      */
     SceneProseLink: {
       /** Scope Type */
@@ -2914,23 +3037,10 @@ export interface components {
       chapter_id?: string | null;
       /** Book Id */
       book_id?: string | null;
-      /**
-       * Start Offset
-       * @default 0
-       */
-      start_offset: number;
+      /** Start Offset */
+      start_offset?: number | null;
       /** End Offset */
       end_offset?: number | null;
-      /**
-       * Content Hash
-       * @default
-       */
-      content_hash: string;
-      /**
-       * Is Stale
-       * @default false
-       */
-      is_stale: boolean;
     };
     /**
      * SceneReorderProseRequest
@@ -2998,7 +3108,7 @@ export interface components {
     };
     /**
      * SceneUpdateProseContentRequest
-     * @description Payload for replacing the prose text at a scene's linked offsets.
+     * @description Payload for replacing the prose text between a scene's inline markers.
      */
     SceneUpdateProseContentRequest: {
       /** Text */
@@ -3043,6 +3153,41 @@ export interface components {
       tag_personal_datetimes?:
         | components['schemas']['SceneTagPersonalDatetime'][]
         | null;
+    };
+    /**
+     * SceneWriteRequest
+     * @description Payload for generating prose for one scene and linking the result.
+     */
+    SceneWriteRequest: {
+      /** Scope Type */
+      scope_type?: ('story' | 'chapter') | null;
+      /** Chapter Id */
+      chapter_id?: string | null;
+      /** Book Id */
+      book_id?: string | null;
+      /**
+       * Include Following Scenes
+       * @default 1
+       */
+      include_following_scenes: number;
+      /**
+       * Detect Boundaries
+       * @default true
+       */
+      detect_boundaries: boolean;
+    };
+    /**
+     * SceneWriteResponse
+     * @description Result of writing one scene and relinking affected scenes.
+     */
+    SceneWriteResponse: {
+      scene: components['schemas']['Scene'];
+      /** Generated Text */
+      generated_text: string;
+      /** Assignments */
+      assignments?: components['schemas']['SceneBoundaryAssignment'][];
+      /** Scenes */
+      scenes?: components['schemas']['Scene'][];
     };
     /**
      * SearchMatch
@@ -5062,6 +5207,39 @@ export interface operations {
       };
     };
   };
+  api_chapter_rewrite_and_relink_api_v1_projects__project_name__chapters__chap_id__rewrite_and_relink_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        chap_id: number;
+        /** @description Directory name of the project */
+        project_name: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': unknown;
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
   api_story_title_api_v1_projects__project_name__story_title_post: {
     parameters: {
       query?: never;
@@ -6250,43 +6428,6 @@ export interface operations {
       };
     };
   };
-  refresh_prose_hash_api_v1_projects__project_name__scenes__scene_id__refresh_hash_post: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        scene_id: number;
-        /** @description Directory name of the project */
-        project_name: string;
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        'application/json': components['schemas']['RefreshProseHashRequest'];
-      };
-    };
-    responses: {
-      /** @description Successful Response */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['SceneProseLink'];
-        };
-      };
-      /** @description Validation Error */
-      422: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['HTTPValidationError'];
-        };
-      };
-    };
-  };
   link_scene_prose_api_v1_projects__project_name__scenes__scene_id__link_prose_post: {
     parameters: {
       query?: never;
@@ -6303,6 +6444,39 @@ export interface operations {
         'application/json': components['schemas']['SceneLinkProseRequest'];
       };
     };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Scene'][];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  unlink_scene_prose_api_v1_projects__project_name__scenes__scene_id__unlink_prose_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        scene_id: number;
+        /** @description Directory name of the project */
+        project_name: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
     responses: {
       /** @description Successful Response */
       200: {
@@ -6384,6 +6558,115 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['Scene'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  detect_boundaries_for_scenes_api_v1_projects__project_name__scenes_detect_boundaries_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Directory name of the project */
+        project_name: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SceneDetectBoundariesRequest'];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SceneDetectBoundariesResponse'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  write_scene_prose_api_v1_projects__project_name__scenes__scene_id__write_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        scene_id: number;
+        /** @description Directory name of the project */
+        project_name: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SceneWriteRequest'];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SceneWriteResponse'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  auto_link_saved_scope_api_v1_projects__project_name__scenes_auto_link_scope_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Directory name of the project */
+        project_name: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AutoLinkScopeRequest'];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AutoLinkScopeResponse'];
         };
       };
       /** @description Validation Error */

@@ -256,14 +256,22 @@ export const api = {
       currentProjectApi().scenes.update(...args),
     delete: (...args: Parameters<ProjectApiClients['scenes']['delete']>) =>
       currentProjectApi().scenes.delete(...args),
-    refreshHash: (...args: Parameters<ProjectApiClients['scenes']['refreshHash']>) =>
-      currentProjectApi().scenes.refreshHash(...args),
     linkProse: (...args: Parameters<ProjectApiClients['scenes']['linkProse']>) =>
       currentProjectApi().scenes.linkProse(...args),
+    unlinkProse: (...args: Parameters<ProjectApiClients['scenes']['unlinkProse']>) =>
+      currentProjectApi().scenes.unlinkProse(...args),
     reorderProse: (...args: Parameters<ProjectApiClients['scenes']['reorderProse']>) =>
       currentProjectApi().scenes.reorderProse(...args),
     updateProseContent: (
       ...args: Parameters<ProjectApiClients['scenes']['updateProseContent']>
     ) => currentProjectApi().scenes.updateProseContent(...args),
+    detectBoundaries: (
+      ...args: Parameters<ProjectApiClients['scenes']['detectBoundaries']>
+    ) => currentProjectApi().scenes.detectBoundaries(...args),
+    autoLinkScope: (
+      ...args: Parameters<ProjectApiClients['scenes']['autoLinkScope']>
+    ) => currentProjectApi().scenes.autoLinkScope(...args),
+    writeScene: (...args: Parameters<ProjectApiClients['scenes']['writeScene']>) =>
+      currentProjectApi().scenes.writeScene(...args),
   },
 };

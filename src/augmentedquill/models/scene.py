@@ -12,15 +12,16 @@ chapter, or remain unlinked from any prose (planning-only).  Scenes can also
 have Beats – sub-units of action within a scene, each optionally linked to a
 specific prose range.
 
-Prose links carry a content hash so the frontend can detect when the underlying
-text file was modified outside AugmentedQuill and warn the user that the stored
-offset may be stale.
+Prose links record only which content *file* a scene belongs to.  The actual
+byte positions are stored as HTML-comment markers embedded directly in the
+content file (see ``scene_markers.py``) and are computed at read time; they are
+never persisted in ``story.json``.
 """
 
 from __future__ import annotations
 
 import uuid
-from typing import Literal, Optional, TypeAlias
+from typing import Any, Literal, Optional, TypeAlias
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -62,28 +63,25 @@ class SceneTagPersonalDatetime(BaseModel):
 
 
 class SceneProseLink(BaseModel):
-    """A link between a scene (or beat) and a specific text range in the prose.
+    """A link between a scene (or beat) and a specific content file.
 
     ``scope_type`` distinguishes between:
     - ``'story'`` – the main story content file (short-story projects)
     - ``'chapter'`` – a specific chapter file (novel / series projects)
 
-    ``start_offset`` and ``end_offset`` are UTF-8 character offsets within the
-    content of the referenced file.  ``end_offset`` being ``None`` means the
-    scene/beat runs to the end of the file from ``start_offset``.
-
-    ``content_hash`` is the first 16 hex characters of the SHA-256 digest of
-    the file content at the time the link was last saved.  The frontend
-    compares this against the current content hash to detect external changes.
+    Only the file identity is persisted.  ``start_offset`` and ``end_offset``
+    are character positions derived at read time by parsing the inline HTML
+    comment markers embedded in the content file (see ``scene_markers.py``).
+    They are populated by the service layer before returning scenes to the API
+    and are excluded from disk storage.
     """
 
     scope_type: str  # 'story' | 'chapter'
     chapter_id: Optional[str] = None
     book_id: Optional[str] = None
-    start_offset: int = 0
+    # Computed at read time from file markers; never written to story.json.
+    start_offset: Optional[int] = None
     end_offset: Optional[int] = None
-    content_hash: str = ""
-    is_stale: bool = False  # computed at read time; never persisted
 
 
 class SceneBeat(BaseModel):
@@ -148,7 +146,9 @@ class Scene(BaseModel):
     prose_link: Optional[SceneProseLink] = None  # used when beats is empty
     order_before: list[SceneId] = []  # scene IDs this scene must precede
     order_after: list[SceneId] = []  # scene IDs this scene must follow
-    order_index: int = 0  # narrative order for scenes without prose links
+    order_index: Optional[float] = (
+        None  # narrative order; None = freshly created, sorts to end
+    )
     pinboard_x: float = 100.0
     pinboard_y: float = 100.0
     status: str = "active"  # 'active' | 'inactive' | 'draft'
@@ -177,7 +177,7 @@ class SceneCreateRequest(BaseModel):
     prose_link: Optional[SceneProseLink] = None
     order_before: list[SceneId] = []
     order_after: list[SceneId] = []
-    order_index: int = 0
+    order_index: Optional[float] = None
     pinboard_x: float = 100.0
     pinboard_y: float = 100.0
     status: str = "active"
@@ -199,7 +199,7 @@ class SceneUpdateRequest(BaseModel):
     prose_link: Optional[SceneProseLink] = None
     order_before: Optional[list[SceneId]] = None
     order_after: Optional[list[SceneId]] = None
-    order_index: Optional[int] = None
+    order_index: Optional[float] = None
     pinboard_x: Optional[float] = None
     pinboard_y: Optional[float] = None
     status: Optional[str] = None
@@ -243,14 +243,62 @@ class SceneReorderProseResponse(BaseModel):
 
 
 class SceneUpdateProseContentRequest(BaseModel):
-    """Payload for replacing the prose text at a scene's linked offsets."""
+    """Payload for replacing the prose text between a scene's inline markers."""
 
     text: str
 
 
-class ProseConflictError(Exception):
-    """Raised when a new prose range would create a hole in an existing scene."""
+class SceneBoundaryAssignment(BaseModel):
+    """One scene-to-prose boundary mapping in absolute offsets."""
 
-    def __init__(self, conflicting_scene_id: SceneId) -> None:
-        super().__init__(f"Range creates a hole in scene '{conflicting_scene_id}'")
-        self.conflicting_scene_id = conflicting_scene_id
+    scene_id: SceneId
+    start_offset: int
+    end_offset: int
+
+
+class SceneDetectBoundariesRequest(BaseModel):
+    """Payload for boundary detection + optional automatic scene relinking."""
+
+    scope_type: Literal["story", "chapter"] = "chapter"
+    chapter_id: Optional[str] = None
+    book_id: Optional[str] = None
+    scene_ids: list[SceneId] = Field(default_factory=list)
+    start_offset: int = 0
+    end_offset: Optional[int] = None
+    prose_text: Optional[str] = None
+
+    @field_validator("end_offset")
+    @classmethod
+    def _validate_offsets(cls, value: Optional[int], info: Any) -> Optional[int]:
+        if value is None:
+            return value
+        start_offset = int(info.data.get("start_offset", 0))
+        if value <= start_offset:
+            raise ValueError("end_offset must be greater than start_offset")
+        return value
+
+
+class SceneDetectBoundariesResponse(BaseModel):
+    """Result of boundary detection + link updates."""
+
+    assignments: list[SceneBoundaryAssignment] = Field(default_factory=list)
+    scenes: list[Scene] = Field(default_factory=list)
+
+
+class SceneWriteRequest(BaseModel):
+    """Payload for generating prose for one scene and linking the result."""
+
+    scope_type: Optional[Literal["story", "chapter"]] = None
+    chapter_id: Optional[str] = None
+    book_id: Optional[str] = None
+    include_following_scenes: int = 1
+    detect_boundaries: bool = True
+
+
+class SceneWriteResponse(BaseModel):
+    """Result of writing one scene and relinking affected scenes."""
+
+    scene: Scene
+    generated_text: str
+    assignments: list[SceneBoundaryAssignment] = Field(default_factory=list)
+    scenes: list[Scene] = Field(default_factory=list)

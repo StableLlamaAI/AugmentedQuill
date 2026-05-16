@@ -113,6 +113,7 @@
       "You are helping the user write a story.",
       "Your job is to keep the story logical, coherent, and well-paced by managing metadata, available structure, sourcebook knowledge, and delegation.",
       "Only use tools that are actually available in this session.",
+      "The active project structure is determined by the tools available in this session.",
       "",
       "Your goal is to assist with brainstorming, structuring, and coordinating the writing process.",
       "You own story metadata, active-draft metadata, sourcebook evolution, available structural ordering, and workflow progression.",
@@ -271,6 +272,15 @@
       "Respect the story's themes, tags, and any unresolved conflicts provided in the prompt."
     ]
   },
+  "scene_boundary_linker": {
+    "_use": "EDITING",
+    "en": [
+      "You are a precise prose segmentation assistant.",
+      "Split the provided prose segment into contiguous ranges that map to the requested scene IDs.",
+      "Return strict JSON only in the requested schema.",
+      "Do not add commentary or markdown."
+    ]
+  },
   "user_prompts": {
     "sourcebook_keyword_extraction": {
       "_use": "WRITING",
@@ -369,6 +379,49 @@
         "{existing_text}",
         "",
         "Task: Continue the current draft from where it stops to advance the summary coherently."
+      ]
+    },
+    "write_scene_prose": {
+      "_use": "WRITING",
+      "en": [
+        "Story title: {story_title}",
+        "",
+        "Story description: {story_summary}",
+        "",
+        "Story tags: {story_tags}",
+        "",
+        "Background information:\n{background}",
+        "",
+        "Current draft title: {chapter_title}",
+        "Current draft summary: {chapter_summary}",
+        "",
+        "Scene guidance:\n{scene_guidance}",
+        "",
+        "Current scene summary: {current_scene_summary}",
+        "Next scene summary: {next_scene_summary}",
+        "",
+        "Recent prose tail (style continuity only, do not repeat):\n{existing_tail}",
+        "",
+        "Task: Write prose for the current scene only. Return prose text only."
+      ]
+    },
+    "scene_boundary_detection": {
+      "_use": "EDITING",
+      "en": [
+        "Scene IDs (allowed): {scene_ids}",
+        "",
+        "Scene descriptions:\n{scene_descriptions}",
+        "",
+        "Prose segment:\n{prose_text}",
+        "",
+        "Task:",
+        "Return strict JSON only in this exact shape:",
+        "{{\"boundaries\": [{{\"scene_id\": 1, \"start_offset\": 0, \"end_offset\": 10}}]}}",
+        "Offsets must be 0-based and relative to the given prose segment.",
+        "Boundaries must be non-overlapping and ordered.",
+        "Map prose to scenes using semantic evidence from each scene description.",
+        "Do not guess: when evidence is weak, return fewer boundaries instead of forced assignments.",
+        "Only use scene IDs from the allowed list."
       ]
     },
     "chapter_ai_prefill_task": {

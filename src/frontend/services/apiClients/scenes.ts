@@ -44,11 +44,6 @@ export interface SceneCreatePayload {
 
 export type SceneUpdatePayload = Partial<SceneCreatePayload>;
 
-export interface RefreshHashPayload {
-  beat_id?: string | null;
-  prose_link: SceneProseLink;
-}
-
 export interface LinkProsePayload {
   scope_type: string;
   chapter_id?: string | null;
@@ -73,6 +68,54 @@ export interface ReorderProseResponse {
   rebuilt_text: string;
 }
 
+export interface SceneBoundaryAssignment {
+  scene_id: SceneId;
+  start_offset: number;
+  end_offset: number;
+}
+
+export interface DetectBoundariesPayload {
+  scope_type: 'story' | 'chapter';
+  chapter_id?: string | null;
+  book_id?: string | null;
+  scene_ids: SceneId[];
+  start_offset: number;
+  end_offset?: number | null;
+  prose_text?: string | null;
+}
+
+export interface DetectBoundariesResponse {
+  assignments: SceneBoundaryAssignment[];
+  scenes: Scene[];
+}
+
+export interface AutoLinkScopePayload {
+  scope_type: 'story' | 'chapter';
+  chapter_id?: string | null;
+  book_id?: string | null;
+  current_text: string;
+}
+
+export interface AutoLinkScopeResponse {
+  assignments: SceneBoundaryAssignment[];
+  scenes: Scene[];
+}
+
+export interface SceneWritePayload {
+  scope_type?: 'story' | 'chapter';
+  chapter_id?: string | null;
+  book_id?: string | null;
+  include_following_scenes?: number;
+  detect_boundaries?: boolean;
+}
+
+export interface SceneWriteResponse {
+  scene: Scene;
+  generated_text: string;
+  assignments: SceneBoundaryAssignment[];
+  scenes: Scene[];
+}
+
 // ---------------------------------------------------------------------------
 // API interface
 // ---------------------------------------------------------------------------
@@ -83,13 +126,18 @@ export interface ScenesApi {
   get: (sceneId: SceneId) => Promise<Scene>;
   update: (sceneId: SceneId, payload: SceneUpdatePayload) => Promise<Scene>;
   delete: (sceneId: SceneId) => Promise<void>;
-  refreshHash: (
-    sceneId: SceneId,
-    payload: RefreshHashPayload
-  ) => Promise<SceneProseLink>;
   linkProse: (sceneId: SceneId, payload: LinkProsePayload) => Promise<Scene[]>;
+  unlinkProse: (sceneId: SceneId) => Promise<Scene[]>;
   reorderProse: (payload: ReorderProsePayload) => Promise<ReorderProseResponse>;
   updateProseContent: (sceneId: SceneId, text: string) => Promise<Scene>;
+  detectBoundaries: (
+    payload: DetectBoundariesPayload
+  ) => Promise<DetectBoundariesResponse>;
+  autoLinkScope: (payload: AutoLinkScopePayload) => Promise<AutoLinkScopeResponse>;
+  writeScene: (
+    sceneId: SceneId,
+    payload: SceneWritePayload
+  ) => Promise<SceneWriteResponse>;
 }
 
 export const createScenesApi = (projectName: string): ScenesApi => {
@@ -111,21 +159,18 @@ export const createScenesApi = (projectName: string): ScenesApi => {
     delete: (sceneId: SceneId): Promise<void> =>
       deleteJson<void>(`${base}/${sceneId}`, 'Failed to delete scene'),
 
-    refreshHash: (
-      sceneId: SceneId,
-      payload: RefreshHashPayload
-    ): Promise<SceneProseLink> =>
-      postJson<SceneProseLink>(
-        `${base}/${sceneId}/refresh-hash`,
-        payload,
-        'Failed to refresh hash'
-      ),
-
     linkProse: (sceneId: SceneId, payload: LinkProsePayload): Promise<Scene[]> =>
       postJson<Scene[]>(
         `${base}/${sceneId}/link-prose`,
         payload,
         'Failed to link prose'
+      ),
+
+    unlinkProse: (sceneId: SceneId): Promise<Scene[]> =>
+      postJson<Scene[]>(
+        `${base}/${sceneId}/unlink-prose`,
+        {},
+        'Failed to unlink prose'
       ),
 
     reorderProse: (payload: ReorderProsePayload): Promise<ReorderProseResponse> =>
@@ -140,6 +185,32 @@ export const createScenesApi = (projectName: string): ScenesApi => {
         `${base}/${sceneId}/prose-content`,
         { text },
         'Failed to update prose content'
+      ),
+
+    detectBoundaries: (
+      payload: DetectBoundariesPayload
+    ): Promise<DetectBoundariesResponse> =>
+      postJson<DetectBoundariesResponse>(
+        `${base}/detect-boundaries`,
+        payload,
+        'Failed to detect scene boundaries'
+      ),
+
+    autoLinkScope: (payload: AutoLinkScopePayload): Promise<AutoLinkScopeResponse> =>
+      postJson<AutoLinkScopeResponse>(
+        `${base}/auto-link-scope`,
+        payload,
+        'Failed to auto-link chapter scenes'
+      ),
+
+    writeScene: (
+      sceneId: SceneId,
+      payload: SceneWritePayload
+    ): Promise<SceneWriteResponse> =>
+      postJson<SceneWriteResponse>(
+        `${base}/${sceneId}/write`,
+        payload,
+        'Failed to write scene prose'
       ),
   };
 };

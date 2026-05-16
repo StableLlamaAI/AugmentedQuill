@@ -94,6 +94,10 @@ interface SceneEditorDialogProps {
   getLinkedProseText?: (link: SceneProseLink) => string | null;
   /** Saves new prose content back to the file at the link range. */
   onSaveProseContent?: (text: string) => Promise<void>;
+  /** Generates prose for this scene and links the result. */
+  onWriteScene?: () => Promise<void>;
+  /** Unlinks the scene from its current prose range. */
+  onUnlinkProse?: (sceneId: SceneId) => Promise<void>;
   /** Open sourcebook dialog for an entry id. */
   onOpenSourcebookEntry?: (entryId: string) => void;
 }
@@ -119,6 +123,8 @@ export const SceneEditorDialog: React.FC<SceneEditorDialogProps> = ({
   onDeleteCause,
   getLinkedProseText,
   onSaveProseContent,
+  onWriteScene,
+  onUnlinkProse,
   onOpenSourcebookEntry,
 }: SceneEditorDialogProps) => {
   const { t, i18n } = useTranslation();
@@ -308,6 +314,7 @@ export const SceneEditorDialog: React.FC<SceneEditorDialogProps> = ({
   const [proseDirty, setProseDirty] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isWritingScene, setIsWritingScene] = useState(false);
   const [pendingSourcebookEntryId, setPendingSourcebookEntryId] = useState<
     string | null
   >(null);
@@ -649,6 +656,16 @@ export const SceneEditorDialog: React.FC<SceneEditorDialogProps> = ({
   const handleSave = async (): Promise<void> => {
     await performSave();
     onClose();
+  };
+
+  const handleWriteScene = async (): Promise<void> => {
+    if (!onWriteScene) return;
+    setIsWritingScene(true);
+    try {
+      await onWriteScene();
+    } finally {
+      setIsWritingScene(false);
+    }
   };
 
   const handleDelete = async (): Promise<void> => {
@@ -1202,13 +1219,18 @@ export const SceneEditorDialog: React.FC<SceneEditorDialogProps> = ({
 
           <div className={sectionCls}>
             <label className={labelCls}>{t('Linked Prose')}</label>
+            {onWriteScene && (
+              <button
+                type="button"
+                className="mb-2 px-3 py-1.5 rounded-md bg-brand-500 text-white text-xs font-medium hover:bg-brand-600 disabled:opacity-50"
+                onClick={(): void => void handleWriteScene()}
+                disabled={isWritingScene || isSaving}
+              >
+                {isWritingScene ? t('Writing Scene...') : t('Write Scene')}
+              </button>
+            )}
             {proseLink ? (
               <>
-                {proseLink.is_stale && (
-                  <p className="text-xs font-semibold text-amber-600 dark:text-amber-400 mb-1">
-                    ⚠ {t('Stale (file changed externally)')}
-                  </p>
-                )}
                 {getLinkedProseText ? (
                   <textarea
                     className={`${inputCls} font-mono`}
@@ -1225,7 +1247,16 @@ export const SceneEditorDialog: React.FC<SceneEditorDialogProps> = ({
                 <button
                   type="button"
                   className="text-xs text-red-500 hover:text-red-600 font-medium mt-1"
-                  onClick={(): void => setProseLink(null)}
+                  onClick={async (): Promise<void> => {
+                    if (onUnlinkProse) {
+                      try {
+                        await onUnlinkProse(scene.id);
+                        setProseLink(null);
+                      } catch {
+                        // error will be displayed by parent
+                      }
+                    }
+                  }}
                 >
                   {t('Unlink prose')}
                 </button>

@@ -16,8 +16,11 @@ import { parseZonedDateTime } from '../../utils/temporal';
 
 export type ProjectType = 'short-story' | 'novel' | 'series';
 
-function getNarrativeOrderIndex(scene: Scene): number {
-  return Number.isFinite(scene.order_index) ? (scene.order_index as number) : scene.id;
+function sceneIdCompare(a: SceneId, b: SceneId): number {
+  if (typeof a === 'number' && typeof b === 'number') {
+    return a - b;
+  }
+  return String(a).localeCompare(String(b));
 }
 
 function normalizeId(value: unknown): string | null {
@@ -110,18 +113,16 @@ export function normalizeChapterId(chapterId: unknown): string {
   return '';
 }
 
-/** Returns a [chapterIndex, startOffset] tuple for sorting.
- *  Scenes without a prose link sort to the very end. */
+/** Returns an order_index for sorting all scenes in narrative order.
+ *  Unlinked scenes use their fractional order_index (or Infinity if None);
+ *  linked scenes use their assigned odd-integer order_index (1.0, 3.0, 5.0...).
+ *  Chapter boundaries are handled separately via buildChapterOrderMap. */
 export function sceneSortKey(
   scene: Scene,
-  chapterOrderMap: Map<string, number>
-): [number, number] {
-  const link = scene.prose_link;
-  if (!link) return [Infinity, getNarrativeOrderIndex(scene)];
-  if (link.scope_type === 'story') return [-1, link.start_offset];
-  const chapterId = normalizeChapterId(link.chapter_id);
-  const chIdx = chapterOrderMap.get(chapterId) ?? Infinity;
-  return [chIdx, link.start_offset];
+  _chapterOrderMap: Map<string, number>
+): number {
+  // Sort by order_index; None (freshly created) sorts to end.
+  return Number.isFinite(scene.order_index) ? (scene.order_index as number) : Infinity;
 }
 
 export function proseSort(
@@ -129,14 +130,37 @@ export function proseSort(
   sceneB: Scene,
   chapterOrderMap: Map<string, number>
 ): number {
-  const [aChIdx, aOff] = sceneSortKey(sceneA, chapterOrderMap);
-  const [bChIdx, bOff] = sceneSortKey(sceneB, chapterOrderMap);
-  if (aChIdx !== bChIdx) return aChIdx < bChIdx ? -1 : 1;
-  if (aOff !== bOff) return aOff - bOff;
-  const aOrder = getNarrativeOrderIndex(sceneA);
-  const bOrder = getNarrativeOrderIndex(sceneB);
-  if (aOrder !== bOrder) return aOrder - bOrder;
-  return sceneA.id - sceneB.id;
+  // Scenes with no prose link are sorted by their chapter (if in a chapter scope).
+  // Linked scenes are sorted by their chapter first, then by prose start_offset.
+  // Once in the same chapter/scope, use order_index for all.
+  const linkA = sceneA.prose_link;
+  const linkB = sceneB.prose_link;
+
+  let chIdxA = Infinity;
+  let chIdxB = Infinity;
+
+  if (linkA && linkA.scope_type !== 'story') {
+    chIdxA = chapterOrderMap.get(normalizeChapterId(linkA.chapter_id)) ?? Infinity;
+  }
+  if (linkB && linkB.scope_type !== 'story') {
+    chIdxB = chapterOrderMap.get(normalizeChapterId(linkB.chapter_id)) ?? Infinity;
+  }
+
+  if (chIdxA !== chIdxB) return chIdxA < chIdxB ? -1 : 1;
+
+  const startA = sceneA.prose_link?.start_offset;
+  const startB = sceneB.prose_link?.start_offset;
+  if (Number.isFinite(startA) && Number.isFinite(startB) && startA !== startB) {
+    return Number(startA) - Number(startB);
+  }
+
+  // Same chapter/scope: sort by order_index
+  const aKey = sceneSortKey(sceneA, chapterOrderMap);
+  const bKey = sceneSortKey(sceneB, chapterOrderMap);
+  if (aKey !== bKey) return aKey - bKey;
+
+  // Fallback: by scene ID
+  return sceneIdCompare(sceneA.id, sceneB.id);
 }
 
 export function getSceneEpochNanoseconds(scene: Scene): bigint | null {

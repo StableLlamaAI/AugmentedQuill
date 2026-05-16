@@ -535,4 +535,72 @@ describe('useSceneProseSync', () => {
     // setsEqual guard must prevent a second state update (and thus no extra effect run).
     expect(editor.setProseHighlights.mock.calls.length).toBe(firstCallCount);
   });
+
+  it('translates raw prose offsets to visible offsets when chapter content has no inline markers', () => {
+    const markerLength = (id: string, edge: 'start' | 'end'): number =>
+      `<!--scene:${id}:${edge}-->`.length;
+
+    const visibleText = 'Alpha Beta';
+    const scene1Id = '101';
+    const scene2Id = '102';
+
+    const scene1RawStart = markerLength(scene1Id, 'start');
+    const scene1RawEnd = scene1RawStart + 5;
+
+    const between = 1; // single space between "Alpha" and "Beta"
+    const scene2RawStart =
+      scene1RawEnd +
+      markerLength(scene1Id, 'end') +
+      between +
+      markerLength(scene2Id, 'start');
+    const scene2RawEnd = scene2RawStart + 4;
+
+    const scene1: Scene = {
+      ...sceneWithChapterLink,
+      id: scene1Id,
+      prose_link: {
+        scope_type: 'chapter',
+        chapter_id: 'ch1',
+        start_offset: scene1RawStart,
+        end_offset: scene1RawEnd,
+        content_hash: 'hash1',
+      },
+    };
+
+    const scene2: Scene = {
+      ...sceneWithChapterLink,
+      id: scene2Id,
+      prose_link: {
+        scope_type: 'chapter',
+        chapter_id: 'ch1',
+        start_offset: scene2RawStart,
+        end_offset: scene2RawEnd,
+        content_hash: 'hash2',
+      },
+    };
+
+    const chapterWithoutMarkers: WritingUnit = {
+      ...chapterUnit,
+      content: visibleText,
+    };
+
+    const ref = makeRef(editor.handle);
+    const { result } = renderHook(() =>
+      useSceneProseSync([scene1, scene2], chapterWithoutMarkers, ref)
+    );
+
+    act(() => {
+      result.current.handleSelectScene(scene2Id);
+    });
+
+    expect(editor.setProseHighlights).toHaveBeenLastCalledWith([
+      { sceneId: scene2Id, from: 6, to: 10 },
+    ] as ProseHighlightRange[]);
+
+    act(() => {
+      editor.triggerCursorChange(0, 7);
+    });
+
+    expect(result.current.selectedSceneId).toBe(scene2Id);
+  });
 });

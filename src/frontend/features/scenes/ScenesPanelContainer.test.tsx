@@ -59,6 +59,7 @@ const {
       reorderProse: vi.fn(),
       refreshHash: vi.fn(),
       updateProseContent: vi.fn(),
+      writeScene: vi.fn(),
     },
   };
   // Mutable holder — spy stubs close over this object; tests read from it.
@@ -161,6 +162,7 @@ interface DialogHandlers {
   onSave: (updates: Partial<Omit<Scene, 'id'>>) => Promise<void>;
   onDelete: () => Promise<void>;
   onSaveProseContent: ((text: string) => Promise<void>) | undefined;
+  onWriteScene: (() => Promise<void>) | undefined;
   getLinkedProseText: ((link: SceneProseLink) => string | null) | undefined;
 }
 
@@ -657,6 +659,44 @@ describe('handleSaveProseContent', () => {
     expect(dispatch).toHaveBeenCalledWith({
       changes: { from: 0, to: shortDoc.length, insert: 'replaced' },
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// handleWriteScene (via dialog's onWriteScene)
+// ---------------------------------------------------------------------------
+
+describe('handleWriteScene', () => {
+  it('calls writeScene API and patches returned scenes', async () => {
+    const scene = makeScene({ id: 'write-1', prose_link: null });
+    const updatedScene = makeScene({
+      id: 'write-1',
+      summary: 'Generated prose linked',
+    });
+    const sideEffectScene = makeScene({ id: 'write-2' });
+    apiMock.scenes.writeScene.mockResolvedValueOnce({
+      scene: updatedScene,
+      generated_text: 'Generated text',
+      assignments: [{ scene_id: 'write-1', start_offset: 0, end_offset: 14 }],
+      scenes: [sideEffectScene],
+    });
+
+    await renderAndOpenDialog([scene], { currentChapter: CHAPTER });
+    expect(dlg().onWriteScene).toBeDefined();
+
+    await act(async () => {
+      await dlg().onWriteScene!();
+    });
+
+    expect(apiMock.scenes.writeScene).toHaveBeenCalledWith('write-1', {
+      scope_type: 'chapter',
+      chapter_id: 'ch-1',
+      book_id: null,
+      include_following_scenes: 1,
+      detect_boundaries: true,
+    });
+    expect(patchSceneMock).toHaveBeenCalledWith(updatedScene);
+    expect(patchSceneMock).toHaveBeenCalledWith(sideEffectScene);
   });
 });
 
@@ -1310,13 +1350,9 @@ describe('handleNarrativeReorder (drag-reorder user interaction)', () => {
     expect(apiMock.scenes.update).toHaveBeenNthCalledWith(
       1,
       'b',
-      expect.objectContaining({ order_index: 1 })
+      expect.objectContaining({ order_index: 0 })
     );
-    expect(apiMock.scenes.update).toHaveBeenNthCalledWith(
-      2,
-      'a',
-      expect.objectContaining({ order_index: 2 })
-    );
+    expect(apiMock.scenes.update).toHaveBeenCalledTimes(1);
   });
 
   it('[VALID] forwards reorder intent for different prose scopes', async () => {
