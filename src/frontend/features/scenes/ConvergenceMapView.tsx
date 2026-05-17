@@ -23,12 +23,7 @@ import React, {
 } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Scene, SceneId } from '../../types';
-import type {
-  Chapter,
-  Book,
-  SourcebookEntry,
-  SceneTagPersonalDatetime,
-} from '../../types/domain';
+import type { Chapter, Book, SourcebookEntry } from '../../types/domain';
 import { useTheme } from '../layout/ThemeContext';
 import { useSceneLanes } from './useSceneLanes';
 import { LaneHeader } from './LaneHeader';
@@ -62,7 +57,6 @@ interface ConvergenceMapViewProps {
 // ---------------------------------------------------------------------------
 
 const TRACK_W = 32; // px — lateral spacing between neighboring snake lanes
-const R = TRACK_W / 2; // hairpin arc radius (= 8 px)
 const TRANSITION_DX = TRACK_W / 2; // horizontal offset from down-lane to middle up-lane
 const TURN_R = TRANSITION_DX / 2; // radius for top/bottom half-circle turns
 const SCENE_CIRCLE_R = 5; // snake node circle radius
@@ -89,6 +83,31 @@ type MeasuredRowEntry = { y: number; h: number };
 
 const getLayoutCenterY = (layout: { y: number; h: number }): number => {
   return layout.y + layout.h / 2;
+};
+
+export const compareSnakeSceneOrder = (
+  a: Scene,
+  b: Scene,
+  laneBySceneId: ReadonlyMap<SceneId, number>,
+  sceneEpochNanosecondsById: ReadonlyMap<SceneId, bigint>
+): number => {
+  const laneA = laneBySceneId.get(a.id) ?? 0;
+  const laneB = laneBySceneId.get(b.id) ?? 0;
+  if (laneA < laneB) return -1;
+  if (laneA > laneB) return 1;
+
+  const epochA = sceneEpochNanosecondsById.get(a.id);
+  const epochB = sceneEpochNanosecondsById.get(b.id);
+  if (epochA !== undefined && epochB !== undefined) {
+    if (epochA < epochB) return -1;
+    if (epochA > epochB) return 1;
+  } else if (epochA !== undefined) {
+    return -1;
+  } else if (epochB !== undefined) {
+    return 1;
+  }
+
+  return a.id - b.id;
 };
 
 /**
@@ -268,7 +287,6 @@ function buildTimeTravelArrowGeometry(
   const goingDown = destY >= depY;
 
   if (goingDown) {
-    const endY = destY; // Adjusted to end exactly at destination point
     return {
       pathData: [
         `M ${sourceX},${depY}`,
@@ -308,41 +326,6 @@ function getTimeTravelLoopX(
   }
 
   return Math.max(sourceX, destinationX) + TL_LOOP_W_CROSS;
-}
-
-function buildTimelineBranchConnectorGeometry(
-  sourceX: number,
-  sourceY: number,
-  destinationX: number,
-  destinationY: number,
-  loopX?: number
-): string {
-  if (Math.abs(destinationY - sourceY) < 0.5) {
-    return [`M ${sourceX},${sourceY}`, `L ${destinationX},${destinationY}`].join(' ');
-  }
-
-  const cr = TL_CORNER_R;
-  const rx = loopX ?? Math.max(sourceX, destinationX) + TL_LOOP_W_CROSS;
-
-  if (destinationY > sourceY) {
-    return [
-      `M ${sourceX},${sourceY}`,
-      `L ${rx - cr},${sourceY}`,
-      `a ${cr},${cr} 0 0 1 ${cr},${cr}`,
-      `L ${rx},${destinationY - cr}`,
-      `a ${cr},${cr} 0 0 1 ${-cr},${cr}`,
-      `L ${destinationX},${destinationY}`,
-    ].join(' ');
-  }
-
-  return [
-    `M ${sourceX},${sourceY}`,
-    `L ${rx - cr},${sourceY}`,
-    `a ${cr},${cr} 0 0 0 ${cr},${-cr}`,
-    `L ${rx},${destinationY + cr}`,
-    `a ${cr},${cr} 0 0 0 ${-cr},${-cr}`,
-    `L ${destinationX},${destinationY}`,
-  ].join(' ');
 }
 
 function buildBranchCreationArrowGeometry(
@@ -585,6 +568,16 @@ export const ConvergenceMapView: React.FC<ConvergenceMapViewProps> = ({
     return () => ro.disconnect();
   }, [measureLayouts]);
 
+  const timelinePanelModel = useMemo(
+    () =>
+      buildTimelinePanelModel(
+        sortedScenes,
+        sourcebookEntries,
+        sceneEpochNanosecondsById
+      ),
+    [sortedScenes, sourcebookEntries, sceneEpochNanosecondsById]
+  );
+
   // -------------------------------------------------------------------------
   // Snake path data (computed from measured layouts)
   // -------------------------------------------------------------------------
@@ -594,38 +587,19 @@ export const ConvergenceMapView: React.FC<ConvergenceMapViewProps> = ({
       const centerX = laneCenterXById.get(entryId);
       if (centerX === undefined) return null;
 
-      // Scenes belonging to this lane, sorted by the entry's personal timeline.
-      // For each scene: check tag_personal_datetimes for this entry, else use scene_time.
-      // Scenes without any temporal anchor go to the end.
+      // Scenes belonging to this lane, sorted by the lane-aware chronology.
+      // Branch timelines come after their parent lane, and scenes within a lane
+      // stay in chronological order.
       const entryScenes = sortedScenes.filter((s: Scene) =>
         markerStyleBySceneId.get(s.id)?.has(entryId)
       );
-      const sourceEntry = sourcebookEntries.find(
-        (e: SourcebookEntry) => e.id === entryId
-      );
-      const getPersonalAge = (s: Scene): string | null => {
-        const tagDts = s.tag_personal_datetimes ?? [];
-        const sbMatch = tagDts.find(
-          (t: SceneTagPersonalDatetime) => t.role === 'sourcebook' && t.ref === entryId
-        );
-        if (sbMatch) return sbMatch.personal_age;
-        if (sourceEntry) {
-          const charMatch = tagDts.find(
-            (t: SceneTagPersonalDatetime) =>
-              (t.role === 'active' || t.role === 'passive') &&
-              t.ref === sourceEntry.name
-          );
-          if (charMatch) return charMatch.personal_age;
-        }
-        return null;
-      };
       const proseScenes = [...entryScenes].sort((a: Scene, b: Scene) => {
-        const ta = getPersonalAge(a);
-        const tb = getPersonalAge(b);
-        if (ta === null && tb === null) return 0;
-        if (ta === null) return 1;
-        if (tb === null) return -1;
-        return ta < tb ? -1 : ta > tb ? 1 : 0;
+        return compareSnakeSceneOrder(
+          a,
+          b,
+          timelinePanelModel.laneBySceneId,
+          sceneEpochNanosecondsById
+        );
       });
 
       const { pathData, sceneXById } = buildSnakePath(
@@ -680,16 +654,6 @@ export const ConvergenceMapView: React.FC<ConvergenceMapViewProps> = ({
     depY: number;
     destY: number;
   };
-  const timelinePanelModel = useMemo(
-    () =>
-      buildTimelinePanelModel(
-        sortedScenes,
-        sourcebookEntries,
-        sceneEpochNanosecondsById
-      ),
-    [sortedScenes, sourcebookEntries, sceneEpochNanosecondsById]
-  );
-
   const timelineLaneStartYByNumber = useMemo(() => {
     const starts = new Map<number, number>();
 

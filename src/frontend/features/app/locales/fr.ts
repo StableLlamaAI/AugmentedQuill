@@ -535,8 +535,14 @@ export const fr = {
     'e.g. 30 years earlier': 'p.ex. 30 ans plus tôt',
     'Set personal timeline position':
       'Définir la position dans la chronologie personnelle',
+    'Set character state at this scene':
+      "Définir l'état du personnage dans cette scène",
     'Set personal age at this scene': "Définir l'âge personnel dans cette scène",
     'No age recorded': 'Aucun âge enregistré',
+    'Character state': 'État du personnage',
+    'Original (not time traveled)': 'Original (sans voyage dans le temps)',
+    'After time travel: {{event}}': 'Après voyage temporel : {{event}}',
+    'No character states available': "Aucun état de personnage n'est disponible",
     'Main Timeline': 'Chronologie principale',
     'Enter age as years/months/days, e.g. 17y, 17y 3m, 5m 12d':
       "Saisir l'âge en années/mois/jours, p.ex. 17y, 17y 3m, 5m 12d",

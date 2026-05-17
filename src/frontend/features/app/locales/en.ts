@@ -527,8 +527,13 @@ export const en = {
     'Relative Description': 'Relative Description',
     'e.g. 30 years earlier': 'e.g. 30 years earlier',
     'Set personal timeline position': 'Set personal timeline position',
+    'Set character state at this scene': 'Set character state at this scene',
     'Set personal age at this scene': 'Set personal age at this scene',
     'No age recorded': 'No age recorded',
+    'Character state': 'Character state',
+    'Original (not time traveled)': 'Original (not time traveled)',
+    'After time travel: {{event}}': 'After time travel: {{event}}',
+    'No character states available': 'No character states available',
     'Main Timeline': 'Main Timeline',
     'Enter age as years/months/days, e.g. 17y, 17y 3m, 5m 12d':
       'Enter age as years/months/days, e.g. 17y, 17y 3m, 5m 12d',

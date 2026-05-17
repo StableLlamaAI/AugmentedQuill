@@ -70,6 +70,11 @@ type AgeEditTarget =
   | { type: 'passive_tag'; index: number }
   | { type: 'sourcebook_tag'; entryId: string };
 
+type PersonalStateOption = {
+  value: string;
+  label: string;
+};
+
 type TemporalEditTarget = { type: 'scene' };
 
 type DirtySnapshot = {
@@ -82,6 +87,41 @@ type DirtySnapshot = {
   status: Scene['status'];
   sceneTimeValue: string | null;
   timelineId: string;
+};
+
+const MAIN_TIMELINE_ID = 'main';
+
+const normalizeTimelineId = (value: string | null | undefined): string => {
+  const trimmed = value?.trim();
+  return trimmed && trimmed.length > 0 ? trimmed : MAIN_TIMELINE_ID;
+};
+
+const getBranchTimelineId = (entryId: string): string => `branch:${entryId}`;
+
+const parseEpochNanoseconds = (value: string | null | undefined): bigint | null => {
+  const parsed = parseZonedDateTime(value);
+  return parsed === null ? null : parsed.epochNanoseconds;
+};
+
+const PERSONAL_STATE_PREFIX = 'state:';
+const PERSONAL_STATE_ORIGINAL = 'original';
+
+const encodePersonalStateValue = (order: number, stateId: string): string => {
+  return `${PERSONAL_STATE_PREFIX}${order.toString().padStart(4, '0')}:${stateId}`;
+};
+
+const parsePersonalStateValue = (
+  value: string | null | undefined
+): { order: number; stateId: string } | null => {
+  if (!value || !value.startsWith(PERSONAL_STATE_PREFIX)) return null;
+  const payload = value.slice(PERSONAL_STATE_PREFIX.length);
+  const sep = payload.indexOf(':');
+  if (sep < 0) return null;
+  const orderRaw = payload.slice(0, sep);
+  const stateId = payload.slice(sep + 1);
+  const order = Number.parseInt(orderRaw, 10);
+  if (!Number.isFinite(order) || stateId.length === 0) return null;
+  return { order, stateId };
 };
 
 interface SceneEditorDialogProps {
@@ -161,24 +201,20 @@ export const SceneEditorDialog: React.FC<SceneEditorDialogProps> = ({
   const [summary, setSummary] = useState(scene.summary);
   const [beats, setBeats] = useState<SceneBeat[]>(scene.beats);
   const [activeTokens, setActiveTokens] = useState<CharToken[]>(
-    scene.active_characters.map((name: string): CharToken => {
+    scene.active_characters.map((name: string, i: number): CharToken => {
       const dt = scene.tag_personal_datetimes?.find(
         (t: SceneTagPersonalDatetime) =>
-          t.role === 'active' &&
-          t.ref === name &&
-          t.index === scene.active_characters.indexOf(name)
+          t.role === 'active' && t.ref === name && t.index === i
       );
       return { name, personal_age: dt?.personal_age ?? null };
     })
   );
   const [activeInput, setActiveInput] = useState('');
   const [passiveTokens, setPassiveTokens] = useState<CharToken[]>(
-    scene.passive_characters.map((name: string): CharToken => {
+    scene.passive_characters.map((name: string, i: number): CharToken => {
       const dt = scene.tag_personal_datetimes?.find(
         (t: SceneTagPersonalDatetime) =>
-          t.role === 'passive' &&
-          t.ref === name &&
-          t.index === scene.passive_characters.indexOf(name)
+          t.role === 'passive' && t.ref === name && t.index === i
       );
       return { name, personal_age: dt?.personal_age ?? null };
     })
@@ -211,25 +247,36 @@ export const SceneEditorDialog: React.FC<SceneEditorDialogProps> = ({
    */
   const activeBranchTimelines = useMemo((): SourcebookEntry[] => {
     const currentEpoch = getSceneEpochNanoseconds(scene);
+    const currentTimelineId = normalizeTimelineId(scene.timeline_id);
 
     const ttEntries = sourcebookEntries.filter(
       (e: SourcebookEntry) => e.category === 'Time Travel' && e.creates_new_timeline
     );
 
-    return ttEntries.filter((entry: SourcebookEntry) =>
-      allScenes.some((s: Scene) => {
-        // A TT branch is "active" at this scene if a departure scene for this entry
-        // exists at or before this scene's chronological position.
-        // NOTE: the current scene itself is intentionally included so that the
-        // departure scene (which IS the TT event) also shows the clock icon.
-        if (!(s.sourcebook_entry_ids ?? []).includes(entry.id)) return false;
-        // If either scene has no epoch time, be inclusive rather than hiding the option.
-        if (currentEpoch === null) return true;
-        const sEpoch = getSceneEpochNanoseconds(s);
-        if (sEpoch === null) return true;
-        return sEpoch <= currentEpoch;
-      })
-    );
+    return ttEntries.filter((entry: SourcebookEntry) => {
+      const branchTimelineId = getBranchTimelineId(entry.id);
+      if (currentTimelineId === branchTimelineId) {
+        return true;
+      }
+
+      const branchStartEpoch =
+        parseEpochNanoseconds(entry.destination_datetime) ??
+        parseEpochNanoseconds(entry.origin_date) ??
+        (() => {
+          const departureScene = allScenes.find((candidate: Scene): boolean =>
+            (candidate.sourcebook_entry_ids ?? []).includes(entry.id)
+          );
+          return departureScene ? getSceneEpochNanoseconds(departureScene) : null;
+        })();
+
+      if (currentEpoch === null) {
+        return branchStartEpoch !== null;
+      }
+      if (branchStartEpoch === null) {
+        return true;
+      }
+      return branchStartEpoch <= currentEpoch;
+    });
   }, [scene, allScenes, sourcebookEntries]);
 
   /** Total number of timelines active at this scene (main + branches). */
@@ -258,15 +305,14 @@ export const SceneEditorDialog: React.FC<SceneEditorDialogProps> = ({
    * `main::{role}::{ref}` for the main timeline.
    */
   const knownAgesForRef = useMemo((): Map<string, string[]> => {
-    const branchIds = new Set(activeBranchTimelines.map((e: SourcebookEntry) => e.id));
     const map = new Map<string, string[]>();
 
     allScenes.forEach((s: Scene): void => {
-      // Determine which branch timeline (if any) this scene belongs to.
-      const sceneEntryIds = new Set(s.sourcebook_entry_ids ?? []);
-      const branchId =
-        [...branchIds].find((id: string) => sceneEntryIds.has(id)) ?? null;
-      const tlPrefix = branchId ? `tl:${branchId}` : 'main';
+      const sceneTimelineId = normalizeTimelineId(s.timeline_id);
+      const tlPrefix =
+        sceneTimelineId === MAIN_TIMELINE_ID
+          ? MAIN_TIMELINE_ID
+          : `tl:${sceneTimelineId}`;
 
       (s.tag_personal_datetimes ?? []).forEach(
         (tpd: SceneTagPersonalDatetime): void => {
@@ -282,49 +328,110 @@ export const SceneEditorDialog: React.FC<SceneEditorDialogProps> = ({
     return map;
   }, [allScenes, activeBranchTimelines]);
 
-  /**
-   * Age options per timeline for the current age edit target.
-   * Returns [{timelineLabel, ages}] — one entry per active timeline.
-   */
-  const ageOptionsByTimeline = useMemo((): Array<{ label: string; ages: string[] }> => {
-    if (!ageEditTarget) return [];
+  const ageEditRoleAndRef = useMemo((): { role: string; ref: string } | null => {
+    if (!ageEditTarget) return null;
 
-    let role: string;
-    let ref: string;
     if (ageEditTarget.type === 'active_tag') {
-      role = 'active';
-      ref = activeTokens[ageEditTarget.index]?.name ?? '';
-    } else if (ageEditTarget.type === 'passive_tag') {
-      role = 'passive';
-      ref = passiveTokens[ageEditTarget.index]?.name ?? '';
+      return { role: 'active', ref: activeTokens[ageEditTarget.index]?.name ?? '' };
+    }
+    if (ageEditTarget.type === 'passive_tag') {
+      return {
+        role: 'passive',
+        ref: passiveTokens[ageEditTarget.index]?.name ?? '',
+      };
+    }
+    return { role: 'sourcebook', ref: ageEditTarget.entryId };
+  }, [ageEditTarget, activeTokens, passiveTokens]);
+
+  const characterStateOptions = useMemo((): PersonalStateOption[] => {
+    if (!ageEditRoleAndRef) return [];
+
+    const { role, ref } = ageEditRoleAndRef;
+    const trimmedRef = ref.trim();
+    if (!trimmedRef) return [];
+
+    let characterName: string | null = null;
+    if (role === 'active' || role === 'passive') {
+      characterName = trimmedRef;
     } else {
-      role = 'sourcebook';
-      ref = ageEditTarget.entryId;
+      const entry = entryById.get(trimmedRef);
+      if (entry && (entry.category ?? '').toLowerCase() === 'character') {
+        characterName = entry.name;
+      }
     }
 
-    const result: Array<{ label: string; ages: string[] }> = [
-      {
-        label: t('Main Timeline'),
-        ages: knownAgesForRef.get(`main::${role}::${ref}`) ?? [],
-      },
-    ];
+    const options: PersonalStateOption[] = [];
 
-    for (const entry of activeBranchTimelines) {
-      result.push({
-        label: entry.name,
-        ages: knownAgesForRef.get(`tl:${entry.id}::${role}::${ref}`) ?? [],
+    if (characterName) {
+      const stateEntries = sourcebookEntries
+        .filter((entry: SourcebookEntry): boolean => entry.category === 'Time Travel')
+        .filter((entry: SourcebookEntry): boolean => {
+          return allScenes.some((sceneItem: Scene): boolean => {
+            if (!(sceneItem.sourcebook_entry_ids ?? []).includes(entry.id)) {
+              return false;
+            }
+            const activeMatch = (sceneItem.active_characters ?? []).includes(
+              characterName as string
+            );
+            const passiveMatch = (sceneItem.passive_characters ?? []).includes(
+              characterName as string
+            );
+            return activeMatch || passiveMatch;
+          });
+        })
+        .sort((a: SourcebookEntry, b: SourcebookEntry): number => {
+          return a.id.localeCompare(b.id);
+        });
+
+      options.push({
+        value: encodePersonalStateValue(0, PERSONAL_STATE_ORIGINAL),
+        label: t('Original (not time traveled)'),
+      });
+
+      stateEntries.forEach((entry: SourcebookEntry, index: number): void => {
+        options.push({
+          value: encodePersonalStateValue(index + 1, `tt:${entry.id}`),
+          label: t('After time travel: {{event}}', { event: entry.name }),
+        });
       });
     }
 
-    return result;
-  }, [
-    ageEditTarget,
-    activeTokens,
-    passiveTokens,
-    activeBranchTimelines,
-    knownAgesForRef,
-    t,
-  ]);
+    const known = new Set<string>();
+    knownAgesForRef.forEach((values: string[], key: string): void => {
+      if (!key.endsWith(`::${role}::${trimmedRef}`)) return;
+      values.forEach((value: string): void => known.add(value));
+    });
+
+    const existingValues = Array.from(known).sort((a: string, b: string) =>
+      a.localeCompare(b)
+    );
+
+    existingValues.forEach((value: string): void => {
+      if (options.some((option: PersonalStateOption) => option.value === value)) {
+        return;
+      }
+      options.push({ value, label: value });
+    });
+
+    return options;
+  }, [ageEditRoleAndRef, entryById, sourcebookEntries, allScenes, knownAgesForRef, t]);
+
+  const formatPersonalAgeDisplay = (value: string | null): string | null => {
+    if (!value) return null;
+    const parsed = parsePersonalStateValue(value);
+    if (!parsed) return value;
+    if (parsed.stateId === PERSONAL_STATE_ORIGINAL) {
+      return t('Original (not time traveled)');
+    }
+    if (parsed.stateId.startsWith('tt:')) {
+      const entryId = parsed.stateId.slice(3);
+      const entry = entryById.get(entryId);
+      return t('After time travel: {{event}}', {
+        event: entry?.name ?? entryId,
+      });
+    }
+    return value;
+  };
   const [colorTag, setColorTag] = useState<string | null>(scene.color_tag ?? null);
   const [status, setStatus] = useState(scene.status);
   const [proseLink, setProseLink] = useState<SceneProseLink | null>(
@@ -836,14 +943,14 @@ export const SceneEditorDialog: React.FC<SceneEditorDialogProps> = ({
                         <span className={tc.text}>{token.name}</span>
                         {token.personal_age && (
                           <span className={`text-[10px] ${tc.muted}`}>
-                            {token.personal_age}
+                            {formatPersonalAgeDisplay(token.personal_age)}
                           </span>
                         )}
                         {matched && activeTimelinesAtScene > 1 && (
                           <button
                             type="button"
-                            aria-label={t('Set personal age at this scene')}
-                            title={t('Set personal age at this scene')}
+                            aria-label={t('Set character state at this scene')}
+                            title={t('Set character state at this scene')}
                             className={`${tc.muted} hover:text-brand-500`}
                             onClick={(e: React.MouseEvent): void => {
                               e.stopPropagation();
@@ -956,14 +1063,14 @@ export const SceneEditorDialog: React.FC<SceneEditorDialogProps> = ({
                         <span className={tc.text}>{token.name}</span>
                         {token.personal_age && (
                           <span className={`text-[10px] ${tc.muted}`}>
-                            {token.personal_age}
+                            {formatPersonalAgeDisplay(token.personal_age)}
                           </span>
                         )}
                         {matched && activeTimelinesAtScene > 1 && (
                           <button
                             type="button"
-                            aria-label={t('Set personal age at this scene')}
-                            title={t('Set personal age at this scene')}
+                            aria-label={t('Set character state at this scene')}
+                            title={t('Set character state at this scene')}
                             className={`${tc.muted} hover:text-brand-500`}
                             onClick={(e: React.MouseEvent): void => {
                               e.stopPropagation();
@@ -1075,14 +1182,14 @@ export const SceneEditorDialog: React.FC<SceneEditorDialogProps> = ({
                       </span>
                       {tag.personal_age && (
                         <span className={`text-[10px] ${tc.muted}`}>
-                          {tag.personal_age}
+                          {formatPersonalAgeDisplay(tag.personal_age)}
                         </span>
                       )}
                       {activeTimelinesAtScene > 1 && (
                         <button
                           type="button"
-                          aria-label={t('Set personal age at this scene')}
-                          title={t('Set personal age at this scene')}
+                          aria-label={t('Set character state at this scene')}
+                          title={t('Set character state at this scene')}
                           className={`${tc.muted} hover:text-brand-500`}
                           onClick={(e: React.MouseEvent): void => {
                             e.stopPropagation();
@@ -1524,43 +1631,41 @@ export const SceneEditorDialog: React.FC<SceneEditorDialogProps> = ({
           <div
             className={`relative rounded-xl shadow-xl border ${tc.border} ${tc.bg} p-5 w-80 space-y-3`}
             role="dialog"
-            aria-label={t('Set personal age at this scene')}
+            aria-label={t('Set character state at this scene')}
           >
             <p className={`text-sm font-semibold ${tc.text}`}>
-              {t('Set personal age at this scene')}
+              {t('Set character state at this scene')}
             </p>
-            {ageOptionsByTimeline.map(
-              ({ label, ages }: { label: string; ages: string[] }) => (
-                <div key={label} className="space-y-1">
-                  <p className={`text-xs font-medium ${tc.muted}`}>{label}</p>
-                  {ages.length > 0 ? (
-                    <div className="flex flex-wrap gap-2">
-                      {ages.map((age: string) => (
-                        <button
-                          key={age}
-                          type="button"
-                          onClick={(): void => {
-                            setAgeEditValue(age);
-                            applyAgeEdit(age);
-                          }}
-                          className={`px-2.5 py-1 rounded-full border text-xs font-medium transition-colors ${
-                            ageEditValue === age
-                              ? 'bg-brand-500 text-white border-brand-600'
-                              : `${tc.border} ${tc.text} hover:border-brand-500`
-                          }`}
-                        >
-                          {age}
-                        </button>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className={`text-xs italic ${tc.muted}`}>
-                      {t('No age recorded')}
-                    </p>
-                  )}
+            <div className="space-y-1">
+              <p className={`text-xs font-medium ${tc.muted}`}>
+                {t('Character state')}
+              </p>
+              {characterStateOptions.length > 0 ? (
+                <div className="flex flex-col gap-2 max-h-64 overflow-y-auto pr-1">
+                  {characterStateOptions.map((option: PersonalStateOption) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={(): void => {
+                        setAgeEditValue(option.value);
+                        applyAgeEdit(option.value);
+                      }}
+                      className={`w-full text-left px-2.5 py-2 rounded-md border text-xs transition-colors ${
+                        ageEditValue === option.value
+                          ? 'bg-brand-500 text-white border-brand-600'
+                          : `${tc.border} ${tc.text} hover:border-brand-500`
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
                 </div>
-              )
-            )}
+              ) : (
+                <p className={`text-xs italic ${tc.muted}`}>
+                  {t('No character states available')}
+                </p>
+              )}
+            </div>
             <div className="flex gap-2 justify-end">
               <button
                 type="button"

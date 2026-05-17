@@ -875,7 +875,9 @@ describe('SceneEditorDialog age picker', () => {
 
     // With no TT entries creating timelines active before this scene,
     // the clock button must not be rendered.
-    const ageBtns = screen.queryAllByRole('button', { name: /Set personal age/i });
+    const ageBtns = screen.queryAllByRole('button', {
+      name: /Set character state/i,
+    });
     expect(ageBtns.length).toBe(0);
   });
 
@@ -904,16 +906,51 @@ describe('SceneEditorDialog age picker', () => {
       />
     );
 
-    const ageBtns = screen.getAllByRole('button', { name: /Set personal age/i });
+    const ageBtns = screen.getAllByRole('button', { name: /Set character state/i });
     expect(ageBtns.length).toBeGreaterThan(0);
     fireEvent.click(ageBtns[0]);
 
     // Age picker dialog should appear
     const pickerDialogs = screen.getAllByRole('dialog');
     const agePicker = pickerDialogs.find((d: HTMLElement) =>
-      d.getAttribute('aria-label')?.includes('personal age')
+      d.getAttribute('aria-label')?.includes('character state')
     );
     expect(agePicker).toBeTruthy();
+  });
+
+  it('shows age picker controls on branch scenes created by back-jump destination time', () => {
+    const ttBackJump: SourcebookEntry = {
+      id: 'tt-back-jump',
+      name: 'Back Jump',
+      synonyms: [],
+      description: 'Back jump that creates a branch in the past',
+      images: [],
+      category: 'Time Travel',
+      creates_new_timeline: true,
+      origin_date: '2026-05-16T12:00:00+00:00[UTC]',
+      destination_datetime: '2026-05-10T12:00:00+00:00[UTC]',
+    };
+    sourcebookEntriesState.push(ttBackJump);
+
+    const scene = makeScene({
+      id: 'scene-on-branch',
+      active_characters: ['Alice'],
+      timeline_id: 'branch:tt-back-jump',
+      scene_time: { temporal_zoned_datetime: '2026-05-13T12:00:00+00:00[UTC]' },
+    });
+
+    wrap(
+      <SceneEditorDialog
+        scene={scene}
+        isOpen
+        onClose={NOOP_CLOSE}
+        onSave={NOOP_SAVE}
+        onDelete={NOOP_DELETE}
+      />
+    );
+
+    const ageBtns = screen.getAllByRole('button', { name: /Set character state/i });
+    expect(ageBtns.length).toBeGreaterThan(0);
   });
 
   it('shows known ages as chips per timeline and allows selecting one', async () => {
@@ -946,7 +983,7 @@ describe('SceneEditorDialog age picker', () => {
     );
 
     // Open age picker for Alice
-    const ageBtns = screen.getAllByRole('button', { name: /Set personal age/i });
+    const ageBtns = screen.getAllByRole('button', { name: /Set character state/i });
     fireEvent.click(ageBtns[0]);
 
     // Known age chip "17y" should appear (from the TT-branch timeline)
@@ -964,6 +1001,94 @@ describe('SceneEditorDialog age picker', () => {
     const aliceTag = tagDt.find(
       (t: SceneTagPersonalDatetime) =>
         t.role === 'active' && t.ref === 'Alice' && t.personal_age === '17y'
+    );
+    expect(aliceTag).toBeTruthy();
+  });
+
+  it('hydrates personal ages using tag index when the same character appears twice', () => {
+    const scene = makeScene({
+      active_characters: ['Alice', 'Alice'],
+      tag_personal_datetimes: [
+        { role: 'active', ref: 'Alice', index: 0, personal_age: '17y' },
+        { role: 'active', ref: 'Alice', index: 1, personal_age: '61y' },
+      ],
+    });
+
+    wrap(
+      <SceneEditorDialog
+        scene={scene}
+        isOpen
+        onClose={NOOP_CLOSE}
+        onSave={NOOP_SAVE}
+        onDelete={NOOP_DELETE}
+      />
+    );
+
+    expect(screen.getByText('17y')).toBeTruthy();
+    expect(screen.getByText('61y')).toBeTruthy();
+  });
+
+  it('lets the user select a computed character state without typing an age', async () => {
+    const ttBackJump: SourcebookEntry = {
+      id: 'tt-back-jump-manual',
+      name: 'Back Jump Manual',
+      synonyms: [],
+      description: 'Back jump branch without prior personal age samples',
+      images: [],
+      category: 'Time Travel',
+      creates_new_timeline: true,
+      origin_date: '2026-05-16T12:00:00+00:00[UTC]',
+      destination_datetime: '2026-05-10T12:00:00+00:00[UTC]',
+    };
+    sourcebookEntriesState.push(ttBackJump);
+
+    const departureScene = makeScene({
+      id: 'scene-departure',
+      active_characters: ['Alice'],
+      sourcebook_entry_ids: ['tt-back-jump-manual'],
+      scene_time: { temporal_zoned_datetime: '2026-05-16T12:00:00+00:00[UTC]' },
+    });
+    mockedUseScenes.mockReturnValue([departureScene]);
+
+    const scene = makeScene({
+      id: 'scene-manual-age',
+      active_characters: ['Alice'],
+      timeline_id: 'branch:tt-back-jump-manual',
+      scene_time: { temporal_zoned_datetime: '2026-05-13T12:00:00+00:00[UTC]' },
+    });
+
+    const onSave = vi.fn<SceneSaveHandler>(async () => undefined);
+
+    wrap(
+      <SceneEditorDialog
+        scene={scene}
+        isOpen
+        onClose={NOOP_CLOSE}
+        onSave={onSave}
+        onDelete={NOOP_DELETE}
+      />
+    );
+
+    const ageBtns = screen.getAllByRole('button', { name: /Set character state/i });
+    fireEvent.click(ageBtns[0]);
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: /After time travel: Back Jump Manual/i,
+      })
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /^Save$/i }));
+    });
+
+    const arg = onSave.mock.calls[0][0] as Partial<Scene>;
+    const tagDt = arg.tag_personal_datetimes ?? [];
+    const aliceTag = tagDt.find(
+      (t: SceneTagPersonalDatetime) =>
+        t.role === 'active' &&
+        t.ref === 'Alice' &&
+        t.personal_age === 'state:0001:tt:tt-back-jump-manual'
     );
     expect(aliceTag).toBeTruthy();
   });

@@ -529,8 +529,14 @@ export const es = {
     'e.g. 30 years earlier': 'p.ej. 30 años antes',
     'Set personal timeline position':
       'Establecer posición en la línea de tiempo personal',
+    'Set character state at this scene':
+      'Establecer estado del personaje en esta escena',
     'Set personal age at this scene': 'Establecer edad personal en esta escena',
     'No age recorded': 'Sin edad registrada',
+    'Character state': 'Estado del personaje',
+    'Original (not time traveled)': 'Original (sin viaje temporal)',
+    'After time travel: {{event}}': 'Después del viaje temporal: {{event}}',
+    'No character states available': 'No hay estados de personaje disponibles',
     'Main Timeline': 'Línea temporal principal',
     'Enter age as years/months/days, e.g. 17y, 17y 3m, 5m 12d':
       'Ingrese la edad en años/meses/días, p.ej. 17y, 17y 3m, 5m 12d',
