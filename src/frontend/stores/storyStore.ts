@@ -243,6 +243,7 @@ export const useStoryStore = create<StoryStoreState>()(
               destination_datetime: e.destination_datetime,
               destination_relative: e.destination_relative,
               creates_new_timeline: e.creates_new_timeline,
+              timeline_id: e.timeline_id,
             });
           if (sig(prev[idx]) === sig(entry)) return false;
           next = [...prev];

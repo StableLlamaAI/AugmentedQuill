@@ -89,6 +89,7 @@ export interface UseSourcebookEntryDialogStateResult {
   destinationDatetime: string | null;
   destinationRelative: string;
   createsNewTimeline: boolean;
+  timelineId: string;
   images: string[];
   relations: SourcebookRelation[];
   isImagesExpanded: boolean;
@@ -117,6 +118,7 @@ export interface UseSourcebookEntryDialogStateResult {
   setDestinationDatetime: Dispatch<SetStateAction<string | null>>;
   setDestinationRelative: Dispatch<SetStateAction<string>>;
   setCreatesNewTimeline: Dispatch<SetStateAction<boolean>>;
+  setTimelineId: Dispatch<SetStateAction<string>>;
   setImages: Dispatch<SetStateAction<string[]>>;
   setRelations: Dispatch<SetStateAction<SourcebookRelation[]>>;
   setIsImagesExpanded: Dispatch<SetStateAction<boolean>>;
@@ -154,6 +156,7 @@ export const useSourcebookEntryDialogState = ({
   const [destinationDatetime, setDestinationDatetime] = useState<string | null>(null);
   const [destinationRelative, setDestinationRelative] = useState<string>('');
   const [createsNewTimeline, setCreatesNewTimeline] = useState<boolean>(false);
+  const [timelineId, setTimelineId] = useState<string>('main');
   const [images, setImages] = useState<string[]>([]);
   const [relations, setRelations] = useState<SourcebookRelation[]>([]);
   const [isImagesExpanded, setIsImagesExpanded] = useState(true);
@@ -218,6 +221,7 @@ export const useSourcebookEntryDialogState = ({
     setDestinationDatetime(entry?.destination_datetime ?? null);
     setDestinationRelative(entry?.destination_relative ?? '');
     setCreatesNewTimeline(entry?.creates_new_timeline ?? false);
+    setTimelineId(entry?.timeline_id ?? 'main');
     setImages(initialState.images);
     setRelations(initialState.relations);
 
@@ -251,6 +255,7 @@ export const useSourcebookEntryDialogState = ({
         destination_datetime: destinationDatetime ?? undefined,
         destination_relative: destinationRelative || undefined,
         creates_new_timeline: createsNewTimeline,
+        timeline_id: timelineId,
       });
       onClose();
     } finally {
@@ -307,6 +312,7 @@ export const useSourcebookEntryDialogState = ({
     destinationDatetime,
     destinationRelative,
     createsNewTimeline,
+    timelineId,
     images,
     relations,
     isImagesExpanded,
@@ -335,6 +341,7 @@ export const useSourcebookEntryDialogState = ({
     setDestinationDatetime,
     setDestinationRelative,
     setCreatesNewTimeline,
+    setTimelineId,
     setImages,
     setRelations,
     setIsImagesExpanded,

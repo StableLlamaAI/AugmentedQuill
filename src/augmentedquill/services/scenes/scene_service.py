@@ -37,6 +37,13 @@ from augmentedquill.services.scenes.scene_markers import (
     remove_markers,
 )
 from augmentedquill.updates.migrate_story_v3 import migrate_project_v3
+from augmentedquill.updates.migrate_story_v4 import migrate_project_v4
+
+
+def _migrate_project_latest(project_dir: Path) -> None:
+    """Apply all chainable story migrations required by the scene service."""
+    migrate_project_v3(project_dir)
+    migrate_project_v4(project_dir)
 
 
 def _scope_candidates(project_dir: Path) -> list[tuple[dict[str, Any], Path]]:
@@ -423,9 +430,15 @@ def _normalise_scene(raw: dict[str, Any]) -> dict[str, Any]:
         raw["order_index"] = None
 
     raw.setdefault("scene_time", None)
+    timeline_id = raw.get("timeline_id")
+    if isinstance(timeline_id, str) and timeline_id.strip():
+        raw["timeline_id"] = timeline_id.strip()
+    else:
+        raw["timeline_id"] = "main"
     raw.setdefault("tag_personal_datetimes", [])
     raw.pop("personal_datetimes", None)
-    raw.pop("time_travel_events", None)
+    if not isinstance(raw.get("time_travel_events"), list):
+        raw["time_travel_events"] = []
 
     if not isinstance(raw.get("pinboard_x"), (int, float)):
         raw["pinboard_x"] = 100.0
@@ -512,7 +525,7 @@ def _normalize_scope_order_indices(
 
 
 def list_scenes(project_dir: Path) -> list[dict[str, Any]]:
-    migrate_project_v3(project_dir)
+    _migrate_project_latest(project_dir)
     story = load_story_config(project_dir / "story.json") or {}
     scenes_dict = _load_scenes_dict(story)
     scenes = [
@@ -526,7 +539,7 @@ def list_scenes(project_dir: Path) -> list[dict[str, Any]]:
 
 
 def get_scene(project_dir: Path, scene_id: SceneId) -> dict[str, Any] | None:
-    migrate_project_v3(project_dir)
+    _migrate_project_latest(project_dir)
     story = load_story_config(project_dir / "story.json") or {}
     scenes_dict = _load_scenes_dict(story)
     raw = scenes_dict.get(scene_id)
@@ -538,7 +551,7 @@ def get_scene(project_dir: Path, scene_id: SceneId) -> dict[str, Any] | None:
 
 
 def create_scene(project_dir: Path, payload: SceneCreateRequest) -> dict[str, Any]:
-    migrate_project_v3(project_dir)
+    _migrate_project_latest(project_dir)
     story_path = project_dir / "story.json"
     story = load_story_config(story_path) or {}
     scenes_dict = _load_scenes_dict(story)
@@ -564,7 +577,7 @@ def create_scene(project_dir: Path, payload: SceneCreateRequest) -> dict[str, An
 def update_scene(
     project_dir: Path, scene_id: SceneId, payload: SceneUpdateRequest
 ) -> dict[str, Any] | None:
-    migrate_project_v3(project_dir)
+    _migrate_project_latest(project_dir)
     story_path = project_dir / "story.json"
     story = load_story_config(story_path) or {}
     scenes_dict = _load_scenes_dict(story)
@@ -590,7 +603,7 @@ def update_scene(
 
 
 def delete_scene(project_dir: Path, scene_id: SceneId) -> bool:
-    migrate_project_v3(project_dir)
+    _migrate_project_latest(project_dir)
     story_path = project_dir / "story.json"
     story = load_story_config(story_path) or {}
     scenes_dict = _load_scenes_dict(story)
@@ -631,7 +644,7 @@ def link_prose(
     target_scene_id: SceneId,
     request: SceneLinkProseRequest,
 ) -> list[dict[str, Any]]:
-    migrate_project_v3(project_dir)
+    _migrate_project_latest(project_dir)
     story_path = project_dir / "story.json"
     story = load_story_config(story_path) or {}
     scenes_dict = _load_scenes_dict(story)
@@ -726,7 +739,7 @@ def relink_scope_prose(
     get replayed through repeated single-scene edits that can split freshly
     inserted markers.
     """
-    migrate_project_v3(project_dir)
+    _migrate_project_latest(project_dir)
     story_path = project_dir / "story.json"
     story = load_story_config(story_path) or {}
     scenes_dict = _load_scenes_dict(story)
@@ -796,7 +809,7 @@ def unlink_prose(
     project_dir: Path,
     scene_id: SceneId,
 ) -> list[dict[str, Any]]:
-    migrate_project_v3(project_dir)
+    _migrate_project_latest(project_dir)
     story_path = project_dir / "story.json"
     story = load_story_config(story_path) or {}
     scenes_dict = _load_scenes_dict(story)
@@ -875,7 +888,7 @@ def update_prose_content(
     scene_id: SceneId,
     payload: SceneUpdateProseContentRequest,
 ) -> dict[str, Any] | None:
-    migrate_project_v3(project_dir)
+    _migrate_project_latest(project_dir)
     story_path = project_dir / "story.json"
     story = load_story_config(story_path) or {}
     scenes_dict = _load_scenes_dict(story)
@@ -911,7 +924,7 @@ def reorder_scene_prose(
     project_dir: Path,
     request: SceneReorderProseRequest,
 ) -> SceneReorderProseResponse:
-    migrate_project_v3(project_dir)
+    _migrate_project_latest(project_dir)
     story_path = project_dir / "story.json"
     story = load_story_config(story_path) or {}
     scenes_dict = _load_scenes_dict(story)

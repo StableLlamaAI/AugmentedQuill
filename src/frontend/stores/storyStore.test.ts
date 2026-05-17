@@ -28,6 +28,7 @@ function makeEntry(
     destination_datetime: overrides.destination_datetime,
     destination_relative: overrides.destination_relative,
     creates_new_timeline: overrides.creates_new_timeline,
+    timeline_id: overrides.timeline_id,
   };
 }
 
@@ -113,5 +114,29 @@ describe('storyStore.patchSourcebookEntry', () => {
 
     const changed = useStoryStore.getState().patchSourcebookEntry({ ...entry });
     expect(changed).toBe(false);
+  });
+
+  it('updates when only timeline_id changes', () => {
+    const entry = makeEntry({
+      id: 'tt-3',
+      name: 'Branch lineage change',
+      category: 'Time Travel',
+      creates_new_timeline: true,
+      timeline_id: 'main',
+    });
+
+    useStoryStore.getState().setStory({
+      ...INITIAL_STORY,
+      sourcebook: [entry],
+    });
+
+    const changed = useStoryStore.getState().patchSourcebookEntry({
+      ...entry,
+      timeline_id: 'branch:16->10',
+    });
+
+    expect(changed).toBe(true);
+    const updated = useStoryStore.getState().story.sourcebook?.[0];
+    expect(updated?.timeline_id).toBe('branch:16->10');
   });
 });

@@ -98,6 +98,7 @@ async def create_sourcebook_entry(
         destination_datetime=entry.destination_datetime,
         destination_relative=entry.destination_relative,
         creates_new_timeline=entry.creates_new_timeline,
+        timeline_id=entry.timeline_id,
         active=project_dir,
     )
     if "error" in created:
@@ -136,6 +137,7 @@ async def update_sourcebook_entry(
         destination_datetime=updates.destination_datetime,
         destination_relative=updates.destination_relative,
         creates_new_timeline=updates.creates_new_timeline,
+        timeline_id=updates.timeline_id,
         active=project_dir,
     )
     if "error" in result:

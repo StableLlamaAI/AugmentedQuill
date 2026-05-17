@@ -48,6 +48,8 @@ interface SourcebookEntryDialogViewProps {
   destinationDatetime: string | null;
   destinationRelative: string;
   createsNewTimeline: boolean;
+  timelineId: string;
+  timelineOptions: Array<{ id: string; label: string }>;
   images: string[];
   relations: SourcebookRelation[];
   relationNameMap: Record<string, string>;
@@ -86,6 +88,7 @@ interface SourcebookEntryDialogViewProps {
   onDestinationDatetimeChange: (value: string | null) => void;
   onDestinationRelativeChange: (value: string) => void;
   onCreatesNewTimelineChange: (value: boolean) => void;
+  onTimelineIdChange: (value: string) => void;
   onToggleImagesExpanded: () => void;
   onOpenImagePicker: () => void;
   onToggleImage: (filename: string) => void;
@@ -163,10 +166,13 @@ export const SourcebookEntryDialogView: React.FC<SourcebookEntryDialogViewProps>
     destinationDatetime,
     destinationRelative,
     createsNewTimeline,
+    timelineId,
+    timelineOptions,
     onOriginDateChange,
     onDestinationDatetimeChange,
     onDestinationRelativeChange,
     onCreatesNewTimelineChange,
+    onTimelineIdChange,
     onToggleImagesExpanded,
     onOpenImagePicker,
     onToggleImage,
@@ -223,6 +229,8 @@ export const SourcebookEntryDialogView: React.FC<SourcebookEntryDialogViewProps>
               destinationDatetime={destinationDatetime}
               destinationRelative={destinationRelative}
               createsNewTimeline={createsNewTimeline}
+              timelineId={timelineId}
+              timelineOptions={timelineOptions}
               inputBorderClass={inputBorderClass}
               inputBgClass={inputBgClass}
               labelClass={labelClass}
@@ -238,6 +246,7 @@ export const SourcebookEntryDialogView: React.FC<SourcebookEntryDialogViewProps>
               onDestinationDatetimeChange={onDestinationDatetimeChange}
               onDestinationRelativeChange={onDestinationRelativeChange}
               onCreatesNewTimelineChange={onCreatesNewTimelineChange}
+              onTimelineIdChange={onTimelineIdChange}
             />
 
             <SourcebookEntryImagesSection

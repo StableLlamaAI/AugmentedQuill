@@ -50,6 +50,7 @@ const mapStorySourcebookEntry = (e: StorySourcebookEntry): SourcebookEntry => ({
   destination_datetime: e.destination_datetime ?? undefined,
   destination_relative: e.destination_relative ?? undefined,
   creates_new_timeline: e.creates_new_timeline ?? undefined,
+  timeline_id: e.timeline_id ?? undefined,
 });
 
 export const mapStoryBooks = (books: StoryBook[] | null | undefined): Book[] =>

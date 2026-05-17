@@ -17,6 +17,8 @@ from augmentedquill.models.scene import (
     SceneCreateRequest,
     SceneLinkProseRequest,
     SceneProseLink,
+    SceneTimeTravelEvent,
+    SceneUpdateRequest,
     SceneUpdateProseContentRequest,
 )
 from augmentedquill.services.scenes.scene_service import (
@@ -25,6 +27,7 @@ from augmentedquill.services.scenes.scene_service import (
     link_prose,
     list_scenes,
     unlink_prose,
+    update_scene,
     update_prose_content,
 )
 from augmentedquill.services.scenes.scene_markers import parse_scene_spans
@@ -52,6 +55,8 @@ def test_create_scene_and_list(project_dir: Path) -> None:
     assert len(scenes) == 2
     assert scenes[0]["id"] == 1
     assert scenes[1]["id"] == 2
+    assert scenes[0]["timeline_id"] == "main"
+    assert scenes[1]["timeline_id"] == "main"
 
 
 def test_link_prose_injects_markers_and_computes_offsets(project_dir: Path) -> None:
@@ -115,6 +120,82 @@ def test_scene_prose_links_are_runtime_only_and_not_persisted(
 
     assert "prose_link" not in persisted
     assert persisted["beats"][0].get("prose_link") is None
+
+
+def test_scene_time_travel_events_are_persisted(project_dir: Path) -> None:
+    scene = create_scene(
+        project_dir,
+        SceneCreateRequest(
+            summary="Time travel scene",
+            time_travel_events=[
+                SceneTimeTravelEvent(
+                    entry_refs=["Doc Brown", "Marty McFly"],
+                    target_datetime="1955-11-05T20:00:00Z",
+                    relative_description=None,
+                )
+            ],
+        ),
+    )
+
+    refreshed = get_scene(project_dir, scene["id"])
+    assert refreshed is not None
+    events = refreshed.get("time_travel_events") or []
+    assert len(events) == 1
+    assert events[0]["target_datetime"] == "1955-11-05T20:00:00Z"
+    assert events[0]["entry_refs"] == ["Doc Brown", "Marty McFly"]
+
+
+def test_update_scene_persists_timeline_id(project_dir: Path) -> None:
+    created = create_scene(project_dir, SceneCreateRequest(summary="Timeline"))
+
+    updated = update_scene(
+        project_dir,
+        created["id"],
+        SceneUpdateRequest(timeline_id="branch:alpha"),
+    )
+
+    assert updated is not None
+    assert updated["timeline_id"] == "branch:alpha"
+
+    refreshed = get_scene(project_dir, created["id"])
+    assert refreshed is not None
+    assert refreshed["timeline_id"] == "branch:alpha"
+
+
+def test_list_scenes_migrates_story_to_v4_timeline_fields(project_dir: Path) -> None:
+    story_path = project_dir / "story.json"
+    story = json.loads(story_path.read_text(encoding="utf-8"))
+    story["metadata"] = {"version": 3}
+    story["sourcebook"] = {
+        "tt-jump": {
+            "description": "jump",
+            "category": "Time Travel",
+            "creates_new_timeline": True,
+        }
+    }
+    story["scenes"] = {
+        "1": {
+            "summary": "A",
+            "beats": [],
+            "active_characters": [],
+            "passive_characters": [],
+            "sourcebook_entry_ids": [],
+            "order_before": [],
+            "order_after": [],
+            "pinboard_x": 100,
+            "pinboard_y": 100,
+            "status": "active",
+        }
+    }
+    story_path.write_text(json.dumps(story), encoding="utf-8")
+
+    scenes = list_scenes(project_dir)
+    assert scenes[0]["timeline_id"] == "main"
+
+    migrated = json.loads(story_path.read_text(encoding="utf-8"))
+    assert migrated["metadata"]["version"] == 4
+    assert migrated["scenes"]["1"]["timeline_id"] == "main"
+    assert migrated["sourcebook"]["tt-jump"]["timeline_id"] == "branch:tt-jump"
 
 
 def test_link_prose_unlinks_overlapping_scene(project_dir: Path) -> None:

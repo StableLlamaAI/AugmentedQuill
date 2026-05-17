@@ -16,6 +16,7 @@ import type { Scene, SceneId } from '../../types';
 import { SourcebookUpsertPayload } from '../../services/apiTypes';
 import { useThemeClasses } from '../layout/ThemeContext';
 import { useFocusTrap } from '../layout/useFocusTrap';
+import { buildSourcebookTimelineOptions } from '../scenes/timelineOptions';
 import { SourcebookEntryDialogView } from './SourcebookEntryDialogView';
 import { useSourcebookEntryDialogState } from './useSourcebookEntryDialogState';
 import { useScenes } from '../../stores/storyStore';
@@ -70,6 +71,10 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
     onClose,
   });
   const scenes = useScenes();
+  const timelineOptions = useMemo(
+    () => buildSourcebookTimelineOptions(allEntries, state.timelineId),
+    [allEntries, state.timelineId]
+  );
 
   const entryDialogRef = useRef<HTMLDivElement>(null);
   const imagePickerRef = useRef<HTMLDivElement>(null);
@@ -221,6 +226,8 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
       destinationDatetime={state.destinationDatetime}
       destinationRelative={state.destinationRelative}
       createsNewTimeline={state.createsNewTimeline}
+      timelineId={state.timelineId}
+      timelineOptions={timelineOptions}
       images={state.images}
       relations={state.relations}
       relationNameMap={state.relationNameMap}
@@ -259,6 +266,7 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
       onDestinationDatetimeChange={state.setDestinationDatetime}
       onDestinationRelativeChange={state.setDestinationRelative}
       onCreatesNewTimelineChange={state.setCreatesNewTimeline}
+      onTimelineIdChange={state.setTimelineId}
       onToggleImagesExpanded={(): void =>
         state.setIsImagesExpanded((value: boolean): boolean => !value)
       }

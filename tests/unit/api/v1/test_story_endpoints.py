@@ -133,6 +133,7 @@ class StoryEndpointsTest(ApiTestCase):
                 "destination_datetime": "1955-11-05T20:00:00+00:00[UTC][u-ca=gregory]",
                 "destination_relative": "30 years earlier",
                 "creates_new_timeline": True,
+                "timeline_id": "branch:16->10",
             }
         }
         self._make_project(name="tt_payload", sourcebook=sourcebook)
@@ -157,6 +158,7 @@ class StoryEndpointsTest(ApiTestCase):
         )
         self.assertEqual(tt_entry.get("destination_relative"), "30 years earlier")
         self.assertTrue(tt_entry.get("creates_new_timeline"))
+        self.assertEqual(tt_entry.get("timeline_id"), "branch:16->10")
 
     # ---- Story LLM endpoints with fakes ----
     def _patch_llm(self):

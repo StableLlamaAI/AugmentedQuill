@@ -2825,6 +2825,11 @@ export interface components {
       /** Time */
       time?: string | null;
       scene_time?: components['schemas']['SceneChronologyTime'] | null;
+      /**
+       * Timeline Id
+       * @default main
+       */
+      timeline_id: string;
       /** Color Tag */
       color_tag?: string | null;
       prose_link?: components['schemas']['SceneProseLink'] | null;
@@ -2857,16 +2862,25 @@ export interface components {
       status: string;
       /** Tag Personal Datetimes */
       tag_personal_datetimes?: components['schemas']['SceneTagPersonalDatetime'][];
+      /** Time Travel Events */
+      time_travel_events?: components['schemas']['SceneTimeTravelEvent'][];
     };
     /**
      * SceneBeat
      * @description A single beat within a scene – a discrete micro-action or plot step.
      */
     SceneBeat: {
-      /** Id */
+      /**
+       * Id
+       * @description Stable beat identifier. Usually generated automatically.
+       */
       id?: string;
-      /** Text */
+      /**
+       * Text
+       * @description Short description of the beat's action or event.
+       */
       text: string;
+      /** @description Optional link from this beat to a specific prose range. */
       prose_link?: components['schemas']['SceneProseLink'] | null;
     };
     /**
@@ -2886,7 +2900,10 @@ export interface components {
      * @description Scene-local timeline point represented as a Temporal ZonedDateTime string.
      */
     SceneChronologyTime: {
-      /** Temporal Zoned Datetime */
+      /**
+       * Temporal Zoned Datetime
+       * @description Normalized ISO 8601 timestamp for the scene's chronology.
+       */
       temporal_zoned_datetime: string;
     };
     /**
@@ -2896,66 +2913,98 @@ export interface components {
     SceneCreateRequest: {
       /**
        * Summary
+       * @description Scene summary / label. Scenes do not have a separate title field; use this field instead. Keep it short, specific, and suitable for a scene card heading.
        * @default
        */
       summary: string;
       /**
        * Beats
-       * @default []
+       * @description Optional ordered beats inside the scene. Use when the scene needs a micro-beat breakdown.
        */
-      beats: components['schemas']['SceneBeat'][];
+      beats?: components['schemas']['SceneBeat'][];
       /**
        * Active Characters
-       * @default []
+       * @description Character IDs actively participating in the scene. Use sourcebook/character IDs, not display names, when available.
        */
-      active_characters: string[];
+      active_characters?: string[];
       /**
        * Passive Characters
-       * @default []
+       * @description Character IDs present but not actively driving the scene. Use sourcebook/character IDs, not display names, when available.
        */
-      passive_characters: string[];
+      passive_characters?: string[];
       /**
        * Sourcebook Entry Ids
-       * @default []
+       * @description Sourcebook entry IDs needed to ground the scene's facts, setting, or canon references.
        */
-      sourcebook_entry_ids: string[];
-      /** Location */
+      sourcebook_entry_ids?: string[];
+      /**
+       * Location
+       * @description Location identifier or location name for where the scene occurs.
+       */
       location?: string | null;
-      /** Time */
+      /**
+       * Time
+       * @description Human-readable scene time string when a formal chronology is not needed.
+       */
       time?: string | null;
+      /** @description Formal timeline position for the scene. Prefer this when ordering matters. Accepts ISO-like timestamps and normalizes them. */
       scene_time?: components['schemas']['SceneChronologyTime'] | null;
-      /** Color Tag */
+      /**
+       * Timeline Id
+       * @description Explicit timeline identity for this scene. Use 'main' for the primary timeline and stable IDs for branch timelines.
+       * @default main
+       */
+      timeline_id: string;
+      /**
+       * Color Tag
+       * @description Optional color label for the scene card, usually a hex string.
+       */
       color_tag?: string | null;
+      /** @description Optional prose link showing which content file the scene is linked to prose. Use this when the scene is already anchored to prose. */
       prose_link?: components['schemas']['SceneProseLink'] | null;
       /**
        * Order Before
-       * @default []
+       * @description IDs of scenes that should come before this one in narrative order.
        */
-      order_before: number[];
+      order_before?: number[];
       /**
        * Order After
-       * @default []
+       * @description IDs of scenes that should come after this one in narrative order.
        */
-      order_after: number[];
-      /** Order Index */
+      order_after?: number[];
+      /**
+       * Order Index
+       * @description Optional explicit narrative sort key. Leave empty unless the scene must be placed precisely in sequence.
+       */
       order_index?: number | null;
       /**
        * Pinboard X
+       * @description Pinboard X position in logical canvas units.
        * @default 100
        */
       pinboard_x: number;
       /**
        * Pinboard Y
+       * @description Pinboard Y position in logical canvas units.
        * @default 100
        */
       pinboard_y: number;
       /**
        * Status
+       * @description Scene lifecycle status such as active, inactive, or draft.
        * @default active
        */
       status: string;
-      /** Tag Personal Datetimes */
+      /**
+       * Tag Personal Datetimes
+       * @description Per-tag personal age overrides used for time-travel or age-specific ordering. Leave empty unless you need those overrides.
+       */
       tag_personal_datetimes?: components['schemas']['SceneTagPersonalDatetime'][];
+      /**
+       * Time Travel Events
+       * @description Scene-local time travel events recorded for this scene.
+       */
+      time_travel_events?: components['schemas']['SceneTimeTravelEvent'][];
     };
     /**
      * SceneDetectBoundariesRequest
@@ -3031,15 +3080,30 @@ export interface components {
      *     and are excluded from disk storage.
      */
     SceneProseLink: {
-      /** Scope Type */
+      /**
+       * Scope Type
+       * @description Which content scope the scene is linked to: 'story' or 'chapter'.
+       */
       scope_type: string;
-      /** Chapter Id */
+      /**
+       * Chapter Id
+       * @description Chapter ID when scope_type='chapter'. Leave empty for story scope.
+       */
       chapter_id?: string | null;
-      /** Book Id */
+      /**
+       * Book Id
+       * @description Book ID when the linked prose belongs to a book chapter.
+       */
       book_id?: string | null;
-      /** Start Offset */
+      /**
+       * Start Offset
+       * @description Computed start offset within the linked content file.
+       */
       start_offset?: number | null;
-      /** End Offset */
+      /**
+       * End Offset
+       * @description Computed end offset within the linked content file.
+       */
       end_offset?: number | null;
     };
     /**
@@ -3093,18 +3157,47 @@ export interface components {
     SceneTagPersonalDatetime: {
       /**
        * Role
+       * @description Which tag list this override applies to.
        * @enum {string}
        */
       role: 'active' | 'passive' | 'sourcebook';
-      /** Ref */
+      /**
+       * Ref
+       * @description Character name or sourcebook entry ID for the tag.
+       */
       ref: string;
       /**
        * Index
+       * @description 0-based position within the chosen tag list. Use this when the same character appears multiple times.
        * @default 0
        */
       index: number;
-      /** Personal Age */
+      /**
+       * Personal Age
+       * @description Human-readable age such as '17y', '17y 3m', or '30d'.
+       */
       personal_age: string;
+    };
+    /**
+     * SceneTimeTravelEvent
+     * @description A scene-local time travel event recorded in story.json.
+     */
+    SceneTimeTravelEvent: {
+      /**
+       * Entry Refs
+       * @description Sourcebook entry refs involved in the jump.
+       */
+      entry_refs?: string[];
+      /**
+       * Target Datetime
+       * @description Target datetime for the jump, if specified.
+       */
+      target_datetime?: string | null;
+      /**
+       * Relative Description
+       * @description Relative time travel description, if the jump is relative.
+       */
+      relative_description?: string | null;
     };
     /**
      * SceneUpdateProseContentRequest
@@ -3119,40 +3212,97 @@ export interface components {
      * @description Payload for updating an existing scene (full replacement).
      */
     SceneUpdateRequest: {
-      /** Summary */
+      /**
+       * Summary
+       * @description Replacement scene label/summary. Use this instead of a title.
+       */
       summary?: string | null;
-      /** Beats */
+      /**
+       * Beats
+       * @description Full replacement beat list for the scene.
+       */
       beats?: components['schemas']['SceneBeat'][] | null;
-      /** Active Characters */
+      /**
+       * Active Characters
+       * @description Full replacement list of active character IDs.
+       */
       active_characters?: string[] | null;
-      /** Passive Characters */
+      /**
+       * Passive Characters
+       * @description Full replacement list of passive character IDs.
+       */
       passive_characters?: string[] | null;
-      /** Sourcebook Entry Ids */
+      /**
+       * Sourcebook Entry Ids
+       * @description Full replacement list of sourcebook entry IDs.
+       */
       sourcebook_entry_ids?: string[] | null;
-      /** Location */
+      /**
+       * Location
+       * @description Replacement location identifier or name.
+       */
       location?: string | null;
-      /** Time */
+      /**
+       * Time
+       * @description Replacement human-readable time string.
+       */
       time?: string | null;
+      /** @description Replacement formal chronology timestamp for the scene. */
       scene_time?: components['schemas']['SceneChronologyTime'] | null;
-      /** Color Tag */
+      /**
+       * Timeline Id
+       * @description Replacement explicit timeline identity for the scene.
+       */
+      timeline_id?: string | null;
+      /**
+       * Color Tag
+       * @description Replacement card color tag.
+       */
       color_tag?: string | null;
+      /** @description Replacement prose link for the scene. */
       prose_link?: components['schemas']['SceneProseLink'] | null;
-      /** Order Before */
+      /**
+       * Order Before
+       * @description Replacement list of scene IDs that should come before this scene.
+       */
       order_before?: number[] | null;
-      /** Order After */
+      /**
+       * Order After
+       * @description Replacement list of scene IDs that should come after this scene.
+       */
       order_after?: number[] | null;
-      /** Order Index */
+      /**
+       * Order Index
+       * @description Replacement narrative sort key.
+       */
       order_index?: number | null;
-      /** Pinboard X */
+      /**
+       * Pinboard X
+       * @description Replacement pinboard X position.
+       */
       pinboard_x?: number | null;
-      /** Pinboard Y */
+      /**
+       * Pinboard Y
+       * @description Replacement pinboard Y position.
+       */
       pinboard_y?: number | null;
-      /** Status */
+      /**
+       * Status
+       * @description Replacement lifecycle status such as active, inactive, or draft.
+       */
       status?: string | null;
-      /** Tag Personal Datetimes */
+      /**
+       * Tag Personal Datetimes
+       * @description Replacement per-tag personal age overrides. Use None to leave the field unchanged, or an explicit list to replace it.
+       */
       tag_personal_datetimes?:
         | components['schemas']['SceneTagPersonalDatetime'][]
         | null;
+      /**
+       * Time Travel Events
+       * @description Replacement scene-local time travel events. Use None to leave the field unchanged, or an explicit list to replace it.
+       */
+      time_travel_events?: components['schemas']['SceneTimeTravelEvent'][] | null;
     };
     /**
      * SceneWriteRequest
@@ -3356,6 +3506,8 @@ export interface components {
        * @default false
        */
       creates_new_timeline: boolean;
+      /** Timeline Id */
+      timeline_id?: string | null;
     };
     /**
      * SourcebookEntryCreate
@@ -3394,6 +3546,8 @@ export interface components {
        * @default false
        */
       creates_new_timeline: boolean;
+      /** Timeline Id */
+      timeline_id?: string | null;
     };
     /**
      * SourcebookEntryUpdate
@@ -3420,6 +3574,8 @@ export interface components {
       destination_relative?: string | null;
       /** Creates New Timeline */
       creates_new_timeline?: boolean | null;
+      /** Timeline Id */
+      timeline_id?: string | null;
     };
     /**
      * SourcebookKeywordsRequest
@@ -3591,6 +3747,8 @@ export interface components {
       destination_relative?: string | null;
       /** Creates New Timeline */
       creates_new_timeline?: boolean | null;
+      /** Timeline Id */
+      timeline_id?: string | null;
     };
     /**
      * StorySummaryResponse

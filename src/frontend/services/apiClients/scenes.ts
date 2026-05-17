@@ -32,6 +32,7 @@ export interface SceneCreatePayload {
   location?: string | null;
   time?: string | null;
   scene_time?: SceneChronologyTime | null;
+  timeline_id?: string;
   color_tag?: string | null;
   prose_link?: SceneProseLink | null;
   order_before?: SceneId[];

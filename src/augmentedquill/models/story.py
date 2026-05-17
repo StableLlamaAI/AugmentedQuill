@@ -69,6 +69,7 @@ class StorySourcebookEntry(BaseModel):
     destination_datetime: Optional[str] = None
     destination_relative: Optional[str] = None
     creates_new_timeline: Optional[bool] = None
+    timeline_id: Optional[str] = None
 
 
 class StoryPayload(BaseModel):

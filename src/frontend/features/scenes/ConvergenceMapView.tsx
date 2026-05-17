@@ -36,7 +36,10 @@ import { SceneCard } from './SceneCard';
 import { useSceneSelection } from './useSceneSelection';
 import { buildChapterOrderMap, chronologicalSort } from './sceneSortUtils';
 import type { ProjectType } from './sceneSortUtils';
-import { parseZonedDateTime } from '../../utils/temporal';
+import {
+  buildTimelinePanelModel,
+  type TimelineJumpEvent,
+} from './convergenceMapTimeline';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -63,17 +66,27 @@ const R = TRACK_W / 2; // hairpin arc radius (= 8 px)
 const SCENE_CIRCLE_R = 5; // snake node circle radius
 
 // Left timeline panel
-const TIMELINE_W = 52; // px — width of left chronological timeline panel
-const TL_TRACK_X = 8; // px — X of main vertical track within panel
+const TL_LANE_START_X = 8; // px — X position of the left-most timeline lane
+const TL_LANE_GAP = 28; // px — horizontal spacing between timeline lanes
 const TL_DOT_R = 4; // px — radius of scene dots on timeline
-const TL_LOOP_W = 36; // px — horizontal reach of time travel loop arrows (bows RIGHT)
+const TL_LOOP_W_CROSS = 30; // px — baseline bow for cross-lane jumps
+const TL_LOOP_W_SAME = 14; // px — baseline bow for same-lane jumps (= TL_LANE_GAP/2)
+const TL_MAX_LOOP_W = 56; // px — reserved right-side space for routed jump channels
 const TL_CORNER_R = 6; // px — rounded corner radius on loop arrows
+const TL_RIGHT_PAD = 8; // px — right breathing room for arrow heads
+const DEFAULT_PLACEHOLDER_ROW_HEIGHT = 84; // px — fallback until card heights are measured
 
 // ---------------------------------------------------------------------------
 // Geometry helpers
 // ---------------------------------------------------------------------------
 
 type CardLayoutEntry = { x: number; y: number; w: number; h: number };
+
+type MeasuredRowEntry = { y: number; h: number };
+
+const getLayoutCenterY = (layout: { y: number; h: number }): number => {
+  return layout.y + layout.h / 2;
+};
 
 /**
  * Count how many times the path direction changes (DOWN→UP or UP→DOWN)
@@ -199,40 +212,182 @@ function buildSnakePath(
  * vertical to destY, horizontal left back to TL_TRACK_X.
  * Corners are rounded with radius TL_CORNER_R.
  */
-function buildTimeTravelArrowPath(depY: number, destY: number): string {
-  const rx = TL_TRACK_X + TL_LOOP_W; // rightmost X of the loop
+/**
+ * Universal time-travel arrow geometry.
+ *
+ * By default jumps bow to the RIGHT of max(sourceX, destinationX). Callers may
+ * pass a custom `loopX` to keep a jump in a lane-local side channel instead.
+ *
+ * The shape is always a U-like path opening toward the right-side channel:
+ *
+ *   ┌── rx ──┐
+ *   │        │
+ *   srcX    dstX  (same lane → dstX = srcX, so it bows right and returns)
+ *
+ * Backward jump (destY < depY, going UP in the SVG): arrowhead tip points UP.
+ * Forward jump  (destY ≥ depY, going DOWN):          arrowhead tip points DOWN.
+ */
+function buildTimeTravelArrowGeometry(
+  sourceX: number,
+  depY: number,
+  destinationX: number,
+  destY: number,
+  loopX?: number
+): { pathData: string; endX: number; endY: number } {
   const cr = TL_CORNER_R;
+  const rx = loopX ?? Math.max(sourceX, destinationX) + TL_LOOP_W_CROSS;
   const goingDown = destY >= depY;
 
   if (goingDown) {
-    // Arrow: departs rightward, goes down on the right side, arrives at destY
-    return [
-      `M ${TL_TRACK_X},${depY}`,
-      `L ${rx - cr},${depY}`,
-      `a ${cr},${cr} 0 0 1 ${cr},${cr}`,
-      `L ${rx},${destY - cr}`,
-      `a ${cr},${cr} 0 0 1 ${-cr},${cr}`,
-      `L ${TL_TRACK_X},${destY}`,
-    ].join(' ');
-  } else {
-    // Arrow: departs rightward, goes up on the right side, arrives at destY
-    return [
-      `M ${TL_TRACK_X},${depY}`,
+    const endY = destY; // Adjusted to end exactly at destination point
+    return {
+      pathData: [
+        `M ${sourceX},${depY}`,
+        `L ${rx - cr},${depY}`,
+        `a ${cr},${cr} 0 0 1 ${cr},${cr}`,
+        `L ${rx},${destY - cr}`,
+        `a ${cr},${cr} 0 0 1 ${-cr},${cr}`,
+        `L ${destinationX},${destY}`,
+      ].join(' '),
+      endX: destinationX,
+      endY: destY,
+    };
+  }
+
+  return {
+    pathData: [
+      `M ${sourceX},${depY}`,
       `L ${rx - cr},${depY}`,
       `a ${cr},${cr} 0 0 0 ${cr},${-cr}`,
       `L ${rx},${destY + cr}`,
       `a ${cr},${cr} 0 0 0 ${-cr},${-cr}`,
-      `L ${TL_TRACK_X},${destY}`,
+      `L ${destinationX},${destY}`,
+    ].join(' '),
+    endX: destinationX,
+    endY: destY,
+  };
+}
+
+function getTimeTravelLoopX(
+  sourceX: number,
+  destinationX: number,
+  depY: number,
+  destY: number
+): number {
+  if (sourceX === destinationX && destY < depY) {
+    return sourceX + TL_LOOP_W_SAME;
+  }
+
+  return Math.max(sourceX, destinationX) + TL_LOOP_W_CROSS;
+}
+
+function buildTimelineBranchConnectorGeometry(
+  sourceX: number,
+  sourceY: number,
+  destinationX: number,
+  destinationY: number,
+  loopX?: number
+): string {
+  if (Math.abs(destinationY - sourceY) < 0.5) {
+    return [`M ${sourceX},${sourceY}`, `L ${destinationX},${destinationY}`].join(' ');
+  }
+
+  const cr = TL_CORNER_R;
+  const rx = loopX ?? Math.max(sourceX, destinationX) + TL_LOOP_W_CROSS;
+
+  if (destinationY > sourceY) {
+    return [
+      `M ${sourceX},${sourceY}`,
+      `L ${rx - cr},${sourceY}`,
+      `a ${cr},${cr} 0 0 1 ${cr},${cr}`,
+      `L ${rx},${destinationY - cr}`,
+      `a ${cr},${cr} 0 0 1 ${-cr},${cr}`,
+      `L ${destinationX},${destinationY}`,
     ].join(' ');
   }
+
+  return [
+    `M ${sourceX},${sourceY}`,
+    `L ${rx - cr},${sourceY}`,
+    `a ${cr},${cr} 0 0 0 ${cr},${-cr}`,
+    `L ${rx},${destinationY + cr}`,
+    `a ${cr},${cr} 0 0 0 ${-cr},${-cr}`,
+    `L ${destinationX},${destinationY}`,
+  ].join(' ');
+}
+
+function buildBranchCreationArrowGeometry(
+  sourceX: number,
+  depY: number,
+  destinationLaneX: number,
+  destY: number
+): { pathData: string; endX: number; endY: number } {
+  const targetX = (sourceX + destinationLaneX) / 2;
+  const dx = targetX - sourceX;
+  const goingDown = destY >= depY;
+  const cr = Math.min(TL_CORNER_R, Math.abs(dx));
+
+  if (cr < 0.5) {
+    return {
+      pathData: [`M ${sourceX},${depY}`, `L ${targetX},${destY}`].join(' '),
+      endX: targetX,
+      endY: destY,
+    };
+  }
+
+  const approachX = targetX - Math.sign(dx) * cr;
+  const arcDx = Math.sign(dx) * cr;
+  const arcDy = goingDown ? cr : -cr;
+  const sweepFlag = dx > 0 ? (goingDown ? 1 : 0) : goingDown ? 0 : 1;
+
+  return {
+    pathData: [
+      `M ${sourceX},${depY}`,
+      `L ${approachX},${depY}`,
+      `a ${cr},${cr} 0 0 ${sweepFlag} ${arcDx},${arcDy}`,
+      `L ${targetX},${destY}`,
+    ].join(' '),
+    endX: targetX,
+    endY: destY,
+  };
+}
+
+function buildSpawnedTimelineTrackPath(
+  parentLaneX: number,
+  laneX: number,
+  spawnY: number,
+  overlayHeight: number
+): string {
+  const cornerRadius = TL_CORNER_R;
+  const dx = laneX - parentLaneX;
+  const absDx = Math.abs(dx);
+  const horizontalSign = dx >= 0 ? 1 : -1;
+  const usableCornerRadius = Math.min(cornerRadius, absDx / 2);
+
+  // If the parent and destination lanes are effectively the same X,
+  // fall back to a direct vertical continuation.
+  if (absDx < 0.5 || usableCornerRadius < 0.5) {
+    return [`M ${laneX},${spawnY}`, `L ${laneX},${overlayHeight}`].join(' ');
+  }
+
+  const horizontalEndX = laneX - horizontalSign * usableCornerRadius;
+  const arcDx = horizontalSign * usableCornerRadius;
+  const arcDy = usableCornerRadius;
+
+  return [
+    `M ${parentLaneX},${spawnY}`,
+    `L ${horizontalEndX},${spawnY}`,
+    `a ${usableCornerRadius},${usableCornerRadius} 0 0 ${horizontalSign > 0 ? 1 : 0} ${arcDx},${arcDy}`,
+    `L ${laneX},${overlayHeight}`,
+  ].join(' ');
 }
 
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
-/* eslint-disable complexity */
 // Intentionally kept as one component to keep map layout and overlay geometry together.
+/* eslint-disable complexity */
 // eslint-disable-next-line max-lines-per-function
 export const ConvergenceMapView: React.FC<ConvergenceMapViewProps> = ({
   scenes,
@@ -313,6 +468,7 @@ export const ConvergenceMapView: React.FC<ConvergenceMapViewProps> = ({
   const laneTrackRef = useRef<HTMLDivElement>(null);
   const bottomLaneScrollRef = useRef<HTMLDivElement>(null);
   const cardWrapperRefs = useRef(new Map<SceneId, HTMLDivElement>());
+  const epochGapRefs = useRef(new Map<string, HTMLDivElement>());
 
   const [cardLayouts, setCardLayouts] = useState<Map<SceneId, CardLayoutEntry>>(
     new Map()
@@ -320,7 +476,11 @@ export const ConvergenceMapView: React.FC<ConvergenceMapViewProps> = ({
   const [laneCenterXById, setLaneCenterXById] = useState<Map<string, number>>(
     new Map()
   );
+  const [epochGapLayouts, setEpochGapLayouts] = useState<Map<string, MeasuredRowEntry>>(
+    new Map()
+  );
   const [lanePlaneWidth, setLanePlaneWidth] = useState(0);
+  const [viewportHeight, setViewportHeight] = useState(0);
 
   /** Measure all card positions and lane button centers. */
   const measureLayouts = useCallback(() => {
@@ -334,6 +494,15 @@ export const ConvergenceMapView: React.FC<ConvergenceMapViewProps> = ({
       });
     });
     setCardLayouts(nextCards);
+
+    const nextEpochGapLayouts = new Map<string, MeasuredRowEntry>();
+    epochGapRefs.current.forEach((el: HTMLDivElement, key: string) => {
+      nextEpochGapLayouts.set(key, {
+        y: el.offsetTop,
+        h: el.offsetHeight,
+      });
+    });
+    setEpochGapLayouts(nextEpochGapLayouts);
 
     const laneTrackRect = laneTrackRef.current?.getBoundingClientRect();
     const nextCenters = new Map<string, number>();
@@ -349,6 +518,7 @@ export const ConvergenceMapView: React.FC<ConvergenceMapViewProps> = ({
     setLanePlaneWidth(
       laneTrackRef.current?.scrollWidth ?? laneTrackRef.current?.offsetWidth ?? 0
     );
+    setViewportHeight(innerContainerRef.current?.clientHeight ?? 0);
   }, [laneButtonRefs]);
 
   useLayoutEffect(() => {
@@ -439,74 +609,404 @@ export const ConvergenceMapView: React.FC<ConvergenceMapViewProps> = ({
 
   type TimeTravelArrow = {
     pathData: string;
+    markerEnd?: string;
     goingDown: boolean;
     entryName: string;
     createsNewTimeline: boolean;
+    sourceX: number;
+    destinationX: number;
     depY: number;
     destY: number;
   };
+  const timelinePanelModel = useMemo(
+    () =>
+      buildTimelinePanelModel(
+        sortedScenes,
+        sourcebookEntries,
+        sceneEpochNanosecondsById
+      ),
+    [sortedScenes, sourcebookEntries, sceneEpochNanosecondsById]
+  );
+
+  const timelineLaneStartYByNumber = useMemo(() => {
+    const starts = new Map<number, number>();
+
+    sortedScenes.forEach((scene: Scene): void => {
+      const layout = cardLayouts.get(scene.id);
+      if (!layout) return;
+      const cy = layout.y + layout.h / 2;
+      const lane = timelinePanelModel.laneBySceneId.get(scene.id) ?? 0;
+      const prev = starts.get(lane);
+      if (prev === undefined || cy < prev) {
+        starts.set(lane, cy);
+      }
+    });
+
+    timelinePanelModel.events.forEach((event: TimelineJumpEvent): void => {
+      if (!event.createsNewTimeline) return;
+      if (event.destinationEpochNs === null) return;
+
+      const startY =
+        event.destinationSceneId !== null
+          ? (() => {
+              const sceneLayout = cardLayouts.get(event.destinationSceneId);
+              return sceneLayout ? getLayoutCenterY(sceneLayout) : null;
+            })()
+          : (() => {
+              const gap = epochGapLayouts.get(event.destinationEpochNs.toString());
+              return gap ? getLayoutCenterY(gap) : null;
+            })();
+      if (startY === null) return;
+
+      const prev = starts.get(event.destinationLane);
+      if (prev === undefined || startY < prev) {
+        starts.set(event.destinationLane, startY);
+      }
+    });
+
+    return starts;
+  }, [timelinePanelModel.events, sortedScenes, cardLayouts, epochGapLayouts]);
+
+  const timelineLaneXByNumber = useMemo(() => {
+    const map = new Map<number, number>();
+    timelinePanelModel.laneNumbers.forEach((lane: number) => {
+      map.set(lane, TL_LANE_START_X + lane * TL_LANE_GAP);
+    });
+    return map;
+  }, [timelinePanelModel.laneNumbers]);
+
+  const timelinePanelWidth = useMemo(() => {
+    const maxLaneNumber = Math.max(0, ...timelinePanelModel.laneNumbers);
+    const rightMostLaneX = TL_LANE_START_X + maxLaneNumber * TL_LANE_GAP;
+    return rightMostLaneX + TL_MAX_LOOP_W + TL_RIGHT_PAD;
+  }, [timelinePanelModel.laneNumbers]);
+
+  const timelineSpawns = useMemo((): Map<number, number | null> => {
+    const spawns = new Map<number, number | null>();
+    spawns.set(0, null);
+
+    timelinePanelModel.events.forEach((ev: TimelineJumpEvent): void => {
+      if (!ev.createsNewTimeline || ev.destinationEpochNs === null) return;
+
+      const measuredGap = epochGapLayouts.get(ev.destinationEpochNs.toString());
+      if (measuredGap !== undefined) {
+        spawns.set(ev.destinationLane, getLayoutCenterY(measuredGap));
+        return;
+      }
+
+      const spawnY =
+        ev.destinationSceneId !== null
+          ? (() => {
+              const layout = cardLayouts.get(ev.destinationSceneId);
+              return layout ? getLayoutCenterY(layout) : null;
+            })()
+          : null; // gap row not yet measured
+      spawns.set(ev.destinationLane, spawnY);
+    });
+
+    return spawns;
+  }, [timelinePanelModel.events, cardLayouts, epochGapLayouts]);
+
+  /** Maps each spawned branch lane → the source lane that created it. */
+  const timelineSpawnParentLane = useMemo((): Map<number, number> => {
+    const map = new Map<number, number>();
+    timelinePanelModel.events.forEach((ev: TimelineJumpEvent): void => {
+      if (!ev.createsNewTimeline) return;
+      if (!map.has(ev.destinationLane)) {
+        map.set(ev.destinationLane, ev.sourceLane);
+      }
+    });
+    return map;
+  }, [timelinePanelModel.events]);
+
+  // For branch-creation jumps that land on an actual destination scene, place
+  // that scene dot on the horizontal spawn segment so the arrow can terminate
+  // directly on the dot (special case like 19->17 in the sketch).
+  const timelineSceneDotXOverrides = useMemo((): Map<SceneId, number> => {
+    const overrides = new Map<SceneId, number>();
+
+    timelinePanelModel.events.forEach((ev: TimelineJumpEvent): void => {
+      if (!ev.createsNewTimeline) return;
+      if (ev.destinationSceneId === null) return;
+
+      const sourceX = timelineLaneXByNumber.get(ev.sourceLane);
+      const destinationLaneX = timelineLaneXByNumber.get(ev.destinationLane);
+      if (sourceX === undefined || destinationLaneX === undefined) return;
+
+      overrides.set(ev.destinationSceneId, (sourceX + destinationLaneX) / 2);
+    });
+
+    return overrides;
+  }, [timelinePanelModel.events, timelineLaneXByNumber]);
+
   const timeTravelArrows = useMemo((): TimeTravelArrow[] => {
     const arrows: TimeTravelArrow[] = [];
-    const ttEntries = sourcebookEntries.filter(
-      (e: SourcebookEntry) => e.category === 'Time Travel'
-    );
 
-    ttEntries.forEach((entry: SourcebookEntry): void => {
-      // Find departure scene(s): scenes that include this entry in sourcebook_entry_ids
-      const depScenes = sortedScenes.filter((s: Scene) =>
-        (s.sourcebook_entry_ids ?? []).includes(entry.id)
-      );
-      if (depScenes.length === 0) return;
+    timelinePanelModel.events.forEach((ev: TimelineJumpEvent): void => {
+      const sourceX = timelineLaneXByNumber.get(ev.sourceLane);
+      if (sourceX === undefined) return;
 
-      // Find destination Y: scene whose scene_time is closest to destination_datetime
-      let destScene: Scene | null = null;
-      if (entry.destination_datetime) {
-        // Use parseZonedDateTime so Temporal-annotated formats (e.g. [UTC][u-ca=gregory])
-        // are handled correctly — Date.parse returns NaN for these strings.
-        const destParsed = parseZonedDateTime(entry.destination_datetime);
-        if (destParsed !== null) {
-          const destNsVal = destParsed.epochNanoseconds;
-          let minDiff = BigInt('99999999999999999999');
-          sortedScenes.forEach((s: Scene): void => {
-            const sNs = sceneEpochNanosecondsById.get(s.id);
-            if (sNs === undefined) return;
-            const diff = sNs > destNsVal ? sNs - destNsVal : destNsVal - sNs;
-            if (diff < minDiff) {
-              minDiff = diff;
-              destScene = s;
-            }
-          });
+      // Departure point
+      const depY =
+        ev.departureSceneId !== null
+          ? (() => {
+              const sceneLayout = cardLayouts.get(ev.departureSceneId);
+              return sceneLayout ? sceneLayout.y + sceneLayout.h / 2 : null;
+            })()
+          : (() => {
+              const gap = epochGapLayouts.get(ev.departureEpochNs.toString());
+              return gap ? getLayoutCenterY(gap) : null;
+            })();
+      if (depY === null) return;
+
+      // Determine destination point
+      let destX = sourceX;
+      let destY: number | null = null;
+      const destinationLaneX = timelineLaneXByNumber.get(ev.destinationLane) ?? sourceX;
+
+      if (ev.createsNewTimeline && ev.destinationEpochNs !== null) {
+        // Branching case: target the split height on the spawned timeline.
+        const spawnY = timelineSpawns.get(ev.destinationLane);
+
+        if (spawnY != null) {
+          if (ev.destinationSceneId !== null) {
+            // Special case: when the destination scene exists exactly at the
+            // branch spawn point, terminate at the marker border so the arrow
+            // points to the dot, not to the horizontal spawn line.
+            const goingDown = spawnY >= depY;
+            destY = spawnY + (goingDown ? -TL_DOT_R : TL_DOT_R);
+          } else {
+            destY = spawnY;
+          }
+        } else if (ev.destinationSceneId !== null) {
+          // Scene exists at destination — use its Y as the arrival point
+          const sceneLayout = cardLayouts.get(ev.destinationSceneId);
+          destY = sceneLayout ? sceneLayout.y + sceneLayout.h / 2 : null;
+        } else {
+          // No gap row measured yet for this epoch.
+          destY = null;
+        }
+        destX = destinationLaneX;
+      } else {
+        // Non-branching case: point at destination scene or stay on source lane
+        if (ev.destinationSceneId !== null) {
+          const sceneLayout = cardLayouts.get(ev.destinationSceneId);
+          if (sceneLayout) {
+            const centerY = sceneLayout.y + sceneLayout.h / 2;
+            // Vertical arrivals: stop at top/bottom edge of dot.
+            // Same-lane backward (horizontal arrival) offset is applied at draw time.
+            const isSameLaneBwd =
+              ev.sourceLane === ev.destinationLane && centerY < depY;
+            destY = isSameLaneBwd
+              ? centerY
+              : centerY + (centerY >= depY ? -TL_DOT_R : TL_DOT_R);
+            destX = sourceX;
+          } else {
+            destY = null;
+            destX = sourceX;
+          }
+        } else if (ev.destinationEpochNs !== null) {
+          // Use the measured epoch-gap row position.
+          const gap = epochGapLayouts.get(ev.destinationEpochNs.toString());
+          destY = gap ? getLayoutCenterY(gap) : null;
+          destX = sourceX;
+        } else {
+          destY = depY - 20;
+          destX = sourceX;
         }
       }
 
-      depScenes.forEach((depScene: Scene): void => {
-        const depLayout = cardLayouts.get(depScene.id);
-        if (!depLayout) return;
-        const depY = depLayout.y + depLayout.h / 2;
+      if (destY === null) return;
+      if (Math.abs(destY - depY) < 2 && sourceX === destX) return;
 
-        let destY: number;
-        if (destScene) {
-          const destLayout = cardLayouts.get((destScene as Scene).id);
-          if (!destLayout) return;
-          destY = destLayout.y + destLayout.h / 2;
-        } else {
-          // No destination datetime: draw a small self-loop arrow at departure
-          destY = depY - 20;
-        }
+      let pathData: string;
+      let markerEnd: string;
 
-        if (Math.abs(destY - depY) < 4) return; // skip trivial arrows
-        arrows.push({
-          pathData: buildTimeTravelArrowPath(depY, destY),
-          goingDown: destY > depY,
-          entryName: entry.name,
-          createsNewTimeline: !!entry.creates_new_timeline,
+      if (ev.createsNewTimeline && ev.destinationEpochNs !== null) {
+        const geometry = buildBranchCreationArrowGeometry(
+          sourceX,
           depY,
-          destY,
+          destinationLaneX,
+          destY
+        );
+        pathData = geometry.pathData;
+        markerEnd = destY > depY ? 'url(#tl-arrow-down)' : 'url(#tl-arrow-up)';
+
+        arrows.push({
+          pathData,
+          markerEnd,
+          goingDown: destY > depY,
+          entryName: ev.entryName,
+          createsNewTimeline: ev.createsNewTimeline,
+          sourceX,
+          destinationX: geometry.endX,
+          depY,
+          destY: geometry.endY,
         });
+        return;
+      }
+
+      const loopX = ev.createsNewTimeline
+        ? Math.max(
+            sourceX,
+            timelineLaneXByNumber.get(ev.destinationLane) ?? sourceX + TL_LANE_GAP
+          ) + TL_LOOP_W_CROSS
+        : getTimeTravelLoopX(sourceX, destX, depY, destY);
+
+      if (sourceX === destX && destY > depY) {
+        // Same-lane forward travel remains on the timeline.
+        pathData = `M ${sourceX},${depY} L ${destX},${destY}`;
+        markerEnd = 'url(#tl-arrow-down)';
+      } else {
+        // Backward jumps and cross-lane jumps use a side-channel loop.
+        const isSameLaneBackward = sourceX === destX && destY < depY;
+        // For same-lane backward jumps with a known destination scene the path arrives
+        // horizontally; shift the endpoint to the right edge of the destination dot.
+        const drawDestX =
+          isSameLaneBackward && ev.destinationSceneId !== null
+            ? destX + TL_DOT_R
+            : destX;
+        const geometry = buildTimeTravelArrowGeometry(
+          sourceX,
+          depY,
+          drawDestX,
+          destY,
+          loopX
+        );
+        pathData = geometry.pathData;
+        // Same-lane backward jumps arrive horizontally from the right side-channel;
+        // all other loops arrive vertically.
+        markerEnd =
+          destY > depY
+            ? 'url(#tl-arrow-down)'
+            : isSameLaneBackward
+              ? 'url(#tl-arrow-left)'
+              : 'url(#tl-arrow-up)';
+      }
+
+      arrows.push({
+        pathData,
+        markerEnd,
+        goingDown: destY > depY,
+        entryName: ev.entryName,
+        createsNewTimeline: ev.createsNewTimeline,
+        sourceX,
+        destinationX: destX,
+        depY,
+        destY,
       });
     });
+
     return arrows;
-  }, [sourcebookEntries, sortedScenes, cardLayouts, sceneEpochNanosecondsById]);
+  }, [
+    timelinePanelModel.events,
+    cardLayouts,
+    epochGapLayouts,
+    timelineLaneXByNumber,
+    timelineSpawns,
+  ]);
+
+  const timelineSceneAreaHeight = useMemo(() => {
+    let maxBottom = 0;
+    cardLayouts.forEach((layout: CardLayoutEntry): void => {
+      maxBottom = Math.max(maxBottom, layout.y + layout.h);
+    });
+    return Math.ceil(maxBottom + 8);
+  }, [cardLayouts]);
+
+  const timelineOverlayHeight = Math.max(timelineSceneAreaHeight, viewportHeight);
+  const cardsLeftPadding = timelinePanelWidth + 4;
+
+  const placeholderRowHeight = useMemo((): number => {
+    const heights = Array.from(cardLayouts.values()).map(
+      (layout: CardLayoutEntry): number => layout.h
+    );
+    if (heights.length === 0) {
+      return DEFAULT_PLACEHOLDER_ROW_HEIGHT;
+    }
+    const sortedHeights = [...heights].sort((a: number, b: number) => a - b);
+    const middle = Math.floor(sortedHeights.length / 2);
+    const median =
+      sortedHeights.length % 2 === 1
+        ? sortedHeights[middle]
+        : (sortedHeights[middle - 1] + sortedHeights[middle]) / 2;
+    return Math.max(40, Math.round(median));
+  }, [cardLayouts]);
+
+  /** All distinct epochs referenced by time-travel events that do not coincide
+   *  with an actual scene row.  Each gets a blank gap row so arrows can anchor
+   *  to a concrete DOM position without interpolation. */
+  const gapEpochs = useMemo((): bigint[] => {
+    const sceneEpochSet = new Set<bigint>();
+    sortedScenes.forEach((scene: Scene) => {
+      const ns = sceneEpochNanosecondsById.get(scene.id);
+      if (ns !== undefined) sceneEpochSet.add(ns);
+    });
+    const seen = new Set<bigint>();
+    const result: bigint[] = [];
+    timelinePanelModel.events.forEach((ev: TimelineJumpEvent) => {
+      const candidates: (bigint | null)[] = [
+        ev.departureSceneId === null ? ev.departureEpochNs : null,
+        ev.destinationSceneId === null && ev.destinationEpochNs !== null
+          ? ev.destinationEpochNs
+          : null,
+      ];
+      candidates.forEach((ns: bigint | null) => {
+        if (ns !== null && !sceneEpochSet.has(ns) && !seen.has(ns)) {
+          seen.add(ns);
+          result.push(ns);
+        }
+      });
+    });
+    return result.sort((a: bigint, b: bigint) => (a < b ? -1 : a > b ? 1 : 0));
+  }, [timelinePanelModel.events, sortedScenes, sceneEpochNanosecondsById]);
+
+  type TimelineListRow =
+    | { kind: 'scene'; scene: Scene }
+    | { kind: 'epoch-gap'; key: string; epochNs: bigint };
+
+  const timelineListRows = useMemo((): TimelineListRow[] => {
+    const rows: TimelineListRow[] = [];
+    let gapIndex = 0;
+
+    sortedScenes.forEach((scene: Scene, index: number): void => {
+      const sceneEpoch = sceneEpochNanosecondsById.get(scene.id) ?? null;
+      const previousScene = index > 0 ? sortedScenes[index - 1] : null;
+      const previousEpoch =
+        previousScene !== null
+          ? (sceneEpochNanosecondsById.get(previousScene.id) ?? null)
+          : null;
+
+      while (gapIndex < gapEpochs.length) {
+        const gapEpoch = gapEpochs[gapIndex];
+        const afterPrevious = previousEpoch === null || gapEpoch > previousEpoch;
+        const beforeCurrent = sceneEpoch !== null && gapEpoch <= sceneEpoch;
+        if (afterPrevious && beforeCurrent) {
+          rows.push({
+            kind: 'epoch-gap',
+            key: `epoch-gap-${gapEpoch.toString()}`,
+            epochNs: gapEpoch,
+          });
+          gapIndex += 1;
+          continue;
+        }
+        break;
+      }
+
+      rows.push({ kind: 'scene', scene });
+    });
+
+    while (gapIndex < gapEpochs.length) {
+      rows.push({
+        kind: 'epoch-gap',
+        key: `epoch-gap-${gapEpochs[gapIndex].toString()}`,
+        epochNs: gapEpochs[gapIndex],
+      });
+      gapIndex += 1;
+    }
+
+    return rows;
+  }, [gapEpochs, sortedScenes, sceneEpochNanosecondsById]);
 
   // -------------------------------------------------------------------------
   // Bottom scroller sync (same as NarrativeView)
@@ -536,8 +1036,6 @@ export const ConvergenceMapView: React.FC<ConvergenceMapViewProps> = ({
   const solidFill = isLight ? '#6366f1' : '#a5b4fc';
   const hollowFill = isLight ? '#f8fafc' : '#0f172a';
   const solidStroke = solidFill;
-  // Highlight color for "creates new timeline" fork indicators
-  const forkColor = isLight ? '#f59e0b' : '#fbbf24';
 
   // -------------------------------------------------------------------------
   // Render
@@ -554,7 +1052,10 @@ export const ConvergenceMapView: React.FC<ConvergenceMapViewProps> = ({
       <div
         className={`sticky top-0 z-30 border-b ${isLight ? 'border-brand-gray-200 bg-brand-gray-50' : 'border-brand-gray-800 bg-brand-gray-950'}`}
       >
-        <div className="overflow-hidden px-3 pt-2 pb-2">
+        <div
+          className="overflow-hidden px-3 pt-2 pb-2"
+          style={{ paddingLeft: `${cardsLeftPadding}px` }}
+        >
           <LaneHeader lanes={lanes} laneTrackRef={laneTrackRef} />
         </div>
       </div>
@@ -569,7 +1070,12 @@ export const ConvergenceMapView: React.FC<ConvergenceMapViewProps> = ({
         onKeyDown={() => {}}
       >
         {/* Snake SVG overlay — ABOVE the cards, pointer-events-none so cards stay clickable */}
-        <div className="pointer-events-none absolute inset-0 z-20 overflow-hidden">
+        <div
+          className="pointer-events-none absolute left-0 top-0 z-20 overflow-hidden"
+          style={{
+            height: timelineOverlayHeight > 0 ? `${timelineOverlayHeight}px` : '100%',
+          }}
+        >
           <div
             className="relative h-full"
             style={{
@@ -579,7 +1085,7 @@ export const ConvergenceMapView: React.FC<ConvergenceMapViewProps> = ({
           >
             <svg
               width={lanePlaneWidth || '100%'}
-              height="100%"
+              height={timelineOverlayHeight > 0 ? timelineOverlayHeight : '100%'}
               className="absolute inset-0"
               style={{ overflow: 'visible', userSelect: 'none' }}
             >
@@ -588,7 +1094,7 @@ export const ConvergenceMapView: React.FC<ConvergenceMapViewProps> = ({
                 const { entryId, pathData, proseScenes, sceneXById } = sp;
 
                 return (
-                  <g key={entryId}>
+                  <g key={entryId} transform={`translate(${cardsLeftPadding},0)`}>
                     {/* Snake track */}
                     <path
                       d={pathData}
@@ -631,34 +1137,98 @@ export const ConvergenceMapView: React.FC<ConvergenceMapViewProps> = ({
 
         {/* Left chronological timeline panel */}
         <div
-          className="pointer-events-none absolute left-0 top-0 bottom-0 z-20 overflow-hidden"
-          style={{ width: TIMELINE_W }}
+          className="pointer-events-none absolute left-0 top-0 z-20 overflow-hidden"
+          style={{
+            width: timelinePanelWidth,
+            height: timelineOverlayHeight > 0 ? `${timelineOverlayHeight}px` : '100%',
+          }}
         >
           <svg
-            width={TIMELINE_W}
-            height="100%"
+            width={timelinePanelWidth}
+            height={timelineOverlayHeight > 0 ? timelineOverlayHeight : '100%'}
             style={{ overflow: 'visible', userSelect: 'none' }}
             aria-hidden="true"
           >
-            {/* Vertical track line */}
-            <line
-              x1={TL_TRACK_X}
-              y1={0}
-              x2={TL_TRACK_X}
-              y2="100%"
-              stroke={trackColor}
-              strokeWidth={1.5}
-              opacity={0.4}
-            />
+            {/* Vertical track lines for all timelines */}
+            {timelinePanelModel.laneNumbers.map((laneNumber: number) => {
+              const laneX = timelineLaneXByNumber.get(laneNumber);
+              if (laneX === undefined) return null;
+
+              // Determine where the line should start.
+              let lineStartY: number | undefined;
+
+              if (laneNumber === 0) {
+                // Main timeline exists for the full visible chronology.
+                lineStartY = 0;
+              } else {
+                // Branched timelines only exist from their spawn onward.
+                const spawnY = timelineSpawns.get(laneNumber);
+                if (spawnY !== null && spawnY !== undefined) {
+                  lineStartY = spawnY;
+                } else {
+                  lineStartY = timelineLaneStartYByNumber.get(laneNumber);
+                }
+              }
+
+              // Skip rendering if no anchor exists.
+              if (lineStartY === undefined) return null;
+
+              const lineEndY = Math.max(timelineOverlayHeight, lineStartY + 1);
+
+              if (laneNumber !== 0) {
+                const spawnY = timelineSpawns.get(laneNumber);
+                if (spawnY !== null && spawnY !== undefined) {
+                  const parentLane = timelineSpawnParentLane.get(laneNumber) ?? 0;
+                  const parentLaneX =
+                    timelineLaneXByNumber.get(parentLane) ?? laneX - TL_LANE_GAP;
+                  const spawnedPath = buildSpawnedTimelineTrackPath(
+                    parentLaneX,
+                    laneX,
+                    spawnY,
+                    lineEndY
+                  );
+
+                  return (
+                    <path
+                      key={`lane-track-${laneNumber}`}
+                      d={spawnedPath}
+                      fill="none"
+                      stroke={trackColor}
+                      strokeWidth={2}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      opacity={0.7}
+                    />
+                  );
+                }
+              }
+
+              return (
+                <line
+                  key={`lane-track-${laneNumber}`}
+                  x1={laneX}
+                  y1={lineStartY}
+                  x2={laneX}
+                  y2={lineEndY}
+                  stroke={trackColor}
+                  strokeWidth={2}
+                  opacity={0.7}
+                />
+              );
+            })}
             {/* Scene position dots */}
             {sortedScenes.map((scene: Scene) => {
               const layout = cardLayouts.get(scene.id);
+              const lane = timelinePanelModel.laneBySceneId.get(scene.id) ?? 0;
+              const laneX = timelineLaneXByNumber.get(lane);
               if (!layout) return null;
+              if (laneX === undefined) return null;
+              const overriddenX = timelineSceneDotXOverrides.get(scene.id);
               const cy = layout.y + layout.h / 2;
               return (
                 <circle
                   key={scene.id}
-                  cx={TL_TRACK_X}
+                  cx={overriddenX ?? laneX}
                   cy={cy}
                   r={TL_DOT_R}
                   fill={solidFill}
@@ -669,76 +1239,88 @@ export const ConvergenceMapView: React.FC<ConvergenceMapViewProps> = ({
             {/* Time travel arrows */}
             <defs>
               <marker
-                id="tl-arrow"
+                id="tl-arrow-down"
                 markerWidth="6"
                 markerHeight="5"
                 refX="5"
                 refY="2.5"
-                orient="auto"
+                orient="90"
+              >
+                <polygon points="0 0, 6 2.5, 0 5" fill={trackColor} />
+              </marker>
+              <marker
+                id="tl-arrow-up"
+                markerWidth="6"
+                markerHeight="5"
+                refX="5"
+                refY="2.5"
+                orient="270"
+              >
+                <polygon points="0 0, 6 2.5, 0 5" fill={trackColor} />
+              </marker>
+              <marker
+                id="tl-arrow-left"
+                markerWidth="6"
+                markerHeight="5"
+                refX="5"
+                refY="2.5"
+                orient="180"
               >
                 <polygon points="0 0, 6 2.5, 0 5" fill={trackColor} />
               </marker>
             </defs>
             {timeTravelArrows.map((arrow: TimeTravelArrow, i: number) => (
-              <path
-                key={i}
-                d={arrow.pathData}
-                fill="none"
-                stroke={trackColor}
-                strokeWidth={1.5}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                markerEnd="url(#tl-arrow)"
-                opacity={0.85}
-              />
+              <g key={i}>
+                {/* Dot at departure point */}
+                <circle
+                  cx={arrow.sourceX}
+                  cy={arrow.depY}
+                  r={3}
+                  fill={trackColor}
+                  opacity={0.85}
+                />
+                {/* Arrow path with new semantics */}
+                <path
+                  d={arrow.pathData}
+                  fill="none"
+                  stroke={trackColor}
+                  strokeWidth={1.5}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  markerEnd={arrow.markerEnd}
+                  opacity={0.85}
+                />
+              </g>
             ))}
-            {/* Fork indicators: prominent diamond + branch line when creates_new_timeline=true */}
-            {timeTravelArrows
-              .filter((a: TimeTravelArrow) => a.createsNewTimeline)
-              .map((arrow: TimeTravelArrow, i: number) => {
-                const cx = TL_TRACK_X;
-                // Fork marker sits at the destination (arrival point in the past)
-                const y = arrow.destY;
-                // Diamond (rhombus) centered on the departure dot, pointing right
-                const dw = 7; // half-width (horizontal)
-                const dh = 5; // half-height (vertical)
-                const diamondPoints = [
-                  `${cx},${y - dh}`,
-                  `${cx + dw},${y}`,
-                  `${cx},${y + dh}`,
-                  `${cx - dw},${y}`,
-                ].join(' ');
-                // Short dashed branch line from diamond tip toward right edge
-                const branchX1 = cx + dw;
-                const branchX2 = TIMELINE_W - 4;
-                return (
-                  <g key={`fork-${i}`}>
-                    {/* Dashed branch line extending right from the diamond */}
-                    <line
-                      x1={branchX1}
-                      y1={y}
-                      x2={branchX2}
-                      y2={y}
-                      stroke={forkColor}
-                      strokeWidth={1.5}
-                      strokeDasharray="3 2"
-                      strokeLinecap="round"
-                      opacity={0.9}
-                    />
-                    {/* Filled amber diamond marking the branch departure */}
-                    <polygon points={diamondPoints} fill={forkColor} opacity={0.95} />
-                  </g>
-                );
-              })}
           </svg>
         </div>
 
         {/* Scene cards — full-width vertical list, exactly like Chronological view */}
         <div
           className="relative z-10 flex flex-col gap-2 p-3"
-          style={{ paddingLeft: `${TIMELINE_W + 4}px` }}
+          style={{ paddingLeft: `${cardsLeftPadding}px` }}
         >
-          {sortedScenes.map((scene: Scene) => {
+          {timelineListRows.map((row: TimelineListRow) => {
+            if (row.kind === 'epoch-gap') {
+              const key = row.epochNs.toString();
+              return (
+                <div
+                  key={row.key}
+                  ref={(el: HTMLDivElement | null) => {
+                    if (el) {
+                      epochGapRefs.current.set(key, el);
+                    } else {
+                      epochGapRefs.current.delete(key);
+                    }
+                  }}
+                  aria-hidden="true"
+                  className="w-full"
+                  style={{ height: placeholderRowHeight }}
+                />
+              );
+            }
+
+            const scene = row.scene;
             const idx = sceneIndexMap.get(scene.id) ?? 0;
             return (
               <div

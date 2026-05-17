@@ -150,6 +150,7 @@ describe('storyMappers mapSelectStoryToState', () => {
             destination_datetime: '1955-11-05T20:00:00+00:00[UTC][u-ca=gregory]',
             destination_relative: '30 years earlier',
             creates_new_timeline: true,
+            timeline_id: 'branch:16->10',
           },
         ],
       },
@@ -167,5 +168,6 @@ describe('storyMappers mapSelectStoryToState', () => {
     );
     expect(mapped.sourcebook[0].destination_relative).toBe('30 years earlier');
     expect(mapped.sourcebook[0].creates_new_timeline).toBe(true);
+    expect(mapped.sourcebook[0].timeline_id).toBe('branch:16->10');
   });
 });

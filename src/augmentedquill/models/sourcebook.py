@@ -71,6 +71,9 @@ class SourcebookEntry(BaseModel):
     creates_new_timeline: bool = (
         False  # For Time Travel entries: whether a new timeline branch is created
     )
+    timeline_id: Optional[str] = (
+        None  # For Time Travel branch entries: stable ID of the branch timeline
+    )
 
     @field_validator("origin_date", mode="before")
     @classmethod
@@ -96,6 +99,7 @@ class SourcebookEntryCreate(BaseModel):
     destination_datetime: Optional[str] = None
     destination_relative: Optional[str] = None
     creates_new_timeline: bool = False
+    timeline_id: Optional[str] = None
 
     @field_validator("origin_date", mode="before")
     @classmethod
@@ -121,6 +125,7 @@ class SourcebookEntryUpdate(BaseModel):
     destination_datetime: Optional[str] = None
     destination_relative: Optional[str] = None
     creates_new_timeline: Optional[bool] = None
+    timeline_id: Optional[str] = None
 
     @field_validator("origin_date", mode="before")
     @classmethod

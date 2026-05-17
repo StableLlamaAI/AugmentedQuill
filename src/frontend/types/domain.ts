@@ -72,6 +72,7 @@ export interface SourcebookEntry {
   destination_datetime?: string | null;
   destination_relative?: string | null;
   creates_new_timeline?: boolean;
+  timeline_id?: string | null;
 }
 
 export interface Story {
@@ -143,6 +144,7 @@ export interface Scene {
   location?: string | null;
   time?: string | null;
   scene_time?: SceneChronologyTime | null;
+  timeline_id?: string;
   color_tag?: string | null;
   prose_link?: SceneProseLink | null;
   order_before: SceneId[];

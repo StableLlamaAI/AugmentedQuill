@@ -31,6 +31,7 @@ import { listProjectImages } from '../sourcebook/sourcebookApi';
 import { ProjectImage } from '../../services/apiTypes';
 import { SceneTemporalDialog } from './SceneTemporalDialog';
 import { getSceneEpochNanoseconds } from './sceneSortUtils';
+import { buildSceneTimelineOptions } from './timelineOptions';
 import {
   parseZonedDateTime,
   toDisplayString,
@@ -80,6 +81,7 @@ type DirtySnapshot = {
   colorTag: string | null;
   status: Scene['status'];
   sceneTimeValue: string | null;
+  timelineId: string;
 };
 
 interface SceneEditorDialogProps {
@@ -196,6 +198,7 @@ export const SceneEditorDialog: React.FC<SceneEditorDialogProps> = ({
   const [sceneTimeValue, setSceneTimeValue] = useState<string | null>(
     scene.scene_time?.temporal_zoned_datetime ?? null
   );
+  const [timelineId, setTimelineId] = useState<string>(scene.timeline_id ?? 'main');
   const [temporalEditTarget, setTemporalEditTarget] =
     useState<TemporalEditTarget | null>(null);
   const [ageEditTarget, setAgeEditTarget] = useState<AgeEditTarget | null>(null);
@@ -231,6 +234,23 @@ export const SceneEditorDialog: React.FC<SceneEditorDialogProps> = ({
 
   /** Total number of timelines active at this scene (main + branches). */
   const activeTimelinesAtScene = activeBranchTimelines.length + 1;
+
+  const sceneEpochNanosecondsById = useMemo((): Map<SceneId, bigint> => {
+    const epochMap = new Map<SceneId, bigint>();
+    allScenes.forEach((sceneItem: Scene): void => {
+      const epochNanoseconds = getSceneEpochNanoseconds(sceneItem);
+      if (epochNanoseconds !== null) {
+        epochMap.set(sceneItem.id, epochNanoseconds);
+      }
+    });
+    return epochMap;
+  }, [allScenes]);
+
+  const timelineOptions = useMemo(
+    () =>
+      buildSceneTimelineOptions(scene, sourcebookEntries, sceneEpochNanosecondsById),
+    [scene, sourcebookEntries, sceneEpochNanosecondsById]
+  );
 
   /**
    * Collect known personal_age values per timeline context.
@@ -359,6 +379,7 @@ export const SceneEditorDialog: React.FC<SceneEditorDialogProps> = ({
     );
     setSourcebookInput('');
     setSceneTimeValue(scene.scene_time?.temporal_zoned_datetime ?? null);
+    setTimelineId(scene.timeline_id ?? 'main');
     setTemporalEditTarget(null);
     setAgeEditTarget(null);
     setAgeEditValue('');
@@ -384,6 +405,7 @@ export const SceneEditorDialog: React.FC<SceneEditorDialogProps> = ({
       colorTag: scene.color_tag ?? null,
       status: scene.status,
       sceneTimeValue: scene.scene_time?.temporal_zoned_datetime ?? null,
+      timelineId: scene.timeline_id ?? 'main',
     };
   }, [isOpen, scene, getLinkedProseText]);
 
@@ -436,6 +458,7 @@ export const SceneEditorDialog: React.FC<SceneEditorDialogProps> = ({
       colorTag !== snapshot.colorTag ||
       status !== snapshot.status ||
       sceneTimeValue !== snapshot.sceneTimeValue ||
+      timelineId !== snapshot.timelineId ||
       proseDirty
     );
   })();
@@ -589,6 +612,7 @@ export const SceneEditorDialog: React.FC<SceneEditorDialogProps> = ({
         passive_characters: passiveTokens.map((t: CharToken) => t.name),
         sourcebook_entry_ids: sourcebookTags.map((t: SourcebookTag) => t.id),
         scene_time: sceneTimeValue ? { temporal_zoned_datetime: sceneTimeValue } : null,
+        timeline_id: timelineId,
         color_tag: colorTag,
         status,
         tag_personal_datetimes: tagPersonalDatetimes,
@@ -1152,6 +1176,23 @@ export const SceneEditorDialog: React.FC<SceneEditorDialogProps> = ({
                   {sceneTimeValue ? t('Edit') : t('Set Time')}
                 </button>
               </div>
+            </div>
+            <div className="mb-2">
+              <label className={labelCls}>{t('Timeline')}</label>
+              <select
+                className={inputCls}
+                value={timelineId}
+                onChange={(event: React.ChangeEvent<HTMLSelectElement>): void =>
+                  setTimelineId(event.target.value)
+                }
+                aria-label={t('Scene timeline')}
+              >
+                {timelineOptions.map((option: { id: string; label: string }) => (
+                  <option key={option.id} value={option.id}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
             </div>
             {sceneTimeValue ? (
               <div

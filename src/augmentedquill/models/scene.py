@@ -127,6 +127,23 @@ class SceneBeat(BaseModel):
     )
 
 
+class SceneTimeTravelEvent(BaseModel):
+    """A scene-local time travel event recorded in story.json."""
+
+    entry_refs: list[str] = Field(
+        default_factory=list,
+        description="Sourcebook entry refs involved in the jump.",
+    )
+    target_datetime: Optional[str] = Field(
+        None,
+        description="Target datetime for the jump, if specified.",
+    )
+    relative_description: Optional[str] = Field(
+        None,
+        description="Relative time travel description, if the jump is relative.",
+    )
+
+
 class SceneChronologyTime(BaseModel):
     """Scene-local timeline point represented as a Temporal ZonedDateTime string."""
 
@@ -179,6 +196,7 @@ class Scene(BaseModel):
     location: Optional[str] = None
     time: Optional[str] = None
     scene_time: Optional[SceneChronologyTime] = None
+    timeline_id: str = "main"
     color_tag: Optional[str] = None  # hex color, e.g. "#a855f7"
     prose_link: Optional[SceneProseLink] = None  # used when beats is empty
     order_before: list[SceneId] = []  # scene IDs this scene must precede
@@ -192,6 +210,9 @@ class Scene(BaseModel):
     tag_personal_datetimes: list[SceneTagPersonalDatetime] = Field(
         default_factory=list
     )  # per-tag personal age overrides (supports duplicate characters)
+    time_travel_events: list[SceneTimeTravelEvent] = Field(
+        default_factory=list
+    )  # scene-local time travel events
 
 
 # ---------------------------------------------------------------------------
@@ -253,6 +274,13 @@ class SceneCreateRequest(BaseModel):
             "matters. Accepts ISO-like timestamps and normalizes them."
         ),
     )
+    timeline_id: str = Field(
+        default="main",
+        description=(
+            "Explicit timeline identity for this scene. Use 'main' for the "
+            "primary timeline and stable IDs for branch timelines."
+        ),
+    )
     color_tag: Optional[str] = Field(
         None,
         description="Optional color label for the scene card, usually a hex string.",
@@ -302,6 +330,10 @@ class SceneCreateRequest(BaseModel):
             "ordering. Leave empty unless you need those overrides."
         ),
     )
+    time_travel_events: list[SceneTimeTravelEvent] = Field(
+        default_factory=list,
+        description="Scene-local time travel events recorded for this scene.",
+    )
 
 
 class SceneUpdateRequest(BaseModel):
@@ -338,6 +370,10 @@ class SceneUpdateRequest(BaseModel):
     scene_time: Optional[SceneChronologyTime] = Field(
         None,
         description="Replacement formal chronology timestamp for the scene.",
+    )
+    timeline_id: Optional[str] = Field(
+        None,
+        description="Replacement explicit timeline identity for the scene.",
     )
     color_tag: Optional[str] = Field(
         None,
@@ -378,6 +414,13 @@ class SceneUpdateRequest(BaseModel):
             "field unchanged, or an explicit list to replace it."
         ),
     )  # None = no change
+    time_travel_events: Optional[list[SceneTimeTravelEvent]] = Field(
+        default=None,
+        description=(
+            "Replacement scene-local time travel events. Use None to leave the "
+            "field unchanged, or an explicit list to replace it."
+        ),
+    )
 
 
 class SceneLinkProseRequest(BaseModel):

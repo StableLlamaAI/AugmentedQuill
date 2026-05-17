@@ -43,6 +43,7 @@ import { SourcebookEntry, SourcebookRelation, AppTheme } from '../../types';
 import { ProjectImage } from '../../services/apiTypes';
 import { CodeMirrorEditor } from '../editor/CodeMirrorEditor';
 import { SceneDatetimePickerButton } from '../scenes/SceneDatetimePickerButton';
+import type { TimelineOption } from '../scenes/timelineOptions';
 
 const CATEGORY_DETAILS: Record<
   string,
@@ -191,6 +192,8 @@ interface BasicSectionProps {
   destinationDatetime: string | null;
   destinationRelative: string;
   createsNewTimeline: boolean;
+  timelineId: string;
+  timelineOptions: TimelineOption[];
   inputBorderClass: string;
   inputBgClass: string;
   labelClass: string;
@@ -206,6 +209,7 @@ interface BasicSectionProps {
   onDestinationDatetimeChange: (value: string | null) => void;
   onDestinationRelativeChange: (value: string) => void;
   onCreatesNewTimelineChange: (value: boolean) => void;
+  onTimelineIdChange: (value: string) => void;
 }
 
 export const SourcebookEntryBasicsSection: React.FC<BasicSectionProps> = ({
@@ -217,6 +221,8 @@ export const SourcebookEntryBasicsSection: React.FC<BasicSectionProps> = ({
   destinationDatetime,
   destinationRelative,
   createsNewTimeline,
+  timelineId,
+  timelineOptions,
   inputBorderClass,
   inputBgClass,
   labelClass,
@@ -232,6 +238,7 @@ export const SourcebookEntryBasicsSection: React.FC<BasicSectionProps> = ({
   onDestinationDatetimeChange,
   onDestinationRelativeChange,
   onCreatesNewTimelineChange,
+  onTimelineIdChange,
 }: BasicSectionProps) => (
   <>
     <div className="space-y-4">
@@ -410,6 +417,26 @@ export const SourcebookEntryBasicsSection: React.FC<BasicSectionProps> = ({
           >
             {t('Creates new timeline')}
           </label>
+        </div>
+        <div className="space-y-2">
+          <label
+            className={`text-xs font-semibold uppercase tracking-wider ${labelClass}`}
+          >
+            {t('Timeline')}
+          </label>
+          <select
+            value={timelineId}
+            onChange={(e: React.ChangeEvent<HTMLSelectElement>): void =>
+              onTimelineIdChange(e.target.value)
+            }
+            className={`w-full px-3 py-2 text-sm rounded-md border ${inputBorderClass} ${inputBgClass} focus:outline-none focus:ring-2 focus:ring-brand-500 transition-colors`}
+          >
+            {timelineOptions.map((option: TimelineOption) => (
+              <option key={option.id} value={option.id}>
+                {option.label}
+              </option>
+            ))}
+          </select>
         </div>
       </>
     )}

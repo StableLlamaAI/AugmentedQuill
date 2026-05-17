@@ -6784,6 +6784,11 @@
               }
             ]
           },
+          "timeline_id": {
+            "type": "string",
+            "title": "Timeline Id",
+            "default": "main"
+          },
           "color_tag": {
             "anyOf": [
               {
@@ -6853,6 +6858,13 @@
             },
             "type": "array",
             "title": "Tag Personal Datetimes"
+          },
+          "time_travel_events": {
+            "items": {
+              "$ref": "#/components/schemas/SceneTimeTravelEvent"
+            },
+            "type": "array",
+            "title": "Time Travel Events"
           }
         },
         "type": "object",
@@ -6864,11 +6876,13 @@
         "properties": {
           "id": {
             "type": "string",
-            "title": "Id"
+            "title": "Id",
+            "description": "Stable beat identifier. Usually generated automatically."
           },
           "text": {
             "type": "string",
-            "title": "Text"
+            "title": "Text",
+            "description": "Short description of the beat's action or event."
           },
           "prose_link": {
             "anyOf": [
@@ -6878,7 +6892,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "Optional link from this beat to a specific prose range."
           }
         },
         "type": "object",
@@ -6910,7 +6925,8 @@
         "properties": {
           "temporal_zoned_datetime": {
             "type": "string",
-            "title": "Temporal Zoned Datetime"
+            "title": "Temporal Zoned Datetime",
+            "description": "Normalized ISO 8601 timestamp for the scene's chronology."
           }
         },
         "type": "object",
@@ -6923,6 +6939,7 @@
           "summary": {
             "type": "string",
             "title": "Summary",
+            "description": "Scene summary / label. Scenes do not have a separate title field; use this field instead. Keep it short, specific, and suitable for a scene card heading.",
             "default": ""
           },
           "beats": {
@@ -6931,7 +6948,7 @@
             },
             "type": "array",
             "title": "Beats",
-            "default": []
+            "description": "Optional ordered beats inside the scene. Use when the scene needs a micro-beat breakdown."
           },
           "active_characters": {
             "items": {
@@ -6939,7 +6956,7 @@
             },
             "type": "array",
             "title": "Active Characters",
-            "default": []
+            "description": "Character IDs actively participating in the scene. Use sourcebook/character IDs, not display names, when available."
           },
           "passive_characters": {
             "items": {
@@ -6947,7 +6964,7 @@
             },
             "type": "array",
             "title": "Passive Characters",
-            "default": []
+            "description": "Character IDs present but not actively driving the scene. Use sourcebook/character IDs, not display names, when available."
           },
           "sourcebook_entry_ids": {
             "items": {
@@ -6955,7 +6972,7 @@
             },
             "type": "array",
             "title": "Sourcebook Entry Ids",
-            "default": []
+            "description": "Sourcebook entry IDs needed to ground the scene's facts, setting, or canon references."
           },
           "location": {
             "anyOf": [
@@ -6966,7 +6983,8 @@
                 "type": "null"
               }
             ],
-            "title": "Location"
+            "title": "Location",
+            "description": "Location identifier or location name for where the scene occurs."
           },
           "time": {
             "anyOf": [
@@ -6977,7 +6995,8 @@
                 "type": "null"
               }
             ],
-            "title": "Time"
+            "title": "Time",
+            "description": "Human-readable scene time string when a formal chronology is not needed."
           },
           "scene_time": {
             "anyOf": [
@@ -6987,7 +7006,14 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "Formal timeline position for the scene. Prefer this when ordering matters. Accepts ISO-like timestamps and normalizes them."
+          },
+          "timeline_id": {
+            "type": "string",
+            "title": "Timeline Id",
+            "description": "Explicit timeline identity for this scene. Use 'main' for the primary timeline and stable IDs for branch timelines.",
+            "default": "main"
           },
           "color_tag": {
             "anyOf": [
@@ -6998,7 +7024,8 @@
                 "type": "null"
               }
             ],
-            "title": "Color Tag"
+            "title": "Color Tag",
+            "description": "Optional color label for the scene card, usually a hex string."
           },
           "prose_link": {
             "anyOf": [
@@ -7008,7 +7035,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "Optional prose link showing which content file the scene is linked to prose. Use this when the scene is already anchored to prose."
           },
           "order_before": {
             "items": {
@@ -7016,7 +7044,7 @@
             },
             "type": "array",
             "title": "Order Before",
-            "default": []
+            "description": "IDs of scenes that should come before this one in narrative order."
           },
           "order_after": {
             "items": {
@@ -7024,7 +7052,7 @@
             },
             "type": "array",
             "title": "Order After",
-            "default": []
+            "description": "IDs of scenes that should come after this one in narrative order."
           },
           "order_index": {
             "anyOf": [
@@ -7035,21 +7063,25 @@
                 "type": "null"
               }
             ],
-            "title": "Order Index"
+            "title": "Order Index",
+            "description": "Optional explicit narrative sort key. Leave empty unless the scene must be placed precisely in sequence."
           },
           "pinboard_x": {
             "type": "number",
             "title": "Pinboard X",
+            "description": "Pinboard X position in logical canvas units.",
             "default": 100.0
           },
           "pinboard_y": {
             "type": "number",
             "title": "Pinboard Y",
+            "description": "Pinboard Y position in logical canvas units.",
             "default": 100.0
           },
           "status": {
             "type": "string",
             "title": "Status",
+            "description": "Scene lifecycle status such as active, inactive, or draft.",
             "default": "active"
           },
           "tag_personal_datetimes": {
@@ -7057,7 +7089,16 @@
               "$ref": "#/components/schemas/SceneTagPersonalDatetime"
             },
             "type": "array",
-            "title": "Tag Personal Datetimes"
+            "title": "Tag Personal Datetimes",
+            "description": "Per-tag personal age overrides used for time-travel or age-specific ordering. Leave empty unless you need those overrides."
+          },
+          "time_travel_events": {
+            "items": {
+              "$ref": "#/components/schemas/SceneTimeTravelEvent"
+            },
+            "type": "array",
+            "title": "Time Travel Events",
+            "description": "Scene-local time travel events recorded for this scene."
           }
         },
         "type": "object",
@@ -7201,7 +7242,8 @@
         "properties": {
           "scope_type": {
             "type": "string",
-            "title": "Scope Type"
+            "title": "Scope Type",
+            "description": "Which content scope the scene is linked to: 'story' or 'chapter'."
           },
           "chapter_id": {
             "anyOf": [
@@ -7212,7 +7254,8 @@
                 "type": "null"
               }
             ],
-            "title": "Chapter Id"
+            "title": "Chapter Id",
+            "description": "Chapter ID when scope_type='chapter'. Leave empty for story scope."
           },
           "book_id": {
             "anyOf": [
@@ -7223,7 +7266,8 @@
                 "type": "null"
               }
             ],
-            "title": "Book Id"
+            "title": "Book Id",
+            "description": "Book ID when the linked prose belongs to a book chapter."
           },
           "start_offset": {
             "anyOf": [
@@ -7234,7 +7278,8 @@
                 "type": "null"
               }
             ],
-            "title": "Start Offset"
+            "title": "Start Offset",
+            "description": "Computed start offset within the linked content file."
           },
           "end_offset": {
             "anyOf": [
@@ -7245,7 +7290,8 @@
                 "type": "null"
               }
             ],
-            "title": "End Offset"
+            "title": "End Offset",
+            "description": "Computed end offset within the linked content file."
           }
         },
         "type": "object",
@@ -7338,26 +7384,69 @@
           "role": {
             "type": "string",
             "enum": ["active", "passive", "sourcebook"],
-            "title": "Role"
+            "title": "Role",
+            "description": "Which tag list this override applies to."
           },
           "ref": {
             "type": "string",
-            "title": "Ref"
+            "title": "Ref",
+            "description": "Character name or sourcebook entry ID for the tag."
           },
           "index": {
             "type": "integer",
             "title": "Index",
+            "description": "0-based position within the chosen tag list. Use this when the same character appears multiple times.",
             "default": 0
           },
           "personal_age": {
             "type": "string",
-            "title": "Personal Age"
+            "title": "Personal Age",
+            "description": "Human-readable age such as '17y', '17y 3m', or '30d'."
           }
         },
         "type": "object",
         "required": ["role", "ref", "personal_age"],
         "title": "SceneTagPersonalDatetime",
         "description": "Personal age override for one specific tag instance in a scene.\n\n``role`` is ``'active'``, ``'passive'``, or ``'sourcebook'``.\n``ref`` is the character name (for active/passive) or sourcebook entry ID\n(for sourcebook).\n``index`` is the 0-based position within the role's list \u2013 this allows\nthe same character to appear multiple times in one scene (e.g. a time\ntraveller meeting their younger self).\n``personal_age`` is a human-readable age string such as ``'17y'``,\n``'17y 3m'``, ``'5m 12d'``, or ``'30d'``."
+      },
+      "SceneTimeTravelEvent": {
+        "properties": {
+          "entry_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Entry Refs",
+            "description": "Sourcebook entry refs involved in the jump."
+          },
+          "target_datetime": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Datetime",
+            "description": "Target datetime for the jump, if specified."
+          },
+          "relative_description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Relative Description",
+            "description": "Relative time travel description, if the jump is relative."
+          }
+        },
+        "type": "object",
+        "title": "SceneTimeTravelEvent",
+        "description": "A scene-local time travel event recorded in story.json."
       },
       "SceneUpdateProseContentRequest": {
         "properties": {
@@ -7382,7 +7471,8 @@
                 "type": "null"
               }
             ],
-            "title": "Summary"
+            "title": "Summary",
+            "description": "Replacement scene label/summary. Use this instead of a title."
           },
           "beats": {
             "anyOf": [
@@ -7396,7 +7486,8 @@
                 "type": "null"
               }
             ],
-            "title": "Beats"
+            "title": "Beats",
+            "description": "Full replacement beat list for the scene."
           },
           "active_characters": {
             "anyOf": [
@@ -7410,7 +7501,8 @@
                 "type": "null"
               }
             ],
-            "title": "Active Characters"
+            "title": "Active Characters",
+            "description": "Full replacement list of active character IDs."
           },
           "passive_characters": {
             "anyOf": [
@@ -7424,7 +7516,8 @@
                 "type": "null"
               }
             ],
-            "title": "Passive Characters"
+            "title": "Passive Characters",
+            "description": "Full replacement list of passive character IDs."
           },
           "sourcebook_entry_ids": {
             "anyOf": [
@@ -7438,7 +7531,8 @@
                 "type": "null"
               }
             ],
-            "title": "Sourcebook Entry Ids"
+            "title": "Sourcebook Entry Ids",
+            "description": "Full replacement list of sourcebook entry IDs."
           },
           "location": {
             "anyOf": [
@@ -7449,7 +7543,8 @@
                 "type": "null"
               }
             ],
-            "title": "Location"
+            "title": "Location",
+            "description": "Replacement location identifier or name."
           },
           "time": {
             "anyOf": [
@@ -7460,7 +7555,8 @@
                 "type": "null"
               }
             ],
-            "title": "Time"
+            "title": "Time",
+            "description": "Replacement human-readable time string."
           },
           "scene_time": {
             "anyOf": [
@@ -7470,7 +7566,20 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "Replacement formal chronology timestamp for the scene."
+          },
+          "timeline_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timeline Id",
+            "description": "Replacement explicit timeline identity for the scene."
           },
           "color_tag": {
             "anyOf": [
@@ -7481,7 +7590,8 @@
                 "type": "null"
               }
             ],
-            "title": "Color Tag"
+            "title": "Color Tag",
+            "description": "Replacement card color tag."
           },
           "prose_link": {
             "anyOf": [
@@ -7491,7 +7601,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "Replacement prose link for the scene."
           },
           "order_before": {
             "anyOf": [
@@ -7505,7 +7616,8 @@
                 "type": "null"
               }
             ],
-            "title": "Order Before"
+            "title": "Order Before",
+            "description": "Replacement list of scene IDs that should come before this scene."
           },
           "order_after": {
             "anyOf": [
@@ -7519,7 +7631,8 @@
                 "type": "null"
               }
             ],
-            "title": "Order After"
+            "title": "Order After",
+            "description": "Replacement list of scene IDs that should come after this scene."
           },
           "order_index": {
             "anyOf": [
@@ -7530,7 +7643,8 @@
                 "type": "null"
               }
             ],
-            "title": "Order Index"
+            "title": "Order Index",
+            "description": "Replacement narrative sort key."
           },
           "pinboard_x": {
             "anyOf": [
@@ -7541,7 +7655,8 @@
                 "type": "null"
               }
             ],
-            "title": "Pinboard X"
+            "title": "Pinboard X",
+            "description": "Replacement pinboard X position."
           },
           "pinboard_y": {
             "anyOf": [
@@ -7552,7 +7667,8 @@
                 "type": "null"
               }
             ],
-            "title": "Pinboard Y"
+            "title": "Pinboard Y",
+            "description": "Replacement pinboard Y position."
           },
           "status": {
             "anyOf": [
@@ -7563,7 +7679,8 @@
                 "type": "null"
               }
             ],
-            "title": "Status"
+            "title": "Status",
+            "description": "Replacement lifecycle status such as active, inactive, or draft."
           },
           "tag_personal_datetimes": {
             "anyOf": [
@@ -7577,7 +7694,23 @@
                 "type": "null"
               }
             ],
-            "title": "Tag Personal Datetimes"
+            "title": "Tag Personal Datetimes",
+            "description": "Replacement per-tag personal age overrides. Use None to leave the field unchanged, or an explicit list to replace it."
+          },
+          "time_travel_events": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/SceneTimeTravelEvent"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Time Travel Events",
+            "description": "Replacement scene-local time travel events. Use None to leave the field unchanged, or an explicit list to replace it."
           }
         },
         "type": "object",
@@ -7911,6 +8044,17 @@
             "type": "boolean",
             "title": "Creates New Timeline",
             "default": false
+          },
+          "timeline_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timeline Id"
           }
         },
         "type": "object",
@@ -8000,6 +8144,17 @@
             "type": "boolean",
             "title": "Creates New Timeline",
             "default": false
+          },
+          "timeline_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timeline Id"
           }
         },
         "type": "object",
@@ -8127,6 +8282,17 @@
               }
             ],
             "title": "Creates New Timeline"
+          },
+          "timeline_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timeline Id"
           }
         },
         "type": "object",
@@ -8791,6 +8957,17 @@
               }
             ],
             "title": "Creates New Timeline"
+          },
+          "timeline_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timeline Id"
           }
         },
         "type": "object",

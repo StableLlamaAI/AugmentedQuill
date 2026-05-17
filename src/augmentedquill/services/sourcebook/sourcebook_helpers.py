@@ -229,6 +229,7 @@ def _normalize_entry_data(e_data: dict) -> dict:
         "destination_datetime": e_data.get("destination_datetime"),
         "destination_relative": e_data.get("destination_relative"),
         "creates_new_timeline": e_data.get("creates_new_timeline", False),
+        "timeline_id": e_data.get("timeline_id"),
     }
 
 
@@ -379,6 +380,7 @@ def sourcebook_create_entry(
     destination_datetime: str | None = None,
     destination_relative: str | None = None,
     creates_new_timeline: bool = False,
+    timeline_id: str | None = None,
     active: Any = None,
 ) -> Dict:
     """Create a sourcebook entry for the active project."""
@@ -473,6 +475,10 @@ def sourcebook_create_entry(
         new_entry_data["destination_relative"] = destination_relative
     if creates_new_timeline:
         new_entry_data["creates_new_timeline"] = creates_new_timeline
+        if isinstance(timeline_id, str) and timeline_id.strip():
+            new_entry_data["timeline_id"] = timeline_id.strip()
+        else:
+            new_entry_data["timeline_id"] = f"branch:{name}"
 
     sb_dict[name] = new_entry_data
     story["sourcebook"] = sb_dict
@@ -520,6 +526,7 @@ def sourcebook_update_entry(
     destination_datetime: str | None | object = _UNSET,
     destination_relative: str | None | object = _UNSET,
     creates_new_timeline: bool | None | object = _UNSET,
+    timeline_id: str | None | object = _UNSET,
     active: Any = None,
 ) -> Dict:
     """Sourcebook Update Entry."""
@@ -666,6 +673,22 @@ def sourcebook_update_entry(
             entry_data.pop("creates_new_timeline", None)
         else:
             entry_data["creates_new_timeline"] = creates_new_timeline
+            if creates_new_timeline and not isinstance(
+                entry_data.get("timeline_id"), str
+            ):
+                entry_data["timeline_id"] = f"branch:{found_key}"
+
+    if timeline_id is not _UNSET:
+        if timeline_id is None:
+            entry_data.pop("timeline_id", None)
+        elif isinstance(timeline_id, str):
+            trimmed = timeline_id.strip()
+            if trimmed:
+                entry_data["timeline_id"] = trimmed
+            else:
+                entry_data.pop("timeline_id", None)
+        else:
+            return {"error": "Invalid timeline_id: timeline_id must be a string."}
 
     sb_dict[found_key] = entry_data
     story["sourcebook"] = sb_dict
