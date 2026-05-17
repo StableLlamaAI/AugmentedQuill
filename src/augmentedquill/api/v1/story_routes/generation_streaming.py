@@ -18,7 +18,7 @@ import re
 
 from augmentedquill.api.v1.dependencies import ProjectDep
 from augmentedquill.core.config import BASE_DIR, save_story_config
-from augmentedquill.core.prompts import get_user_prompt, get_system_message
+from augmentedquill.core.prompts import get_system_message, get_user_prompt
 from augmentedquill.services.llm import llm
 from augmentedquill.services.story.story_api_prompt_ops import (
     resolve_model_runtime,
@@ -34,6 +34,7 @@ from augmentedquill.services.projects.projects import read_story_content
 from augmentedquill.services.story.story_generation_common import (
     _restore_summary_for_rewrite,
     gather_writing_context,
+    get_scene_context_for_scope,
     prepare_ai_action_generation,
     prepare_chapter_summary_generation,
     prepare_continue_chapter_generation,
@@ -44,6 +45,9 @@ from augmentedquill.services.story.story_generation_common import (
 from augmentedquill.services.story.story_api_stream_ops import (
     stream_collect_and_persist,
     stream_unified_chat_content,
+)
+from augmentedquill.services.scenes.scene_generation_service import (
+    auto_link_scope_text,
 )
 from augmentedquill.services.exceptions import ServiceError
 from augmentedquill.services.chat.chat_tool_decorator import WRITING_ROLE
@@ -582,11 +586,10 @@ def _as_streaming_response(
 async def api_story_sourcebook_relevance(
     request: Request, project_dir: ProjectDep
 ) -> Any:
-    """Ask the WRITING model which sourcebook entries are relevant.
+    """Return scene-derived sourcebook entries relevant to the active prose end.
 
-    This is a lightweight helper used by the frontend to keep checkboxes
-    in sync.  It is deliberately separate from the prose suggestion call so
-    that we can run it in the background on every text change.
+    This runs in the background while the user types, so it must stay
+    deterministic, cheap, and free of LLM latency.
     """
     try:
         payload = await parse_json_body(request)
@@ -612,115 +615,14 @@ async def api_story_sourcebook_relevance(
                 if scope == "story"
                 else read_text_or_raise(path)
             )
-
-        # gather story and entries
-        all_entries = []
-        try:
-            from augmentedquill.services.sourcebook.sourcebook_helpers import (
-                sourcebook_list_entries,
-            )
-
-            all_entries = sourcebook_list_entries(active=project_dir)
-        except (ImportError, OSError, TypeError, ValueError, RuntimeError):
-            # if sourcebook is unavailable, just return empty list
-            return {"relevant": []}
-
-        # prepare prompt using same template as before; model_type WRITING
-        # build newline-separated list: name plus synonyms in parentheses
-        entry_lines = []
-        for e in all_entries:
-            parts = [e.get("name", "")]
-            syns = e.get("synonyms") or []
-            if syns:
-                parts.append(f"({', '.join(syns)})")
-            entry_lines.append(" ".join(parts))
-        text_for_relevance = current_text or ""
-        paras = [p for p in re.split(r"\n\n+", text_for_relevance) if p.strip()]
-        recent = "\n\n".join(paras[-3:]) if paras else ""
-
-        prompt = get_user_prompt(
-            "select_relevant_entries",
-            language=story.get("language", "en"),
-            recent_paragraphs=recent,
-            entries="\n".join(entry_lines),
-            user_prompt_overrides={},
+        scene_context = get_scene_context_for_scope(
+            story=story,
+            scope=scope,
+            chap_id=(payload or {}).get("chap_id") if scope == "chapter" else None,
+            current_text=current_text,
+            include_all_scenes=False,
         )
-
-        (
-            base_url,
-            api_key,
-            model_id,
-            timeout_s,
-            model_name,
-            model_overrides,
-            _model_type,
-        ) = resolve_model_runtime(
-            payload=payload,
-            model_type=WRITING_ROLE,
-            base_dir=BASE_DIR,
-        )
-        # guarantee at least 120 seconds for background relevance requests to
-        # reduce spurious ReadTimeouts when using slow reasoning models.
-        if timeout_s is None or timeout_s < 120:
-            timeout_s = 120
-
-        # ask the model synchronously and return the list of names.  If the
-        # request fails (timeout, network error, etc.) we treat it as a
-        # non‑fatal problem because relevance is a best‑effort feature.  Anything
-        # that isn't immediately useful should just yield an empty result so the
-        # frontend can continue working without an error dialog.
-        try:
-            res = await llm.unified_chat_complete(
-                caller_id="api.story.sourcebook_relevance",
-                model_type=WRITING_ROLE,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": get_system_message(
-                            "entry_selector",
-                            model_overrides,
-                            language=story.get("language", "en"),
-                        ),
-                    },
-                    {"role": "user", "content": prompt},
-                ],
-                base_url=base_url,
-                api_key=api_key,
-                model_id=model_id,
-                timeout_s=timeout_s,
-                model_name=model_name,
-            )
-            raw = res.get("content", "")
-            # split on newlines/commas and trim
-            relevant_names = [
-                name.strip() for name in re.split(r"[\n,]+", raw) if name.strip()
-            ]
-
-            relevant_ids = []
-            for name in relevant_names:
-                for e in all_entries:
-                    if e.get("name") == name or name in (e.get("synonyms") or []):
-                        eid = e.get("id")
-                        if eid:
-                            relevant_ids.append(eid)
-                        break
-
-            return {"relevant": relevant_ids}
-        except (OSError, TypeError, ValueError, RuntimeError) as e:
-            # log the failure for debugging then return an empty list; the
-            # front end already ignores errors, but returning a 200 with no
-            # entries keeps the UI quiet and avoids repeated exception noise.
-            # We don't have a request/response to log here; just record the
-            # fact that the background relevance check failed so developers can
-            # see it when inspecting the logs.
-            from augmentedquill.services import llm as _llm_module
-
-            _llm_module.llm_logging.add_llm_log(
-                {
-                    "relevance_error": str(e),
-                }
-            )
-            return {"relevant": []}
+        return {"relevant": scene_context.get("sourcebook_ids", [])}
     except ServiceError as e:
         raise HTTPException(
             status_code=e.status_code,
@@ -1076,6 +978,65 @@ async def api_story_action_stream(request: Request, project_dir: ProjectDep) -> 
         prepared = prepare_ai_action_generation(payload, active=project_dir)
 
         return _as_streaming_response(lambda: _create_gen_source(prepared))
+
+    return await _with_parsed_payload(
+        request,
+        _handler,
+        internal_error_prefix="",
+        include_exception_text=False,
+        use_raw_exception_detail=True,
+    )
+
+
+@router.post("/chapters/{chap_id}/rewrite-and-relink")
+async def api_chapter_rewrite_and_relink(
+    request: Request, project_dir: ProjectDep, chap_id: int
+) -> Any:
+    """Atomically rewrite a chapter and auto-link scenes in one transaction.
+
+    This endpoint streams the generated content and persists it,
+    then performs scene auto-linking on the resulting text.
+    """
+
+    async def _handler(payload: dict) -> Any:
+        """Helper to stream, persist chapter text, then auto-link scenes."""
+        prepared = prepare_write_chapter_generation(
+            payload, chap_id, active=project_dir
+        )
+
+        # Collect streamed content, persist to file
+        collected_content = ""
+        async for item in stream_collect_and_persist(
+            lambda: _create_gen_source_pure(prepared),
+            persist_on_complete=lambda content: prepared["path"].write_text(
+                content, encoding="utf-8"
+            ),
+        ):
+            # Yield the stream data back to client
+            yield item
+            # Extract content from SSE data line if present
+            if isinstance(item, str) and item.startswith("data: "):
+                try:
+                    chunk = json.loads(item[6:])
+                    if isinstance(chunk, dict) and "choices" in chunk:
+                        delta = chunk["choices"][0].get("delta", {})
+                        if "content" in delta:
+                            collected_content += delta["content"]
+                except (json.JSONDecodeError, (KeyError, IndexError, TypeError)):
+                    pass
+
+        # After stream completes, auto-link scenes in this chapter
+        try:
+            await auto_link_scope_text(
+                project_dir,
+                scope_type="chapter",
+                chapter_id=chap_id,
+                current_text=collected_content
+                or prepared["path"].read_text(encoding="utf-8"),
+            )
+        except Exception:
+            # Log but don't fail the response; scene linking is post-process
+            pass
 
     return await _with_parsed_payload(
         request,

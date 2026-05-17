@@ -11,6 +11,7 @@
 
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
+import type { Scene } from '../../types';
 
 import { StoryState } from '../../types';
 import { api } from '../../services/api';
@@ -22,23 +23,35 @@ import {
   useStory,
 } from './useStory';
 
-vi.mock('../../services/api', () => ({
-  api: {
-    projects: {
-      list: vi.fn(),
-      select: vi.fn(),
+vi.mock('../../services/api', () => {
+  const scenesListMock = vi.fn();
+  const chaptersListMock = vi.fn();
+  const storyGetContentMock = vi.fn();
+  const forProjectMock = vi.fn(() => ({
+    chapters: { list: chaptersListMock },
+    story: { getContent: storyGetContentMock },
+    scenes: { list: scenesListMock },
+  }));
+
+  return {
+    api: {
+      projects: {
+        list: vi.fn(),
+        select: vi.fn(),
+      },
+      forProject: forProjectMock,
+      chapters: {
+        list: chaptersListMock,
+        get: vi.fn(),
+      },
+      story: {
+        updateMetadata: vi.fn(),
+        updateContent: vi.fn(),
+        getContent: storyGetContentMock,
+      },
     },
-    chapters: {
-      list: vi.fn(),
-      get: vi.fn(),
-    },
-    story: {
-      updateMetadata: vi.fn(),
-      updateContent: vi.fn(),
-      getContent: vi.fn(),
-    },
-  },
-}));
+  };
+});
 
 const buildStory = (summary: string): StoryState => ({
   id: 'demo',
@@ -164,6 +177,58 @@ describe('resolveExternalHistorySourceState', () => {
 
     expect(selected.summary).toBe('explicit summary snapshot');
   });
+});
+
+it('patchSourcebook updates the reactive story store immediately', async () => {
+  vi.mocked(api.projects.list).mockResolvedValue({
+    available: [],
+    current: null,
+  } as Awaited<ReturnType<typeof api.projects.list>>);
+  vi.mocked(api.projects.select).mockResolvedValue({ ok: false } as Awaited<
+    ReturnType<typeof api.projects.select>
+  >);
+
+  const hook = await hookWithStory('initial', [buildChapter('1', 'Hello')]);
+
+  act(() => {
+    useStoryStore.getState().setStory(
+      (prev: StoryState): StoryState => ({
+        ...prev,
+        sourcebook: [
+          {
+            id: 'tt-1',
+            name: '1985 -> 1955',
+            description: 'Temporal jump',
+            category: 'Time Travel',
+            synonyms: [],
+            images: [],
+            destination_datetime: '1955-11-05T20:00:00Z',
+            creates_new_timeline: false,
+          },
+        ],
+      })
+    );
+  });
+
+  act(() => {
+    const changed = hook.result.current.patchSourcebook({
+      id: 'tt-1',
+      name: '1985 -> 1955',
+      description: 'Temporal jump',
+      category: 'Time Travel',
+      synonyms: [],
+      images: [],
+      destination_datetime: '2015-10-21T16:29:00Z',
+      creates_new_timeline: true,
+    });
+    expect(changed).toBe(true);
+  });
+
+  const updated = useStoryStore
+    .getState()
+    .story.sourcebook?.find((entry: SourcebookEntry): boolean => entry.id === 'tt-1');
+  expect(updated?.destination_datetime).toBe('2015-10-21T16:29:00Z');
+  expect(updated?.creates_new_timeline).toBe(true);
 });
 
 it('clears chat session mutation tags when undo is used', async () => {
@@ -1056,5 +1121,200 @@ describe('advanceBaselineToCurrentStory', () => {
     // Diff should be between 'AI turn 1' (baseline) and 'AI turn 2' (current).
     expect(result.current.story.chapters[0]?.content).toBe('AI turn 2');
     expect(result.current.baselineState.chapters[0]?.content).toBe('AI turn 1');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// fetchStory scene loading
+// ---------------------------------------------------------------------------
+
+describe('fetchStory: scene loading on project open', () => {
+  const buildSelectResponse = () => ({
+    ok: true,
+    story: {
+      project_type: 'novel',
+      title: 'Test Project',
+      summary: '',
+      style_tags: [],
+      image_style: '',
+      image_additional_info: '',
+      notes: '',
+      private_notes: '',
+      conflicts: [],
+      books: [],
+      sourcebook: [],
+    },
+  });
+
+  const buildScenes = (): Scene[] => [
+    {
+      id: 'scene-1',
+      summary: 'First scene',
+      beats: [],
+      prose_link: null,
+      active_characters: [],
+      passive_characters: [],
+      pinboard_x: 0,
+      pinboard_y: 0,
+      order_before: [],
+      order_after: [],
+    },
+    {
+      id: 'scene-2',
+      summary: 'Second scene',
+      beats: [],
+      prose_link: {
+        scope_type: 'chapter',
+        chapter_id: 'ch1',
+        start_offset: 0,
+        end_offset: 50,
+        content_hash: 'abc',
+      },
+      active_characters: [],
+      passive_characters: [],
+      pinboard_x: 100,
+      pinboard_y: 100,
+      order_before: [],
+      order_after: [],
+    },
+  ];
+
+  const setupForFetch = (scenes: Scene[]) => {
+    vi.mocked(api.projects.list).mockResolvedValue({
+      available: ['my-project'],
+      current: 'my-project',
+    } as unknown as Awaited<ReturnType<typeof api.projects.list>>);
+
+    vi.mocked(api.projects.select).mockResolvedValue(
+      buildSelectResponse() as unknown as Awaited<
+        ReturnType<typeof api.projects.select>
+      >
+    );
+
+    const chaptersListMock = vi.fn().mockResolvedValue({ chapters: [] });
+    const storyGetContentMock = vi.fn().mockResolvedValue({ content: '' });
+    const scenesListMock = vi.fn().mockResolvedValue(scenes);
+
+    vi.mocked(api.forProject).mockReturnValue({
+      chapters: { list: chaptersListMock },
+      story: { getContent: storyGetContentMock },
+      scenes: { list: scenesListMock },
+    } as unknown as ReturnType<typeof api.forProject>);
+
+    return { scenesListMock };
+  };
+
+  it('populates store scenes when project is loaded for the first time (page reload)', async () => {
+    const scenes = buildScenes();
+    setupForFetch(scenes);
+
+    const { result } = renderHook(() => useStory());
+
+    // fetchStory is triggered by hasFetchedRef on mount; wait for async work.
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(result.current.story.scenes).toHaveLength(2);
+    expect(result.current.story.scenes[0].id).toBe('scene-1');
+    expect(result.current.story.scenes[1].id).toBe('scene-2');
+  });
+
+  it('populates store with empty array when project has no scenes', async () => {
+    setupForFetch([]);
+
+    const { result } = renderHook(() => useStory());
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(result.current.story.scenes).toEqual([]);
+  });
+
+  it('tolerates a scenes.list failure and stores an empty array', async () => {
+    vi.mocked(api.projects.list).mockResolvedValue({
+      available: ['my-project'],
+      current: 'my-project',
+    } as unknown as Awaited<ReturnType<typeof api.projects.list>>);
+
+    vi.mocked(api.projects.select).mockResolvedValue(
+      buildSelectResponse() as unknown as Awaited<
+        ReturnType<typeof api.projects.select>
+      >
+    );
+
+    vi.mocked(api.forProject).mockReturnValue({
+      chapters: { list: vi.fn().mockResolvedValue({ chapters: [] }) },
+      story: { getContent: vi.fn().mockResolvedValue({ content: '' }) },
+      scenes: { list: vi.fn().mockRejectedValue(new Error('network error')) },
+    } as unknown as ReturnType<typeof api.forProject>);
+
+    const { result } = renderHook(() => useStory());
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    // A failure must not crash the app — scenes defaults to [].
+    expect(result.current.story.scenes).toEqual([]);
+  });
+
+  it('calls scenes.list exactly once per project load', async () => {
+    const scenes = buildScenes();
+    const { scenesListMock } = setupForFetch(scenes);
+
+    renderHook(() => useStory());
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    // Each project open must trigger exactly one scenes.list call.
+    expect(scenesListMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps scenes populated after refreshStory (no full reload required)', async () => {
+    const scenes = buildScenes();
+    setupForFetch(scenes);
+
+    const { result } = renderHook(() => useStory());
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(result.current.story.scenes).toHaveLength(2);
+
+    await act(async () => {
+      await result.current.refreshStory();
+    });
+
+    expect(result.current.story.scenes).toHaveLength(2);
+    expect(result.current.story.scenes[0].id).toBe('scene-1');
+    expect(result.current.story.scenes[1].id).toBe('scene-2');
+  });
+
+  it('preserves existing scenes when refreshStory scenes.list fails', async () => {
+    const scenes = buildScenes();
+    const { scenesListMock } = setupForFetch(scenes);
+
+    const { result } = renderHook(() => useStory());
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(result.current.story.scenes).toHaveLength(2);
+
+    scenesListMock.mockRejectedValueOnce(new Error('refresh failed'));
+
+    await act(async () => {
+      await result.current.refreshStory();
+    });
+
+    expect(result.current.story.scenes).toHaveLength(2);
+    expect(result.current.story.scenes[0].id).toBe('scene-1');
+    expect(result.current.story.scenes[1].id).toBe('scene-2');
   });
 });

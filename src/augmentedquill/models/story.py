@@ -18,6 +18,7 @@ from __future__ import annotations
 from typing import Any, Optional
 
 from pydantic import BaseModel
+from augmentedquill.models.scene import Scene
 
 # ---------------------------------------------------------------------------
 # Story payload (returned inside several project endpoints)
@@ -64,6 +65,11 @@ class StorySourcebookEntry(BaseModel):
     images: Optional[list[str]] = None
     keywords: Optional[list[str]] = None
     relations: Optional[list[Any]] = None
+    origin_date: Optional[str] = None
+    destination_datetime: Optional[str] = None
+    destination_relative: Optional[str] = None
+    creates_new_timeline: Optional[bool] = None
+    timeline_id: Optional[str] = None
 
 
 class StoryPayload(BaseModel):
@@ -89,6 +95,7 @@ class StoryPayload(BaseModel):
     conflicts: Optional[list[Any]] = None
     llm_prefs: Optional[StoryLLMPrefs] = None
     chapters: Optional[list[StoryChapterSummary]] = None
+    scenes: Optional[list[Scene]] = None
 
 
 # ---------------------------------------------------------------------------

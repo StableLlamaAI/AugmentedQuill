@@ -295,17 +295,19 @@ class ImageFeaturesTest(TestCase):
             call_id = "call_123"
             mutations = {}
 
-            # Test Tool 1: list_images
-            res = await exec_chat_tool("list_images", {}, call_id, payload, mutations)
+            # Test Tool 1: manage_images list
+            res = await exec_chat_tool(
+                "manage_images", {"action": "list"}, call_id, payload, mutations
+            )
             content = json.loads(res["content"])
             # Should have ref.png from previous test? No, clean dir each setUp.
             # But wait, we just created desc_test.jpg
             self.assertEqual(content[0]["filename"], "desc_test.jpg")
 
-            # Test Tool 2: generate_image_description
+            # Test Tool 2: manage_images generate_description
             res = await exec_chat_tool(
-                "generate_image_description",
-                {"filename": "desc_test.jpg"},
+                "manage_images",
+                {"action": "generate_description", "filename": "desc_test.jpg"},
                 call_id,
                 payload,
                 mutations,
@@ -328,10 +330,13 @@ class ImageFeaturesTest(TestCase):
             self.assertEqual(user_msg[1]["type"], "image_url")
             self.assertIn("data:image/jpeg;base64,", user_msg[1]["image_url"]["url"])
 
-            # Test Tool 3: create_image_placeholder
+            # Test Tool 3: manage_images create_placeholder
             res = await exec_chat_tool(
-                "create_image_placeholder",
-                {"description": "A ghost", "title": "Ghost"},
+                "manage_images",
+                {
+                    "action": "create_placeholder",
+                    "create_data": {"description": "A ghost", "title": "Ghost"},
+                },
                 call_id,
                 payload,
                 mutations,

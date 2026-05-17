@@ -73,9 +73,10 @@ class SourcebookSearchRefinementTest(TestCase):
                             "id": "c1",
                             "type": "function",
                             "function": {
-                                "name": "search_in_project",
+                                "name": "search_and_replace",
                                 "arguments": json.dumps(
                                     {
+                                        "action": "search",
                                         "query": query,
                                         "scope": scope,
                                     }

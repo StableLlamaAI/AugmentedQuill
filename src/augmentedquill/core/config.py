@@ -25,6 +25,7 @@ import logging
 import os
 import re
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any, Dict, Mapping, Optional
 
@@ -52,7 +53,7 @@ PROJECTS_ROOT = DATA_DIR / "projects"
 LOGS_DIR = DATA_DIR / "logs"
 STATIC_DIR = BASE_DIR / "static"
 
-CURRENT_SCHEMA_VERSION = 2
+CURRENT_SCHEMA_VERSION = 4
 USER_CONFIG_DIR = DATA_DIR / "config"
 DEFAULT_MACHINE_CONFIG_PATH = (
     Path(os.getenv("AUGQ_MACHINE_CONFIG_PATH"))
@@ -258,9 +259,20 @@ def save_story_config(path: os.PathLike[str] | str, config: Dict[str, Any]) -> N
         p.parent.mkdir(parents=True)
 
     clean_config = clean_story_config_for_disk(config)
-
-    with p.open("w", encoding="utf-8") as f:
-        json.dump(clean_config, f, indent=2, ensure_ascii=False)
+    temp_path: Path | None = None
+    replaced = False
+    with tempfile.NamedTemporaryFile(
+        mode="w", encoding="utf-8", dir=p.parent, delete=False
+    ) as tmp_file:
+        json.dump(clean_config, tmp_file, indent=2, ensure_ascii=False)
+        tmp_file.write("\n")
+        temp_path = Path(tmp_file.name)
+    try:
+        os.replace(temp_path, p)
+        replaced = True
+    finally:
+        if temp_path is not None and temp_path.exists() and not replaced:
+            temp_path.unlink(missing_ok=True)
 
 
 def load_model_presets_config(

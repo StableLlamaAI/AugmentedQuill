@@ -48,8 +48,8 @@ async def test_stream_unified_chat_content_multi_round():
                     "index": 0,
                     "id": "call_1",
                     "function": {
-                        "name": "update_story_metadata",
-                        "arguments": '{"title": "New Title"}',
+                        "name": "manage_story_core",
+                        "arguments": '{"action":"update_metadata","update_data":{"title":"New Title"}}',
                     },
                 }
             ]
@@ -95,8 +95,11 @@ async def test_stream_unified_chat_content_multi_round():
         # Verify tool was executed
         mock_exec.assert_called_once()
         args, kwargs = mock_exec.call_args
-        assert args[0] == "update_story_metadata"
-        assert args[1] == {"title": "New Title"}
+        assert args[0] == "manage_story_core"
+        assert args[1] == {
+            "action": "update_metadata",
+            "update_data": {"title": "New Title"},
+        }
 
 
 @pytest.mark.anyio
@@ -307,3 +310,184 @@ def test_prepare_ai_action_chapter_extend_prefills_full_draft_with_heading():
             "enable_thinking": False,
         }
     }
+
+
+def test_prepare_ai_action_chapter_extend_includes_current_and_next_scene_context():
+    ok, msg = select_project("extend_scene_context")
+    assert ok, msg
+
+    project_dir = get_active_project_dir()
+    assert project_dir is not None
+
+    story_path = project_dir / "story.json"
+    story = load_story_config(story_path)
+    story["project_type"] = "novel"
+    story["sourcebook"] = {
+        "Hero": {"description": "Hero of the valley.", "category": "Character"},
+        "Town": {"description": "A cramped mountain town.", "category": "Location"},
+        "Villain": {
+            "description": "The hunter stalking the hero.",
+            "category": "Character",
+        },
+    }
+    story["chapters"] = [
+        {
+            "title": "Chapter 1",
+            "summary": "The hero arrives and danger follows.",
+            "filename": "0001.txt",
+        }
+    ]
+    scene_one_text = "Alpha scene."
+    scene_two_text = " Beta scene."
+    story["scenes"] = {
+        "1": {
+            "summary": "Arrival in town",
+            "active_characters": ["Hero"],
+            "location": "Town",
+            "sourcebook_entry_ids": [],
+            "order_index": 1,
+            "prose_link": {
+                "scope_type": "chapter",
+                "chapter_id": "1",
+                "start_offset": 0,
+                "end_offset": len(scene_one_text),
+            },
+        },
+        "2": {
+            "summary": "The hunter closes in",
+            "active_characters": ["Villain"],
+            "location": "Town",
+            "sourcebook_entry_ids": [],
+            "order_index": 2,
+            "prose_link": {
+                "scope_type": "chapter",
+                "chapter_id": "1",
+                "start_offset": len(scene_one_text),
+                "end_offset": len(scene_one_text + scene_two_text),
+            },
+        },
+    }
+    save_story_config(story_path, story)
+
+    chapters_dir = project_dir / "chapters"
+    chapters_dir.mkdir(parents=True, exist_ok=True)
+    (chapters_dir / "0001.txt").write_text(
+        scene_one_text + scene_two_text, encoding="utf-8"
+    )
+
+    prepared = prepare_ai_action_generation(
+        {
+            "target": "chapter",
+            "action": "extend",
+            "chap_id": 1,
+            "scope": "chapter",
+            "current_text": scene_one_text,
+        }
+    )
+
+    prompt_text = "\n\n".join(
+        str(message.get("content", "")) for message in prepared["messages"]
+    )
+    assert "Scene guidance" in prompt_text
+    assert "Current scene" in prompt_text
+    assert "Summary: Arrival in town" in prompt_text
+    assert "Next scene" in prompt_text
+    assert "Summary: The hunter closes in" in prompt_text
+    assert "Hero of the valley." in prompt_text
+    assert "The hunter stalking the hero." in prompt_text
+    assert "A cramped mountain town." in prompt_text
+
+
+def test_prepare_ai_action_chapter_rewrite_includes_all_scene_context_and_references():
+    ok, msg = select_project("rewrite_scene_context")
+    assert ok, msg
+
+    project_dir = get_active_project_dir()
+    assert project_dir is not None
+
+    story_path = project_dir / "story.json"
+    story = load_story_config(story_path)
+    story["project_type"] = "novel"
+    story["sourcebook"] = {
+        "Hero": {"description": "Hero profile.", "category": "Character"},
+        "Guide": {"description": "Guide profile.", "category": "Character"},
+        "Relic": {"description": "Ancient relic lore.", "category": "Item"},
+    }
+    story["chapters"] = [
+        {
+            "title": "Chapter 1",
+            "summary": "A three-step expedition.",
+            "filename": "0001.txt",
+        }
+    ]
+    chapter_text = "One. Two. Three."
+    story["scenes"] = {
+        "1": {
+            "summary": "Preparation",
+            "active_characters": ["Hero"],
+            "location": None,
+            "sourcebook_entry_ids": ["Relic"],
+            "order_index": 1,
+            "prose_link": {
+                "scope_type": "chapter",
+                "chapter_id": "1",
+                "start_offset": 0,
+                "end_offset": 4,
+            },
+        },
+        "2": {
+            "summary": "Journey",
+            "active_characters": ["Guide"],
+            "location": None,
+            "sourcebook_entry_ids": [],
+            "order_index": 2,
+            "prose_link": {
+                "scope_type": "chapter",
+                "chapter_id": "1",
+                "start_offset": 4,
+                "end_offset": 9,
+            },
+        },
+        "3": {
+            "summary": "Discovery",
+            "active_characters": ["Hero", "Guide"],
+            "location": None,
+            "sourcebook_entry_ids": ["Relic"],
+            "order_index": 3,
+            "prose_link": {
+                "scope_type": "chapter",
+                "chapter_id": "1",
+                "start_offset": 9,
+                "end_offset": len(chapter_text),
+            },
+        },
+    }
+    save_story_config(story_path, story)
+
+    chapters_dir = project_dir / "chapters"
+    chapters_dir.mkdir(parents=True, exist_ok=True)
+    (chapters_dir / "0001.txt").write_text(chapter_text, encoding="utf-8")
+
+    prepared = prepare_ai_action_generation(
+        {
+            "target": "chapter",
+            "action": "rewrite",
+            "chap_id": 1,
+            "scope": "chapter",
+            "current_text": chapter_text,
+        }
+    )
+
+    prompt_text = "\n\n".join(
+        str(message.get("content", "")) for message in prepared["messages"]
+    )
+    assert "Scene plan for this draft" in prompt_text
+    assert "Scene 1" in prompt_text
+    assert "Summary: Preparation" in prompt_text
+    assert "Scene 2" in prompt_text
+    assert "Summary: Journey" in prompt_text
+    assert "Scene 3" in prompt_text
+    assert "Summary: Discovery" in prompt_text
+    assert "Hero profile." in prompt_text
+    assert "Guide profile." in prompt_text
+    assert "Ancient relic lore." in prompt_text

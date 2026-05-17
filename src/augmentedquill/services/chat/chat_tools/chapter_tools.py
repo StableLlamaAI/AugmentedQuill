@@ -43,6 +43,7 @@ from augmentedquill.services.projects.projects import (
     write_chapter_title,
 )
 from augmentedquill.services.chat.chat_tools.metadata_patching import (
+    ConflictEntry,
     ConflictListPatch,
     TextPatch,
     apply_conflict_list_patch,
@@ -188,11 +189,12 @@ class UpdateChapterMetadataParams(BaseModel):
             "{operation:'replace_text', old_text:'...', new_text:'...', occurrence:'first|last|all|unique'}."
         ),
     )
-    conflicts: list | str | None = Field(
+    conflicts: list[ConflictEntry] | str | None = Field(
         None,
         description=(
-            "List of conflicts in the chapter (can be JSON string). "
-            "Each conflict should include description, resolution, and optional resolved status."
+            "List of chapter conflicts (or a JSON string containing that list). "
+            "Each conflict should include description, optional resolution, and a "
+            "resolved flag when the conflict is no longer active."
         ),
     )
     conflicts_patch: ConflictListPatch | None = Field(
@@ -443,6 +445,11 @@ async def update_chapter_metadata(
             conflicts = _json.loads(conflicts)
         except Exception:
             conflicts = None
+    elif isinstance(conflicts, list):
+        conflicts = [
+            conflict.model_dump() if hasattr(conflict, "model_dump") else conflict
+            for conflict in conflicts
+        ]
 
     active = get_active_project_dir()
     story = load_story_config((active / "story.json") if active else None) or {}
@@ -855,6 +862,7 @@ async def continue_chapter(
     description="Create a new chapter with an optional title and book_id.",
     allowed_roles=(CHAT_ROLE,),
     capability="metadata-write",
+    project_types=("novel", "series"),
 )
 async def create_new_chapter(
     params: CreateNewChapterParams, payload: dict, mutations: dict

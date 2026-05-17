@@ -16,7 +16,7 @@
 
 import { create, StoreApi } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { ViewMode, MetadataTab } from '../types';
+import type { MetadataTab, SceneId, ViewMode } from '../types';
 
 // ---------------------------------------------------------------------------
 // Dialog state types
@@ -42,6 +42,12 @@ export interface ChapterMetadataDialogState {
   initialTab?: MetadataTab;
 }
 
+export interface SceneEditorDialogState {
+  isOpen: boolean;
+  version: number;
+  sceneId: SceneId | null;
+}
+
 // ---------------------------------------------------------------------------
 // Store shape
 // ---------------------------------------------------------------------------
@@ -59,9 +65,11 @@ export interface UIStoreState {
   metadataDialog: MetadataDialogState;
   sourcebookDialog: SourcebookDialogState;
   chapterMetadataDialog: ChapterMetadataDialogState;
+  sceneEditorDialog: SceneEditorDialogState;
 
   // ── Editor UI flags ───────────────────────────────────────────────────────
   viewMode: ViewMode;
+  workspaceMode: 'page' | 'scenes' | 'split';
   showWhitespace: boolean;
   activeFormats: string[];
   isViewMenuOpen: boolean;
@@ -82,7 +90,16 @@ export interface UIStoreState {
   closeSourcebookDialog: () => void;
   openChapterMetadataDialog: (chapterId: string, initialTab?: MetadataTab) => void;
   closeChapterMetadataDialog: () => void;
+  openSceneEditorDialog: (sceneId: SceneId) => void;
+  closeSceneEditorDialog: () => void;
 
+  setWorkspaceMode: (
+    mode:
+      | 'page'
+      | 'scenes'
+      | 'split'
+      | ((prev: 'page' | 'scenes' | 'split') => 'page' | 'scenes' | 'split')
+  ) => void;
   setViewMode: (mode: ViewMode | ((prev: ViewMode) => ViewMode)) => void;
   setShowWhitespace: (show: boolean | ((prev: boolean) => boolean)) => void;
   setActiveFormats: (formats: string[] | ((prev: string[]) => string[])) => void;
@@ -128,9 +145,15 @@ export const useUIStore = create<UIStoreState>()(
         chapterId: null,
         initialTab: undefined,
       },
+      sceneEditorDialog: {
+        isOpen: false,
+        version: 0,
+        sceneId: null,
+      },
 
       // ── Editor UI flags (not persisted) ─────────────────────────────────
       viewMode: 'raw' as ViewMode,
+      workspaceMode: 'page' as 'page' | 'scenes' | 'split',
       showWhitespace: false,
       activeFormats: [] as string[],
       isViewMenuOpen: false,
@@ -241,7 +264,35 @@ export const useUIStore = create<UIStoreState>()(
           chapterMetadataDialog: { ...s.chapterMetadataDialog, isOpen: false },
         })),
 
+      openSceneEditorDialog: (sceneId: SceneId) =>
+        set((s: UIStoreState) => ({
+          sceneEditorDialog: {
+            isOpen: true,
+            version: s.sceneEditorDialog.version + 1,
+            sceneId,
+          },
+        })),
+
+      closeSceneEditorDialog: () =>
+        set((s: UIStoreState) => ({
+          sceneEditorDialog: {
+            ...s.sceneEditorDialog,
+            isOpen: false,
+            sceneId: null,
+          },
+        })),
+
       // ── Editor UI actions ────────────────────────────────────────────────
+      setWorkspaceMode: (
+        v:
+          | 'page'
+          | 'scenes'
+          | 'split'
+          | ((prev: 'page' | 'scenes' | 'split') => 'page' | 'scenes' | 'split')
+      ) =>
+        set((s: UIStoreState): { workspaceMode: 'page' | 'scenes' | 'split' } => ({
+          workspaceMode: resolve(v, s.workspaceMode),
+        })),
       setViewMode: (v: ViewMode | ((prev: ViewMode) => ViewMode)) =>
         set((s: UIStoreState): { viewMode: ViewMode } => ({
           viewMode: resolve(v, s.viewMode),
@@ -302,6 +353,16 @@ export function useChapterMetadataDialog(): ChapterMetadataDialogState {
   );
 }
 
+/** Subscribe to scene editor dialog state only. */
+export function useSceneEditorDialog(): SceneEditorDialogState {
+  return useUIStore((s: UIStoreState): SceneEditorDialogState => s.sceneEditorDialog);
+}
+
+/** Subscribe to workspace mode state only. */
+export function useWorkspaceMode(): 'page' | 'scenes' | 'split' {
+  return useUIStore((s: UIStoreState) => s.workspaceMode);
+}
+
 // ---------------------------------------------------------------------------
 // Test helpers
 // ---------------------------------------------------------------------------
@@ -322,6 +383,11 @@ export function resetUIStore(): void {
       version: 0,
       chapterId: null,
       initialTab: undefined,
+    },
+    sceneEditorDialog: {
+      isOpen: false,
+      version: 0,
+      sceneId: null,
     },
     viewMode: 'raw' as ViewMode,
     showWhitespace: false,
@@ -347,4 +413,7 @@ export const uiStoreActions = {
   openChapterMetadataDialog: (chapterId: string, initialTab?: MetadataTab) =>
     useUIStore.getState().openChapterMetadataDialog(chapterId, initialTab),
   closeChapterMetadataDialog: () => useUIStore.getState().closeChapterMetadataDialog(),
+  openSceneEditorDialog: (sceneId: SceneId) =>
+    useUIStore.getState().openSceneEditorDialog(sceneId),
+  closeSceneEditorDialog: () => useUIStore.getState().closeSceneEditorDialog(),
 };

@@ -44,7 +44,12 @@ type UseChatExecutionParams = {
   currentChapter?: { id: string; title: string } | null;
   refreshProjects: () => Promise<void>;
   refreshStory: () => Promise<void>;
-  onProseChunk?: (chapId: number, writeMode: string, accumulated: string) => void;
+  onProseChunk?: (
+    chapId: number,
+    writeMode: string,
+    accumulated: string,
+    streamId: number
+  ) => void;
   onMutations?: (mutations: ChatToolMutationPayload) => void;
   pushExternalHistoryEntry?: (params: {
     label: string;

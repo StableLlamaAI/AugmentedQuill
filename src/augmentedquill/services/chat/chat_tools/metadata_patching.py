@@ -14,6 +14,22 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
+class ConflictEntry(BaseModel):
+    """Structured conflict entry used by chapter and story metadata tools."""
+
+    description: str = Field(
+        ..., description="Short description of the unresolved story conflict."
+    )
+    resolution: str | None = Field(
+        None,
+        description="Optional proposed or current resolution for the conflict.",
+    )
+    resolved: bool = Field(
+        False,
+        description="Set to true when the conflict has been resolved and should no longer be treated as active.",
+    )
+
+
 class TextPatch(BaseModel):
     """Patch operation for text fields."""
 
@@ -92,20 +108,30 @@ class ConflictPatchOperation(BaseModel):
             "Operation type. Inferred automatically when omitted: "
             "updates present → 'update'; conflict present with index → 'replace'; "
             "conflict present without index → 'add'; only index present → 'remove'. "
-            "Must be set explicitly for 'insert' and 'clear'."
+            "Must be set explicitly for 'insert' and 'clear'. "
+            "IMPORTANT: 'update' requires both index and updates (not conflict)."
         ),
     )
     index: int | None = Field(
         None,
-        description="0-based conflict list index. Required for insert/replace/update/remove.",
+        description=(
+            "0-based conflict list index. Required for insert/replace/update/remove. "
+            "For append/add, omit index."
+        ),
     )
-    conflict: dict[str, Any] | None = Field(
+    conflict: ConflictEntry | dict[str, Any] | None = Field(
         None,
-        description="Conflict payload for add/insert/replace operations.",
+        description=(
+            "Conflict payload for add/insert/replace operations. "
+            "Use this to append a new conflict object (usually without index)."
+        ),
     )
     updates: dict[str, Any] | None = Field(
         None,
-        description="Fields to merge into the existing conflict for update operations.",
+        description=(
+            "Fields to merge into an existing conflict for update operations. "
+            "Requires index to identify which conflict to update."
+        ),
     )
 
     @model_validator(mode="before")
@@ -135,7 +161,11 @@ class ConflictPatchOperation(BaseModel):
                 "provide op explicitly (add/insert/replace/update/remove/clear)"
             )
         if self.op in ("insert", "replace", "update", "remove") and self.index is None:
-            raise ValueError("index is required for insert/replace/update/remove")
+            raise ValueError(
+                "index is required for insert/replace/update/remove. "
+                "To append a new conflict, omit index and use conflict with op='add' "
+                "(or omit op to infer add). For update, provide both index and updates."
+            )
         if self.op in ("add", "insert", "replace") and self.conflict is None:
             raise ValueError("conflict is required for add/insert/replace")
         if self.op == "update" and self.updates is None:
@@ -150,7 +180,8 @@ class ConflictListPatch(BaseModel):
         ...,
         description=(
             "Ordered index-based operations to apply to the conflicts list. "
-            "Use numeric index for update/insert/replace/remove operations."
+            "Use numeric index for update/insert/replace/remove operations. "
+            "Examples: append -> {conflict:{...}}; update existing -> {index:0, updates:{resolution:'...'}}."
         ),
     )
 
@@ -222,13 +253,21 @@ def apply_conflict_list_patch(
     """Apply ordered conflict-list operations."""
     result = [dict(item) for item in (current or []) if isinstance(item, dict)]
 
+    def _as_dict(value: Any) -> dict[str, Any]:
+        if hasattr(value, "model_dump"):
+            dumped = value.model_dump()
+            return dumped if isinstance(dumped, dict) else {}
+        if isinstance(value, dict):
+            return dict(value)
+        return {}
+
     for op in patch.operations:
         if op.op == "clear":
             result = []
             continue
 
         if op.op == "add":
-            result.append(dict(op.conflict or {}))
+            result.append(_as_dict(op.conflict))
             continue
 
         if op.index is None:
@@ -239,13 +278,13 @@ def apply_conflict_list_patch(
             )
 
         if op.op == "insert":
-            result.insert(op.index, dict(op.conflict or {}))
+            result.insert(op.index, _as_dict(op.conflict))
         elif op.op == "replace":
             if op.index >= len(result):
                 raise ValueError(
                     f"replace index {op.index} is out of bounds for size {len(result)}"
                 )
-            result[op.index] = dict(op.conflict or {})
+            result[op.index] = _as_dict(op.conflict)
         elif op.op == "update":
             if op.index >= len(result):
                 raise ValueError(

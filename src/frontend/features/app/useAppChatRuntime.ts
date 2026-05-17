@@ -22,6 +22,7 @@ import type { PromptsState } from '../settings/usePrompts';
 import type { ChatToolExecutionResponse } from '../../services/apiTypes';
 import { useChatStore, ChatStoreState } from '../../stores/chatStore';
 import { useStoryStore } from '../../stores/storyStore';
+import type { SceneId } from '../../types';
 
 type CurrentChapterContext = {
   id: string;
@@ -57,6 +58,7 @@ type UseAppChatRuntimeParams = {
   ) => Promise<'stop' | 'continue' | 'unlimited'>;
   handleChapterSelect: (chapterId: string | null) => void;
   openAndExpandStory: () => void;
+  openSceneEditorDialog: (sceneId: SceneId) => void;
   openSourcebookEntryDialog: (entryId: string) => void;
   openStoryMetadataDialog: (tab?: MetadataTab) => void;
   openChapterMetadataDialog: (chapterId: string, initialTab?: MetadataTab) => void;
@@ -82,6 +84,60 @@ type ToolMutationPayload = ChatToolExecutionResponse & {
   }>;
 };
 
+type MutationNavigationCallbacks = {
+  handleChapterSelect: (chapterId: string | null) => void;
+  openAndExpandStory: () => void;
+  openSceneEditorDialog: (sceneId: SceneId) => void;
+  openSourcebookEntryDialog: (entryId: string) => void;
+  openStoryMetadataDialog: (tab?: MetadataTab) => void;
+  openChapterMetadataDialog: (chapterId: string, initialTab?: MetadataTab) => void;
+};
+
+/** Route a mutation badge click to the corresponding UI navigation intent. */
+export function handleSessionMutationClick(
+  mutation: SessionMutation,
+  {
+    handleChapterSelect,
+    openAndExpandStory,
+    openSceneEditorDialog,
+    openSourcebookEntryDialog,
+    openStoryMetadataDialog,
+    openChapterMetadataDialog,
+  }: MutationNavigationCallbacks
+): void {
+  if (mutation.type === 'chapter') {
+    openAndExpandStory();
+    handleChapterSelect(mutation.targetId ?? null);
+  } else if (mutation.type === 'scene') {
+    openAndExpandStory();
+    handleChapterSelect(null);
+    if (mutation.targetId) {
+      const sceneId = Number(mutation.targetId);
+      if (Number.isInteger(sceneId)) {
+        openSceneEditorDialog(sceneId);
+      }
+    }
+  } else if (mutation.type === 'story') {
+    openAndExpandStory();
+    handleChapterSelect(null);
+  } else if (mutation.type === 'metadata') {
+    openAndExpandStory();
+    if (mutation.targetId && mutation.targetId !== 'story') {
+      handleChapterSelect(mutation.targetId);
+      openChapterMetadataDialog(
+        mutation.targetId,
+        mutation.subType as MetadataTab | undefined
+      );
+    } else {
+      openStoryMetadataDialog(mutation.subType as MetadataTab | undefined);
+    }
+  } else if (mutation.type === 'sourcebook') {
+    if (mutation.targetId) {
+      openSourcebookEntryDialog(mutation.targetId);
+    }
+  }
+}
+
 export function useAppChatRuntime({
   storyId,
   storyRef,
@@ -98,6 +154,7 @@ export function useAppChatRuntime({
   requestToolCallLoopAccess,
   handleChapterSelect,
   openAndExpandStory,
+  openSceneEditorDialog,
   openSourcebookEntryDialog,
   openStoryMetadataDialog,
   openChapterMetadataDialog,
@@ -253,7 +310,12 @@ export function useAppChatRuntime({
     refreshProjects,
     refreshStory,
     onProseChunk: useCallback(
-      (chapterId: number, writeMode: string, accumulated: string): void => {
+      (
+        chapterId: number,
+        writeMode: string,
+        accumulated: string,
+        streamId: number
+      ): void => {
         if (!useChatStore.getState().isChatLoading) {
           return;
         }
@@ -269,7 +331,7 @@ export function useAppChatRuntime({
           return;
         }
 
-        const streamKey = `${chapterId}:${writeMode}`;
+        const streamKey = `${chapterId}:${writeMode}:${streamId}`;
         const previous = prosePreviewStateRef.current[streamKey];
         const restarted =
           !previous ||
@@ -336,28 +398,14 @@ export function useAppChatRuntime({
     (mutation: SessionMutation): void => {
       startTransition((): void => {
         requestAnimationFrame((): void => {
-          if (mutation.type === 'chapter') {
-            openAndExpandStory();
-            handleChapterSelect(mutation.targetId ?? null);
-          } else if (mutation.type === 'story') {
-            openAndExpandStory();
-            handleChapterSelect(null);
-          } else if (mutation.type === 'metadata') {
-            openAndExpandStory();
-            if (mutation.targetId && mutation.targetId !== 'story') {
-              handleChapterSelect(mutation.targetId);
-              openChapterMetadataDialog(
-                mutation.targetId,
-                mutation.subType as MetadataTab | undefined
-              );
-            } else {
-              openStoryMetadataDialog(mutation.subType as MetadataTab | undefined);
-            }
-          } else if (mutation.type === 'sourcebook') {
-            if (mutation.targetId) {
-              openSourcebookEntryDialog(mutation.targetId);
-            }
-          }
+          handleSessionMutationClick(mutation, {
+            handleChapterSelect,
+            openAndExpandStory,
+            openSceneEditorDialog,
+            openSourcebookEntryDialog,
+            openStoryMetadataDialog,
+            openChapterMetadataDialog,
+          });
         });
       });
     },

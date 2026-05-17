@@ -97,13 +97,114 @@ class ChatToolsTest(TestCase):
     def _post_single_tool(self, name: str, arguments: dict | str):
         return self._post_single_tool_for_role("CHAT", name, arguments)
 
+    def _post_tool_calls(self, calls: list[tuple[str, dict | str]]):
+        return self._post_tool_calls_for_role("CHAT", calls)
+
+    @staticmethod
+    def _normalize_manager_tool_call(name: str, arguments: dict) -> tuple[str, dict]:
+        """Translate legacy per-action tool invocations to manager tool actions."""
+        if name == "get_project_overview":
+            return "manage_project", {"action": "get_overview", **arguments}
+        if name == "create_project":
+            return "manage_project", {"action": "create", "create_data": arguments}
+        if name == "list_projects":
+            return "manage_project", {"action": "list"}
+        if name == "delete_project":
+            return "manage_project", {"action": "delete", "delete_data": arguments}
+        if name == "change_project_type":
+            return (
+                "manage_project",
+                {
+                    "action": "change_type",
+                    "type_data": {"new_type": arguments.get("new_type")},
+                },
+            )
+
+        if name == "get_story_metadata":
+            return "manage_story_core", {"action": "get_metadata"}
+        if name == "update_story_metadata":
+            return "manage_story_core", {
+                "action": "update_metadata",
+                "update_data": arguments,
+            }
+        if name == "read_story_content":
+            return "manage_story_core", {
+                "action": "read_content",
+                "read_data": arguments,
+            }
+        if name == "sync_story_summary":
+            return "manage_story_core", {
+                "action": "sync_summary",
+                "sync_data": arguments,
+            }
+
+        if name == "read_scratchpad":
+            req = {"action": "read"}
+            if "chat_id" in arguments:
+                req["chat_id"] = arguments["chat_id"]
+            return "manage_scratchpad", req
+        if name == "write_scratchpad":
+            return "manage_scratchpad", {"action": "write", "write_data": arguments}
+
+        if name == "get_sourcebook_entry":
+            return "manage_sourcebook", {"action": "get", **arguments}
+        if name == "create_sourcebook_entry":
+            return "manage_sourcebook", {"action": "create", "entry_data": arguments}
+        if name == "update_sourcebook_entry":
+            payload = dict(arguments)
+            name_or_id = payload.pop("name_or_id", None)
+            return (
+                "manage_sourcebook",
+                {"action": "update", "name_or_id": name_or_id, "update_data": payload},
+            )
+        if name == "delete_sourcebook_entry":
+            return "manage_sourcebook", {"action": "delete", **arguments}
+        if name == "list_sourcebook_entries":
+            return "manage_sourcebook", {"action": "list", **arguments}
+        if name == "add_sourcebook_relation":
+            return "manage_sourcebook", {
+                "action": "add_relation",
+                "relation_data": arguments,
+            }
+        if name == "remove_sourcebook_relation":
+            return "manage_sourcebook", {
+                "action": "remove_relation",
+                "relation_data": arguments,
+            }
+
+        if name == "list_images":
+            return "manage_images", {"action": "list"}
+        if name == "generate_image_description":
+            return "manage_images", {"action": "generate_description", **arguments}
+        if name == "create_image_placeholder":
+            return "manage_images", {
+                "action": "create_placeholder",
+                "create_data": arguments,
+            }
+        if name == "set_image_metadata":
+            return "manage_images", {
+                "action": "set_metadata",
+                "metadata_data": arguments,
+            }
+
+        if name == "search_in_project":
+            return "search_and_replace", {"action": "search", **arguments}
+        if name == "replace_in_project":
+            return "search_and_replace", {"action": "replace", **arguments}
+
+        return name, arguments
+
     def _post_single_tool_for_role(
         self, model_type: str, name: str, arguments: dict | str
     ):
         if isinstance(arguments, str):
             args = arguments
+            normalized_name = name
         else:
-            args = json.dumps(arguments)
+            normalized_name, normalized_args = self._normalize_manager_tool_call(
+                name, arguments
+            )
+            args = json.dumps(normalized_args)
 
         body = {
             "model_type": model_type,
@@ -116,11 +217,50 @@ class ChatToolsTest(TestCase):
                             "id": f"call_{name}",
                             "type": "function",
                             "function": {
-                                "name": name,
+                                "name": normalized_name,
                                 "arguments": args,
                             },
                         }
                     ],
+                }
+            ],
+        }
+        response = self.client.post("/api/v1/chat/tools", json=body)
+        self.assertEqual(response.status_code, 200, response.text)
+        return _parse_tool_sse_result(response.text)
+
+    def _post_tool_calls_for_role(
+        self, model_type: str, calls: list[tuple[str, dict | str]]
+    ) -> dict:
+        tool_calls = []
+        for index, (name, arguments) in enumerate(calls, start=1):
+            if isinstance(arguments, str):
+                args = arguments
+                normalized_name = name
+            else:
+                normalized_name, normalized_args = self._normalize_manager_tool_call(
+                    name, arguments
+                )
+                args = json.dumps(normalized_args)
+
+            tool_calls.append(
+                {
+                    "id": f"call_{index}_{name}",
+                    "type": "function",
+                    "function": {
+                        "name": normalized_name,
+                        "arguments": args,
+                    },
+                }
+            )
+
+        body = {
+            "model_type": model_type,
+            "messages": [
+                {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": tool_calls,
                 }
             ],
         }
@@ -181,8 +321,8 @@ class ChatToolsTest(TestCase):
                             "id": "a1",
                             "type": "function",
                             "function": {
-                                "name": "get_story_metadata",
-                                "arguments": "{}",
+                                "name": "manage_story_core",
+                                "arguments": '{"action":"get_metadata"}',
                             },
                         }
                     ],
@@ -378,6 +518,101 @@ class ChatToolsTest(TestCase):
             ]
         )
         self.assertEqual(payload_current["chapter"]["title"], "Intro")
+
+    def test_manage_project_create_returns_created_project_name_with_type_alias(self):
+        self._bootstrap_project()
+
+        body = {
+            "model_type": "CHAT",
+            "messages": [
+                {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": [
+                        {
+                            "id": "create_alias",
+                            "type": "function",
+                            "function": {
+                                "name": "manage_project",
+                                "arguments": json.dumps(
+                                    {
+                                        "action": "create",
+                                        "create_data": {
+                                            "name": "Back to the Future: The Chronological Narrative",
+                                            "type": "series",
+                                        },
+                                    }
+                                ),
+                            },
+                        }
+                    ],
+                }
+            ],
+        }
+
+        response = self.client.post("/api/v1/projects/demo/chat/tools", json=body)
+        self.assertEqual(response.status_code, 200, response.text)
+        data = _parse_tool_sse_result(response.text)
+        appended = data.get("appended_messages") or []
+        self.assertEqual(len(appended), 1)
+        payload = json.loads(appended[0].get("content") or "{}")
+
+        self.assertTrue(payload.get("ok"))
+        self.assertEqual(
+            payload.get("project_name"),
+            "Back to the Future_ The Chronological Narrative",
+        )
+
+    def test_tool_batch_follows_project_switch_after_manage_project_create(self):
+        self._bootstrap_project()
+
+        body = {
+            "model_type": "CHAT",
+            "messages": [
+                {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": [
+                        {
+                            "id": "create_then_read_1",
+                            "type": "function",
+                            "function": {
+                                "name": "manage_project",
+                                "arguments": json.dumps(
+                                    {
+                                        "action": "create",
+                                        "create_data": {
+                                            "name": "SwitchTarget",
+                                            "project_type": "novel",
+                                        },
+                                    }
+                                ),
+                            },
+                        },
+                        {
+                            "id": "create_then_read_2",
+                            "type": "function",
+                            "function": {
+                                "name": "manage_story_core",
+                                "arguments": json.dumps({"action": "get_metadata"}),
+                            },
+                        },
+                    ],
+                }
+            ],
+        }
+
+        response = self.client.post("/api/v1/projects/demo/chat/tools", json=body)
+        self.assertEqual(response.status_code, 200, response.text)
+        data = _parse_tool_sse_result(response.text)
+        appended = data.get("appended_messages") or []
+        self.assertEqual(len(appended), 2)
+
+        create_payload = json.loads(appended[0].get("content") or "{}")
+        metadata_payload = json.loads(appended[1].get("content") or "{}")
+
+        self.assertEqual(create_payload.get("project_name"), "SwitchTarget")
+        self.assertEqual(metadata_payload.get("title"), "SwitchTarget")
 
     def test_chat_tool_batch_can_undo_and_redo(self):
         """Tool-call batches should expose batch_id and support undo/redo endpoints."""
@@ -792,6 +1027,526 @@ class ChatToolsTest(TestCase):
         # Verify mutations for undo/redo support
         mutations = data.get("mutations") or {}
         self.assertTrue(mutations.get("story_changed"))
+
+    def test_call_writing_llm_two_append_calls_same_batch_preserve_both_writes(self):
+        """Two append-mode call_writing_llm calls in one tool batch must append cumulatively."""
+        self._bootstrap_project()
+        self._post_single_tool(
+            "update_story_metadata",
+            {
+                "conflicts": [
+                    {
+                        "id": "c1",
+                        "description": "Test conflict",
+                        "resolution": "Test resolution",
+                    }
+                ]
+            },
+        )
+
+        chapter_file = self.projects_root / "demo" / "chapters" / "0001.txt"
+        original_content = chapter_file.read_text(encoding="utf-8")
+
+        generated_chunks = ["First continuation.", "Second continuation."]
+
+        async def _sequenced_stream(**kwargs):
+            yield {"content": generated_chunks.pop(0)}
+
+        body = {
+            "model_type": "CHAT",
+            "messages": [
+                {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": [
+                        {
+                            "id": "call_1",
+                            "type": "function",
+                            "function": {
+                                "name": "call_writing_llm",
+                                "arguments": json.dumps(
+                                    {
+                                        "instruction": "Write prose for scene one",
+                                        "context": "Scene one context",
+                                        "write_mode": "append",
+                                        "chap_id": 1,
+                                    }
+                                ),
+                            },
+                        },
+                        {
+                            "id": "call_2",
+                            "type": "function",
+                            "function": {
+                                "name": "call_writing_llm",
+                                "arguments": json.dumps(
+                                    {
+                                        "instruction": "Write prose for scene two",
+                                        "context": "Scene two context",
+                                        "preceding_content": "First continuation.",
+                                        "write_mode": "append",
+                                        "chap_id": 1,
+                                    }
+                                ),
+                            },
+                        },
+                    ],
+                }
+            ],
+        }
+
+        with (
+            patch(
+                "augmentedquill.services.llm.llm.resolve_openai_credentials",
+                return_value=("http://localhost:11434/v1", None, "dummy", 30, "dummy"),
+            ),
+            patch(
+                "augmentedquill.services.llm.llm.unified_chat_stream",
+                new=_sequenced_stream,
+            ),
+        ):
+            response = self.client.post("/api/v1/chat/tools", json=body)
+
+        self.assertEqual(response.status_code, 200, response.text)
+        data = _parse_tool_sse_result(response.text)
+
+        prose_start_events = response.text.count('"type": "prose_start"')
+        self.assertEqual(prose_start_events, 2)
+
+        new_content = chapter_file.read_text(encoding="utf-8")
+        self.assertEqual(
+            new_content,
+            original_content + " First continuation. Second continuation.",
+        )
+
+        appended = data.get("appended_messages") or []
+        self.assertEqual(len(appended), 2)
+        first_result = json.loads(appended[0].get("content") or "{}")
+        second_result = json.loads(appended[1].get("content") or "{}")
+        self.assertEqual(first_result.get("write_mode"), "append")
+        self.assertEqual(second_result.get("write_mode"), "append")
+        self.assertTrue(first_result.get("written"))
+        self.assertTrue(second_result.get("written"))
+
+        mutations = data.get("mutations") or {}
+        self.assertTrue(mutations.get("story_changed"))
+
+    def test_update_story_metadata_append_patch_is_cumulative_within_one_batch(self):
+        self._bootstrap_project()
+
+        self._post_single_tool(
+            "update_story_metadata",
+            {
+                "notes": "Story base",
+                "conflicts": [{"description": "Conflict", "resolution": "Open"}],
+            },
+        )
+
+        data = self._post_tool_calls(
+            [
+                (
+                    "update_story_metadata",
+                    {
+                        "notes_patch": {
+                            "operation": "append",
+                            "value": " one",
+                        }
+                    },
+                ),
+                (
+                    "update_story_metadata",
+                    {
+                        "notes_patch": {
+                            "operation": "append",
+                            "value": " two",
+                        }
+                    },
+                ),
+            ]
+        )
+
+        story = json.loads(
+            (self.projects_root / "demo" / "story.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(story.get("notes"), "Story base one two")
+        self.assertTrue((data.get("mutations") or {}).get("story_changed"))
+
+    def test_update_chapter_metadata_append_patch_is_cumulative_within_one_batch(self):
+        self._bootstrap_project()
+
+        self._post_single_tool(
+            "update_chapter_metadata",
+            {"chap_id": 1, "notes": "Chapter base"},
+        )
+
+        data = self._post_tool_calls(
+            [
+                (
+                    "update_chapter_metadata",
+                    {
+                        "chap_id": 1,
+                        "notes_patch": {
+                            "operation": "append",
+                            "value": " one",
+                        },
+                    },
+                ),
+                (
+                    "update_chapter_metadata",
+                    {
+                        "chap_id": 1,
+                        "notes_patch": {
+                            "operation": "append",
+                            "value": " two",
+                        },
+                    },
+                ),
+            ]
+        )
+
+        story = json.loads(
+            (self.projects_root / "demo" / "story.json").read_text(encoding="utf-8")
+        )
+        chapter = (story.get("chapters") or [])[0]
+        self.assertEqual(chapter.get("notes"), "Chapter base one two")
+        self.assertTrue((data.get("mutations") or {}).get("story_changed"))
+
+    def test_update_book_metadata_append_patch_is_cumulative_within_one_batch(self):
+        self._bootstrap_project()
+
+        story_path = self.projects_root / "demo" / "story.json"
+        story = json.loads(story_path.read_text(encoding="utf-8"))
+        story["project_type"] = "series"
+        story["books"] = [
+            {
+                "id": "book-1",
+                "folder": "book-1",
+                "title": "Book One",
+                "summary": "",
+                "notes": "Book base",
+                "chapters": [],
+            }
+        ]
+        story_path.write_text(json.dumps(story), encoding="utf-8")
+
+        data = self._post_tool_calls(
+            [
+                (
+                    "update_book_metadata",
+                    {
+                        "book_id": "book-1",
+                        "notes_patch": {
+                            "operation": "append",
+                            "value": " one",
+                        },
+                    },
+                ),
+                (
+                    "update_book_metadata",
+                    {
+                        "book_id": "book-1",
+                        "notes_patch": {
+                            "operation": "append",
+                            "value": " two",
+                        },
+                    },
+                ),
+            ]
+        )
+
+        story_after = json.loads(story_path.read_text(encoding="utf-8"))
+        book = (story_after.get("books") or [])[0]
+        self.assertEqual(book.get("notes"), "Book base one two")
+        self.assertTrue((data.get("mutations") or {}).get("story_changed"))
+
+    def test_update_sourcebook_entry_append_patch_is_cumulative_within_one_batch(self):
+        self._bootstrap_project()
+
+        self._post_single_tool(
+            "create_sourcebook_entry",
+            {
+                "name": "Ava",
+                "description": "Base description",
+                "category": "Character",
+            },
+        )
+
+        data = self._post_tool_calls(
+            [
+                (
+                    "update_sourcebook_entry",
+                    {
+                        "name_or_id": "Ava",
+                        "description_patch": {
+                            "operation": "append",
+                            "value": " one",
+                        },
+                    },
+                ),
+                (
+                    "update_sourcebook_entry",
+                    {
+                        "name_or_id": "Ava",
+                        "description_patch": {
+                            "operation": "append",
+                            "value": " two",
+                        },
+                    },
+                ),
+            ]
+        )
+
+        fetched = self._post_single_tool("get_sourcebook_entry", {"name_or_id": "Ava"})
+        payload = fetched.get("appended_messages") or []
+        self.assertEqual(len(payload), 1)
+        entry = json.loads(payload[0]["content"])
+        self.assertEqual(entry.get("description"), "Base description one two")
+        self.assertTrue((data.get("mutations") or {}).get("story_changed"))
+
+    def test_manage_scenes_append_patch_is_cumulative_within_one_batch(self):
+        self._bootstrap_project()
+
+        created = self._post_single_tool(
+            "manage_scenes",
+            {
+                "action": "create",
+                "create_data": {"summary": "Scene base"},
+            },
+        )
+        created_payload = created.get("appended_messages") or []
+        self.assertEqual(len(created_payload), 1)
+        scene = json.loads(created_payload[0]["content"])
+        scene_id = scene.get("id")
+        self.assertIsInstance(scene_id, int)
+
+        data = self._post_tool_calls(
+            [
+                (
+                    "manage_scenes",
+                    {
+                        "action": "update",
+                        "scene_id": scene_id,
+                        "update_data": {
+                            "summary_patch": {
+                                "operation": "append",
+                                "value": " one",
+                            }
+                        },
+                    },
+                ),
+                (
+                    "manage_scenes",
+                    {
+                        "action": "update",
+                        "scene_id": scene_id,
+                        "update_data": {
+                            "summary_patch": {
+                                "operation": "append",
+                                "value": " two",
+                            }
+                        },
+                    },
+                ),
+            ]
+        )
+
+        fetched = self._post_single_tool(
+            "manage_scenes",
+            {"action": "get", "scene_id": scene_id},
+        )
+        fetched_payload = fetched.get("appended_messages") or []
+        self.assertEqual(len(fetched_payload), 1)
+        updated_scene = json.loads(fetched_payload[0]["content"])
+        self.assertEqual(updated_scene.get("summary"), "Scene base one two")
+        self.assertTrue((data.get("mutations") or {}).get("story_changed"))
+
+    def test_append_capable_tools_integration_single_turn_batch(self):
+        """Integration: append-capable tool paths all preserve cumulative appends in one turn."""
+        self._bootstrap_project()
+
+        self._post_single_tool(
+            "update_story_metadata",
+            {
+                "conflicts": [
+                    {
+                        "id": "c1",
+                        "description": "Integration conflict",
+                        "resolution": "Open",
+                    }
+                ]
+            },
+        )
+
+        chapter_file = self.projects_root / "demo" / "chapters" / "0001.txt"
+        original_chapter = chapter_file.read_text(encoding="utf-8")
+
+        generated_chunks = ["First prose.", "Second prose."]
+
+        async def _sequenced_stream(**kwargs):
+            text = generated_chunks.pop(0) if generated_chunks else ""
+            yield {"content": text}
+
+        with (
+            patch(
+                "augmentedquill.services.llm.llm.resolve_openai_credentials",
+                return_value=("http://localhost:11434/v1", None, "dummy", 30, "dummy"),
+            ),
+            patch(
+                "augmentedquill.services.llm.llm.unified_chat_stream",
+                new=_sequenced_stream,
+            ),
+        ):
+            data = self._post_tool_calls(
+                [
+                    (
+                        "call_writing_llm",
+                        {
+                            "instruction": "Write prose for scene one",
+                            "context": "Context one",
+                            "write_mode": "append",
+                            "chap_id": 1,
+                        },
+                    ),
+                    (
+                        "call_writing_llm",
+                        {
+                            "instruction": "Write prose for scene two",
+                            "context": "Context two",
+                            "preceding_content": "First prose.",
+                            "write_mode": "append",
+                            "chap_id": 1,
+                        },
+                    ),
+                    (
+                        "update_story_metadata",
+                        {
+                            "notes_patch": {
+                                "operation": "append",
+                                "value": " story-one",
+                            }
+                        },
+                    ),
+                    (
+                        "update_story_metadata",
+                        {
+                            "notes_patch": {
+                                "operation": "append",
+                                "value": " story-two",
+                            }
+                        },
+                    ),
+                    (
+                        "update_chapter_metadata",
+                        {
+                            "chap_id": 1,
+                            "notes_patch": {
+                                "operation": "append",
+                                "value": " chapter-one",
+                            },
+                        },
+                    ),
+                    (
+                        "update_chapter_metadata",
+                        {
+                            "chap_id": 1,
+                            "notes_patch": {
+                                "operation": "append",
+                                "value": " chapter-two",
+                            },
+                        },
+                    ),
+                    (
+                        "create_sourcebook_entry",
+                        {
+                            "name": "Integration Entry",
+                            "description": "Entry base",
+                            "category": "Character",
+                        },
+                    ),
+                    (
+                        "update_sourcebook_entry",
+                        {
+                            "name_or_id": "Integration Entry",
+                            "description_patch": {
+                                "operation": "append",
+                                "value": " one",
+                            },
+                        },
+                    ),
+                    (
+                        "update_sourcebook_entry",
+                        {
+                            "name_or_id": "Integration Entry",
+                            "description_patch": {
+                                "operation": "append",
+                                "value": " two",
+                            },
+                        },
+                    ),
+                    (
+                        "manage_scenes",
+                        {
+                            "action": "create",
+                            "create_data": {"summary": "Scene base"},
+                        },
+                    ),
+                    (
+                        "manage_scenes",
+                        {
+                            "action": "update",
+                            "scene_id": 1,
+                            "update_data": {
+                                "summary_patch": {
+                                    "operation": "append",
+                                    "value": " one",
+                                }
+                            },
+                        },
+                    ),
+                    (
+                        "manage_scenes",
+                        {
+                            "action": "update",
+                            "scene_id": 1,
+                            "update_data": {
+                                "summary_patch": {
+                                    "operation": "append",
+                                    "value": " two",
+                                }
+                            },
+                        },
+                    ),
+                ]
+            )
+
+        self.assertTrue((data.get("mutations") or {}).get("story_changed"))
+
+        new_chapter = chapter_file.read_text(encoding="utf-8")
+        self.assertEqual(new_chapter, original_chapter + " First prose. Second prose.")
+
+        story = json.loads(
+            (self.projects_root / "demo" / "story.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(story.get("notes"), " story-one story-two")
+        chapter = (story.get("chapters") or [])[0]
+        self.assertEqual(chapter.get("notes"), " chapter-one chapter-two")
+
+        sourcebook_data = self._post_single_tool(
+            "get_sourcebook_entry", {"name_or_id": "Integration Entry"}
+        )
+        sourcebook_payload = sourcebook_data.get("appended_messages") or []
+        self.assertEqual(len(sourcebook_payload), 1)
+        sourcebook_entry = json.loads(sourcebook_payload[0]["content"])
+        self.assertEqual(sourcebook_entry.get("description"), "Entry base one two")
+
+        scene_data = self._post_single_tool(
+            "manage_scenes",
+            {"action": "get", "scene_id": 1},
+        )
+        scene_payload = scene_data.get("appended_messages") or []
+        self.assertEqual(len(scene_payload), 1)
+        scene_one = json.loads(scene_payload[0]["content"])
+        self.assertEqual(scene_one.get("summary"), "Scene base one two")
 
     def test_call_writing_llm_append_mode_with_trailing_newline(self):
         """Test append mode consumes trailing newline when continuation is inline."""
@@ -1835,6 +2590,10 @@ class ChatToolsTest(TestCase):
 
     def test_update_book_metadata_missing_book_returns_error(self):
         self._bootstrap_project()
+        story_path = self.projects_root / "demo" / "story.json"
+        story_data = json.loads(story_path.read_text(encoding="utf-8"))
+        story_data["project_type"] = "series"
+        story_path.write_text(json.dumps(story_data), encoding="utf-8")
         result = self._post_single_tool(
             "update_book_metadata",
             {
@@ -2039,3 +2798,480 @@ class ChatToolsTest(TestCase):
         appended = undo_data.get("appended_messages") or []
         result = json.loads(appended[0].get("content") or "{}")
         self.assertIn("error", result)
+
+    # =========================================================================
+    # SYSTEMATIC TEST SUITE: Scoped Multi-Tool Execution Scenarios
+    # =========================================================================
+    # These tests close the gap for `/api/v1/projects/{project_name}/chat/tools`
+    # with multiple tool calls and project operations (create, type changes, etc).
+
+    def test_scoped_multi_tool_baseline_no_project_switch(self):
+        """Base case: multiple tools in same batch without project switches.
+
+        Validates that the scoped endpoint correctly handles multiple
+        independent tools that don't change project context.
+        """
+        self._bootstrap_project()
+
+        # Execute two tools in same batch on same project.
+        body = {
+            "model_type": "CHAT",
+            "messages": [
+                {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": [
+                        {
+                            "id": "tool_1",
+                            "type": "function",
+                            "function": {
+                                "name": "manage_story_core",
+                                "arguments": json.dumps({"action": "get_metadata"}),
+                            },
+                        },
+                        {
+                            "id": "tool_2",
+                            "type": "function",
+                            "function": {
+                                "name": "manage_sourcebook",
+                                "arguments": json.dumps({"action": "list"}),
+                            },
+                        },
+                    ],
+                }
+            ],
+        }
+
+        response = self.client.post("/api/v1/projects/demo/chat/tools", json=body)
+        self.assertEqual(response.status_code, 200, response.text)
+        data = _parse_tool_sse_result(response.text)
+        appended = data.get("appended_messages") or []
+
+        # Both tools should execute successfully.
+        self.assertEqual(len(appended), 2)
+        self.assertEqual(appended[0].get("name"), "manage_story_core")
+        self.assertEqual(appended[1].get("name"), "manage_sourcebook")
+
+        # Verify story metadata is from 'demo' project.
+        story_payload = json.loads(appended[0].get("content") or "{}")
+        self.assertEqual(story_payload.get("title"), "Demo")
+
+    def test_scoped_multi_tool_create_then_read_canonical_name(self):
+        """Verify project creation returns canonical name, subsequent tools use new project.
+
+        This tests the fix for: project_name derivation must use created
+        artifact path, not contextual lookup. Ensures manage_project.create
+        returns the actual directory name, and subsequent tools read from
+        the newly created project.
+        """
+        self._bootstrap_project()
+
+        # Create new project with name "SciFiAdventure", then read metadata.
+        body = {
+            "model_type": "CHAT",
+            "messages": [
+                {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": [
+                        {
+                            "id": "create_project_call",
+                            "type": "function",
+                            "function": {
+                                "name": "manage_project",
+                                "arguments": json.dumps(
+                                    {
+                                        "action": "create",
+                                        "create_data": {
+                                            "name": "SciFiAdventure",
+                                            "project_type": "novel",
+                                        },
+                                    }
+                                ),
+                            },
+                        },
+                        {
+                            "id": "read_new_project_call",
+                            "type": "function",
+                            "function": {
+                                "name": "manage_story_core",
+                                "arguments": json.dumps({"action": "get_metadata"}),
+                            },
+                        },
+                    ],
+                }
+            ],
+        }
+
+        response = self.client.post("/api/v1/projects/demo/chat/tools", json=body)
+        self.assertEqual(response.status_code, 200, response.text)
+        data = _parse_tool_sse_result(response.text)
+        appended = data.get("appended_messages") or []
+
+        self.assertEqual(len(appended), 2)
+
+        # First message: project creation result.
+        create_payload = json.loads(appended[0].get("content") or "{}")
+        project_name = create_payload.get("project_name")
+        self.assertTrue(
+            project_name, "create result must include canonical project_name"
+        )
+        self.assertNotIn(
+            " ", project_name, "project_name must be canonical (no spaces)"
+        )
+
+        # Second message: metadata from NEW project (not 'demo').
+        metadata_payload = json.loads(appended[1].get("content") or "{}")
+        new_title = metadata_payload.get("title")
+        self.assertIsNotNone(
+            new_title, "subsequent tool must read from newly created project"
+        )
+
+        # Verify new project directory exists.
+        new_project_dir = self.projects_root / project_name
+        self.assertTrue(
+            new_project_dir.exists(),
+            f"new project directory must exist at {new_project_dir}",
+        )
+
+    def test_scoped_multi_tool_update_then_verify_persisted(self):
+        """Tool changes are persisted and visible to subsequent tools in batch.
+
+        Validates that changes made by one tool are immediately visible
+        to subsequent tools in the same batch.
+        """
+        self._bootstrap_project()
+
+        # Update story metadata, then verify it's visible in get_metadata.
+        body = {
+            "model_type": "CHAT",
+            "messages": [
+                {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": [
+                        {
+                            "id": "update_call",
+                            "type": "function",
+                            "function": {
+                                "name": "manage_story_core",
+                                "arguments": json.dumps(
+                                    {
+                                        "action": "update_metadata",
+                                        "update_data": {
+                                            "summary": "Updated story summary",
+                                            "tags": ["updated"],
+                                        },
+                                    }
+                                ),
+                            },
+                        },
+                        {
+                            "id": "verify_call",
+                            "type": "function",
+                            "function": {
+                                "name": "manage_story_core",
+                                "arguments": json.dumps({"action": "get_metadata"}),
+                            },
+                        },
+                    ],
+                }
+            ],
+        }
+
+        response = self.client.post("/api/v1/projects/demo/chat/tools", json=body)
+        self.assertEqual(response.status_code, 200, response.text)
+        data = _parse_tool_sse_result(response.text)
+        appended = data.get("appended_messages") or []
+
+        self.assertEqual(len(appended), 2)
+
+        # Second message should reflect the update from first message.
+        verify_payload = json.loads(appended[1].get("content") or "{}")
+        self.assertEqual(verify_payload.get("summary"), "Updated story summary")
+        self.assertIn("updated", verify_payload.get("tags") or [])
+
+    def test_scoped_multi_tool_with_sourcebook_operations(self):
+        """Multiple scoped tools targeting different subsystems (story + sourcebook).
+
+        Validates that tools from different domains (story management,
+        sourcebook management) can coexist and operate correctly in same batch.
+        """
+        self._bootstrap_project()
+
+        # Create a sourcebook entry, then read all entries.
+        body = {
+            "model_type": "CHAT",
+            "messages": [
+                {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": [
+                        {
+                            "id": "create_entry_call",
+                            "type": "function",
+                            "function": {
+                                "name": "manage_sourcebook",
+                                "arguments": json.dumps(
+                                    {
+                                        "action": "create",
+                                        "entry_data": {
+                                            "name": "TestCharacter",
+                                            "category": "character",
+                                            "description": "A brave hero.",
+                                        },
+                                    }
+                                ),
+                            },
+                        },
+                        {
+                            "id": "list_entries_call",
+                            "type": "function",
+                            "function": {
+                                "name": "manage_sourcebook",
+                                "arguments": json.dumps(
+                                    {
+                                        "action": "list",
+                                        "category": "character",
+                                    }
+                                ),
+                            },
+                        },
+                    ],
+                }
+            ],
+        }
+
+        response = self.client.post("/api/v1/projects/demo/chat/tools", json=body)
+        self.assertEqual(response.status_code, 200, response.text)
+        data = _parse_tool_sse_result(response.text)
+        appended = data.get("appended_messages") or []
+
+        self.assertEqual(len(appended), 2)
+
+        # First message: created entry confirmation - should have entry details.
+        create_payload = json.loads(appended[0].get("content") or "{}")
+        # Create returns the entry data which includes id, name, category, etc.
+        self.assertTrue(create_payload, "create should return entry data")
+
+        # Second message: list should show the newly created entry.
+        list_payload = json.loads(appended[1].get("content") or "{}")
+        entries = (
+            list_payload
+            if isinstance(list_payload, list)
+            else list_payload.get("entries") or []
+        )
+        entry_names = [e.get("name") for e in entries if isinstance(e, dict)]
+        self.assertIn(
+            "TestCharacter", entry_names, "list should include newly created entry"
+        )
+
+    def test_scoped_multi_tool_project_type_change_mid_batch(self):
+        """Changing project type mid-batch executes and returns context updates.
+
+        Tests that when manage_project.change_type is called mid-batch,
+        it executes successfully and subsequent tools continue operating.
+        Note: full context switching for project type changes is a separate concern.
+        """
+        self._bootstrap_project()
+
+        # Change project type, then verify subsequent tool executes successfully.
+        body = {
+            "model_type": "CHAT",
+            "messages": [
+                {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": [
+                        {
+                            "id": "change_type_call",
+                            "type": "function",
+                            "function": {
+                                "name": "manage_project",
+                                "arguments": json.dumps(
+                                    {
+                                        "action": "change_type",
+                                        "type_data": {
+                                            "new_type": "short_story_collection"
+                                        },
+                                    }
+                                ),
+                            },
+                        },
+                        {
+                            "id": "verify_batch_call",
+                            "type": "function",
+                            "function": {
+                                "name": "manage_story_core",
+                                "arguments": json.dumps({"action": "get_metadata"}),
+                            },
+                        },
+                    ],
+                }
+            ],
+        }
+
+        response = self.client.post("/api/v1/projects/demo/chat/tools", json=body)
+        self.assertEqual(response.status_code, 200, response.text)
+        data = _parse_tool_sse_result(response.text)
+        appended = data.get("appended_messages") or []
+
+        # Both tools should execute without error.
+        self.assertEqual(len(appended), 2)
+
+        # First message: change_type result
+        change_result = json.loads(appended[0].get("content") or "{}")
+        self.assertTrue(change_result.get("ok") or "message" in change_result)
+
+        # Second message: subsequent tool executes (metadata accessible)
+        metadata = json.loads(appended[1].get("content") or "{}")
+        self.assertIn(
+            "project_type", metadata, "subsequent tool should execute successfully"
+        )
+
+    def test_scoped_multi_tool_three_tool_context_chain(self):
+        """Three-tool chain verifies context updates persist across tools.
+
+        Tests that registry.current updates after each tool execution,
+        allowing a chain of operations where each tool depends on previous
+        context changes (e.g., create → update → read).
+        """
+        self._bootstrap_project()
+
+        # 1. Create a sourcebook entry
+        # 2. Update it with new description
+        # 3. Read it back to verify chain
+        body = {
+            "model_type": "CHAT",
+            "messages": [
+                {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": [
+                        {
+                            "id": "step1",
+                            "type": "function",
+                            "function": {
+                                "name": "manage_sourcebook",
+                                "arguments": json.dumps(
+                                    {
+                                        "action": "create",
+                                        "entry_data": {
+                                            "name": "Hero",
+                                            "category": "character",
+                                            "description": "The protagonist.",
+                                        },
+                                    }
+                                ),
+                            },
+                        },
+                        {
+                            "id": "step2",
+                            "type": "function",
+                            "function": {
+                                "name": "manage_sourcebook",
+                                "arguments": json.dumps(
+                                    {
+                                        "action": "update",
+                                        "name_or_id": "Hero",
+                                        "update_data": {
+                                            "description": "The brave protagonist who seeks the artifact."
+                                        },
+                                    }
+                                ),
+                            },
+                        },
+                        {
+                            "id": "step3",
+                            "type": "function",
+                            "function": {
+                                "name": "manage_sourcebook",
+                                "arguments": json.dumps(
+                                    {
+                                        "action": "get",
+                                        "name_or_id": "Hero",
+                                    }
+                                ),
+                            },
+                        },
+                    ],
+                }
+            ],
+        }
+
+        response = self.client.post("/api/v1/projects/demo/chat/tools", json=body)
+        self.assertEqual(response.status_code, 200, response.text)
+        data = _parse_tool_sse_result(response.text)
+        appended = data.get("appended_messages") or []
+
+        self.assertEqual(len(appended), 3)
+
+        # Final read should show the updated description (or content field if used).
+        final_payload = json.loads(appended[2].get("content") or "{}")
+        final_desc = final_payload.get("description", "")
+        self.assertIn(
+            "brave protagonist",
+            final_desc,
+            f"final read should show updated description, got: {final_desc}",
+        )
+
+    def test_scoped_multi_tool_concurrent_mutation_tracking(self):
+        """Batch mutations from multiple tools are aggregated correctly.
+
+        Validates that when multiple tools mutate state, the batch response
+        correctly aggregates mutations (e.g., story_changed flags, tool_batch ids).
+        """
+        self._bootstrap_project()
+
+        # Two tools that modify state: update_metadata + create sourcebook entry.
+        body = {
+            "model_type": "CHAT",
+            "messages": [
+                {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": [
+                        {
+                            "id": "mutate1",
+                            "type": "function",
+                            "function": {
+                                "name": "manage_story_core",
+                                "arguments": json.dumps(
+                                    {
+                                        "action": "update_metadata",
+                                        "update_data": {"summary": "Updated."},
+                                    }
+                                ),
+                            },
+                        },
+                        {
+                            "id": "mutate2",
+                            "type": "function",
+                            "function": {
+                                "name": "manage_sourcebook",
+                                "arguments": json.dumps(
+                                    {
+                                        "action": "create",
+                                        "entry_data": {
+                                            "name": "NewEntry",
+                                            "category": "location",
+                                            "content": "A place.",
+                                        },
+                                    }
+                                ),
+                            },
+                        },
+                    ],
+                }
+            ],
+        }
+
+        response = self.client.post("/api/v1/projects/demo/chat/tools", json=body)
+        self.assertEqual(response.status_code, 200, response.text)
+        data = _parse_tool_sse_result(response.text)
+
+        # Verify mutations are tracked.
+        mutations = data.get("mutations") or {}
+        self.assertTrue(mutations.get("story_changed"))
+        tool_batch = mutations.get("tool_batch") or {}
+        self.assertTrue(tool_batch.get("batch_id"))

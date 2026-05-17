@@ -45,7 +45,9 @@ import {
 import { useToast } from './components/ui/Toast';
 import { setErrorDispatcher } from './services/errorNotifier';
 import { useChatStore, ChatStoreState } from './stores/chatStore';
+import { uiStoreActions, useUIStore, UIStoreState } from './stores/uiStore';
 import type { SessionMutation } from './features/chat';
+import type { SceneId } from './types';
 
 const App: React.FC = () => {
   const { confirm, alert, confirmDialogState, handleConfirm, handleCancel } =
@@ -180,6 +182,17 @@ const App: React.FC = () => {
     isMobileFormatMenuOpen,
     setIsMobileFormatMenuOpen,
   } = useEditorUIState();
+  const setWorkspaceMode = useUIStore(
+    (s: UIStoreState): UIStoreState['setWorkspaceMode'] => s.setWorkspaceMode
+  );
+
+  const openSceneEditorDialog = useCallback(
+    (sceneId: SceneId): void => {
+      setWorkspaceMode('scenes');
+      uiStoreActions.openSceneEditorDialog(sceneId);
+    },
+    [setWorkspaceMode]
+  );
 
   const { editorSettings, setEditorSettings, currentTheme, isLight } =
     useEditorPreferences();
@@ -258,6 +271,7 @@ const App: React.FC = () => {
     requestToolCallLoopAccess,
     handleChapterSelect,
     openAndExpandStory,
+    openSceneEditorDialog,
     openSourcebookEntryDialog,
     openStoryMetadataDialog,
     openChapterMetadataDialog,
@@ -378,6 +392,7 @@ const App: React.FC = () => {
   const chatControls = useMemo(
     () => ({
       isChatOpen,
+      setIsChatOpen,
       isChatAvailable: roleAvailability.chat,
       activeChatConfig,
       handleSendMessage: handleSendMessageWithReset,
@@ -396,6 +411,7 @@ const App: React.FC = () => {
     }),
     [
       isChatOpen,
+      setIsChatOpen,
       roleAvailability.chat,
       activeChatConfig,
       handleSendMessageWithReset,
@@ -415,6 +431,23 @@ const App: React.FC = () => {
   );
 
   const { sidebarControls, appMainLayoutProps } = useAppMainLayoutProps({
+    viewControls: {
+      viewMode,
+      setViewMode,
+      showWhitespace,
+      setShowWhitespace,
+      isViewMenuOpen,
+      setIsViewMenuOpen,
+    },
+    formatControls: {
+      handleFormat,
+      getFormatButtonClass,
+      isFormatMenuOpen,
+      setIsFormatMenuOpen,
+      isMobileFormatMenuOpen,
+      setIsMobileFormatMenuOpen,
+      onOpenImages: openImagesDialog,
+    },
     isSidebarOpen,
     setIsSidebarOpen,
     currentChapterId,
@@ -490,18 +523,6 @@ const App: React.FC = () => {
     nextRedoLabel,
     canUndo,
     canRedo,
-    viewMode,
-    setViewMode,
-    showWhitespace,
-    setShowWhitespace,
-    isViewMenuOpen,
-    setIsViewMenuOpen,
-    isFormatMenuOpen,
-    setIsFormatMenuOpen,
-    isMobileFormatMenuOpen,
-    setIsMobileFormatMenuOpen,
-    handleFormat,
-    getFormatButtonClass,
     openImagesDialog,
     setIsSettingsOpen,
     setIsImagesOpen,

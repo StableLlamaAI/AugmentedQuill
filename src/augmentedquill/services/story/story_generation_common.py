@@ -116,6 +116,293 @@ def sanitize_prompt(prompt: str) -> str:
     return "\n".join(cleaned)
 
 
+def _coerce_scene_id(raw_id: object) -> int | None:
+    """Return a positive integer scene ID when the stored value is valid."""
+    if isinstance(raw_id, int) and raw_id > 0:
+        return raw_id
+    if isinstance(raw_id, str) and raw_id.isdigit():
+        parsed = int(raw_id)
+        return parsed if parsed > 0 else None
+    return None
+
+
+def _iter_story_scenes(story: dict) -> list[dict[str, Any]]:
+    """Return scene dicts with stable IDs from the story config."""
+    raw_scenes = story.get("scenes") or {}
+    items: list[dict[str, Any]] = []
+
+    if isinstance(raw_scenes, dict):
+        iterable = raw_scenes.items()
+    elif isinstance(raw_scenes, list):
+        iterable = [
+            (scene.get("id"), scene) for scene in raw_scenes if isinstance(scene, dict)
+        ]
+    else:
+        iterable = []
+
+    for raw_id, scene_data in iterable:
+        if not isinstance(scene_data, dict):
+            continue
+        scene_id = _coerce_scene_id(scene_data.get("id", raw_id))
+        if scene_id is None:
+            continue
+        items.append({"id": scene_id, **scene_data})
+
+    return items
+
+
+def _scene_matches_scope(
+    scene: dict[str, Any], *, scope: str, chap_id: int | None
+) -> bool:
+    """Return whether a scene is linked into the requested prose scope."""
+    link = scene.get("prose_link")
+    if not isinstance(link, dict):
+        # Unlinked scenes are planning entities and should still participate in
+        # deterministic scene guidance for both story and chapter scopes.
+        return True
+
+    if scope == "story":
+        return link.get("scope_type") == "story"
+
+    if link.get("scope_type") != "chapter" or chap_id is None:
+        return False
+
+    raw_chapter_id = link.get("chapter_id")
+    if isinstance(raw_chapter_id, int):
+        return raw_chapter_id == chap_id
+    if isinstance(raw_chapter_id, str):
+        stripped = raw_chapter_id.strip()
+        return stripped == str(chap_id) or (
+            stripped.isdigit() and int(stripped) == chap_id
+        )
+    return False
+
+
+def _scene_sort_key(scene: dict[str, Any]) -> tuple[int, int, int, int]:
+    """Sort linked scenes by prose position, then by persisted narrative order."""
+    link = scene.get("prose_link") if isinstance(scene.get("prose_link"), dict) else {}
+    start_offset = link.get("start_offset")
+    has_start = isinstance(start_offset, int)
+    order_index = scene.get("order_index")
+    scene_id = int(scene.get("id") or 0)
+    return (
+        0 if has_start else 1,
+        int(start_offset) if has_start else 10**12,
+        int(order_index) if isinstance(order_index, int) else scene_id,
+        scene_id,
+    )
+
+
+def _scene_reference_ids(scene: dict[str, Any]) -> list[str]:
+    """Collect stable sourcebook IDs referenced by a scene."""
+    ids: list[str] = []
+    for field_name in (
+        "active_characters",
+        "passive_characters",
+        "sourcebook_entry_ids",
+    ):
+        values = scene.get(field_name)
+        if not isinstance(values, list):
+            continue
+        for value in values:
+            if isinstance(value, str):
+                stripped = value.strip()
+                if stripped and stripped not in ids:
+                    ids.append(stripped)
+
+    location = scene.get("location")
+    if isinstance(location, str):
+        stripped = location.strip()
+        if stripped and stripped not in ids:
+            ids.append(stripped)
+
+    return ids
+
+
+def _format_scene_brief(scene: dict[str, Any]) -> str:
+    """Render one compact scene guidance block for writing prompts."""
+    lines: list[str] = []
+    summary = str(scene.get("summary") or "").strip()
+    if summary:
+        lines.append(f"Summary: {summary}")
+
+    active_characters = scene.get("active_characters")
+    if isinstance(active_characters, list):
+        active = ", ".join(
+            str(value).strip() for value in active_characters if str(value).strip()
+        )
+        if active:
+            lines.append(f"Active characters: {active}")
+
+    passive_characters = scene.get("passive_characters")
+    if isinstance(passive_characters, list):
+        passive = ", ".join(
+            str(value).strip() for value in passive_characters if str(value).strip()
+        )
+        if passive:
+            lines.append(f"Passive characters: {passive}")
+
+    location = str(scene.get("location") or "").strip()
+    if location:
+        lines.append(f"Location: {location}")
+
+    extra_refs = scene.get("sourcebook_entry_ids")
+    if isinstance(extra_refs, list):
+        refs = ", ".join(
+            str(value).strip() for value in extra_refs if str(value).strip()
+        )
+        if refs:
+            lines.append(f"Referenced entries: {refs}")
+
+    return "\n".join(lines)
+
+
+def get_scene_context_for_scope(
+    *,
+    story: dict,
+    scope: str,
+    chap_id: int | None,
+    current_text: str,
+    include_all_scenes: bool,
+) -> dict[str, Any]:
+    """Derive deterministic scene guidance and referenced sourcebook IDs.
+
+    For chapter continuation/relevance, this identifies the current scene from
+    the end of the current prose and the immediately following linked scene.
+    For rewrite, callers can request the full in-scope scene list.
+    """
+    scoped_scenes = [
+        scene
+        for scene in _iter_story_scenes(story)
+        if _scene_matches_scope(scene, scope=scope, chap_id=chap_id)
+    ]
+    scoped_scenes.sort(key=_scene_sort_key)
+
+    if not scoped_scenes:
+        return {"scene_block": "", "sourcebook_ids": [], "scenes": []}
+
+    selected_scenes: list[dict[str, Any]]
+    if include_all_scenes:
+        selected_scenes = scoped_scenes
+        header = "Scene plan for this draft"
+    else:
+        cursor = max(0, len(current_text or ""))
+        current_index: int | None = None
+        for index, scene in enumerate(scoped_scenes):
+            link = scene.get("prose_link") or {}
+            start_offset = int(link.get("start_offset") or 0)
+            end_offset = link.get("end_offset")
+            scene_end = float("inf") if end_offset is None else int(end_offset)
+
+            if start_offset < cursor <= scene_end:
+                current_index = index
+                break
+            if cursor == start_offset:
+                current_index = index - 1 if index > 0 else None
+                break
+            if cursor >= scene_end:
+                current_index = index
+                continue
+            if cursor < start_offset:
+                break
+
+        selected_scenes = []
+        if current_index is not None:
+            selected_scenes.append(scoped_scenes[current_index])
+            if current_index + 1 < len(scoped_scenes):
+                selected_scenes.append(scoped_scenes[current_index + 1])
+        elif scoped_scenes:
+            selected_scenes.append(scoped_scenes[0])
+
+        if not selected_scenes:
+            return {"scene_block": "", "sourcebook_ids": [], "scenes": []}
+
+        header = "Scene guidance"
+
+    sourcebook_ids: list[str] = []
+    for scene in selected_scenes:
+        for entry_id in _scene_reference_ids(scene):
+            if entry_id not in sourcebook_ids:
+                sourcebook_ids.append(entry_id)
+
+    scene_lines: list[str] = [header]
+    if include_all_scenes:
+        for index, scene in enumerate(selected_scenes, start=1):
+            scene_lines.append(f"Scene {index}")
+            scene_lines.append(_format_scene_brief(scene) or "Summary: (empty)")
+    else:
+        labels = ["Current scene", "Next scene"]
+        for label, scene in zip(labels, selected_scenes):
+            scene_lines.append(label)
+            scene_lines.append(_format_scene_brief(scene) or "Summary: (empty)")
+
+    return {
+        "scene_block": "\n".join(scene_lines),
+        "sourcebook_ids": sourcebook_ids,
+        "scenes": selected_scenes,
+    }
+
+
+def get_scene_context_for_target(
+    *,
+    story: dict,
+    scope: str,
+    chap_id: int | None,
+    target_scene_id: int,
+    include_following_scenes: int,
+) -> dict[str, Any]:
+    """Build deterministic context centered on one scene and its successors."""
+    context = get_scene_context_for_scope(
+        story=story,
+        scope=scope,
+        chap_id=chap_id,
+        current_text="",
+        include_all_scenes=True,
+    )
+    scoped_scenes = context.get("scenes") or []
+    if not scoped_scenes:
+        return {"scene_block": "", "sourcebook_ids": [], "scenes": []}
+
+    target_index = next(
+        (
+            idx
+            for idx, scene in enumerate(scoped_scenes)
+            if int(scene.get("id") or 0) == target_scene_id
+        ),
+        -1,
+    )
+    if target_index < 0:
+        return context
+
+    take_count = max(1, include_following_scenes + 1)
+    selected = scoped_scenes[target_index : target_index + take_count]
+    if not selected:
+        return {"scene_block": "", "sourcebook_ids": [], "scenes": []}
+
+    sourcebook_ids: list[str] = []
+    for scene in selected:
+        for entry_id in _scene_reference_ids(scene):
+            if entry_id not in sourcebook_ids:
+                sourcebook_ids.append(entry_id)
+
+    scene_lines: list[str] = ["Scene guidance"]
+    for index, scene in enumerate(selected):
+        if index == 0:
+            label = "Current scene"
+        elif index == 1:
+            label = "Next scene"
+        else:
+            label = f"Following scene {index}"
+        scene_lines.append(label)
+        scene_lines.append(_format_scene_brief(scene) or "Summary: (empty)")
+
+    return {
+        "scene_block": "\n".join(scene_lines),
+        "sourcebook_ids": sourcebook_ids,
+        "scenes": selected,
+    }
+
+
 def gather_writing_context(
     story: dict,
     chapters_data: list[dict],
@@ -703,14 +990,39 @@ def prepare_ai_action_generation(payload: dict, active: Path | None = None) -> d
         if book_summaries_list:
             chapter_summaries_text = "\n\n".join(book_summaries_list)
 
+    scene_context: dict[str, Any] = {"scene_block": "", "sourcebook_ids": []}
+    payload_with_scene_entries = dict(payload)
+    if target == "chapter" and action in ("extend", "rewrite"):
+        scene_context = get_scene_context_for_scope(
+            story=story,
+            scope=scope,
+            chap_id=chap_id if isinstance(chap_id, int) else None,
+            current_text=existing_content,
+            include_all_scenes=action == "rewrite",
+        )
+        merged_sourcebook_ids = list(
+            payload_with_scene_entries.get("checked_sourcebook") or []
+        )
+        for entry_id in scene_context.get("sourcebook_ids", []):
+            if entry_id not in merged_sourcebook_ids:
+                merged_sourcebook_ids.append(entry_id)
+        if merged_sourcebook_ids:
+            payload_with_scene_entries["checked_sourcebook"] = merged_sourcebook_ids
+
     context = gather_writing_context(
         story=story,
         chapters_data=chapters_data,
         pos=pos,
         title=chapter_title,
         summary=chapter_summary,
-        payload=payload,
+        payload=payload_with_scene_entries,
     )
+    if scene_context.get("scene_block"):
+        context["background"] = "\n\n".join(
+            part
+            for part in [context.get("background", ""), scene_context["scene_block"]]
+            if part
+        )
 
     model_type = (
         EDITING_ROLE

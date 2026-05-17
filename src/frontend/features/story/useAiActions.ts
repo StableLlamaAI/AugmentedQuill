@@ -11,9 +11,10 @@
 
 import { useEffect, useRef, useState } from 'react';
 
-import { WritingUnit } from '../../types';
+import { WritingUnit, Scene } from '../../types';
 import { streamAiAction } from '../../services/openaiService';
 import { notifyError } from '../../services/errorNotifier';
+import { api } from '../../services/api';
 import { setupMountedRefLifecycle } from '../../utils/mountedRef';
 import { joinSuggestionToContent } from '../../utils/textUtils';
 import { useStoryStore } from '../../stores/storyStore';
@@ -44,6 +45,26 @@ type StreamedContent = {
   chapterId: string;
   content: string;
 };
+
+type AutoLinkScopeType = 'story' | 'chapter';
+
+function buildAutoLinkPayload(
+  unit: WritingUnit,
+  content: string
+): {
+  scope_type: AutoLinkScopeType;
+  chapter_id?: string;
+  book_id?: string | null;
+  current_text: string;
+} {
+  const scopeType: AutoLinkScopeType = unit.scope === 'chapter' ? 'chapter' : 'story';
+  return {
+    scope_type: scopeType,
+    chapter_id: scopeType === 'chapter' ? unit.id : undefined,
+    book_id: scopeType === 'chapter' ? (unit.book_id ?? null) : undefined,
+    current_text: content,
+  };
+}
 
 const createPrefillStripper =
   (
@@ -155,7 +176,7 @@ function createStreamingPusher(
  * Extracted from useAiActions to keep the hook under the line-length limit.
  */
 async function commitCancelledProseContent(
-  chapterId: string,
+  unit: WritingUnit,
   content: string,
   updateChapter: (
     id: string,
@@ -167,7 +188,17 @@ async function commitCancelledProseContent(
   onDone: () => void
 ): Promise<void> {
   try {
-    await updateChapter(chapterId, { content }, true, true, false);
+    await updateChapter(unit.id, { content }, true, true, false);
+    try {
+      const linked = await api.scenes.autoLinkScope(
+        buildAutoLinkPayload(unit, content)
+      );
+      linked.scenes.forEach((scene: Scene): void => {
+        useStoryStore.getState().patchScene(scene);
+      });
+    } catch {
+      // Keep the cancel commit resilient even if auto-link fails temporarily.
+    }
     useStoryStore.getState().setStreamingContent(null);
   } finally {
     onDone();
@@ -220,13 +251,13 @@ export function useAiActions({
     cancelSignalRef.current.reader = undefined;
 
     const lastStreamed = lastStreamedContentRef.current;
-    if (lastStreamed) {
+    if (lastStreamed && currentUnit) {
       // Set frozen flag BEFORE clearing isAiActionLoading so no render frame
       // sees streamingModeActive=false while partial content is still visible.
       useChatStore.getState().setIsProseStreamingFrozen(true);
       cancelCommitInProgressRef.current = true;
       void commitCancelledProseContent(
-        lastStreamed.chapterId,
+        currentUnit,
         lastStreamed.content,
         updateChapter,
         (): void => {
@@ -319,12 +350,29 @@ export function useAiActions({
       if (target === 'summary') {
         await updateChapter(currentUnit.id, { summary: result });
       } else if (action === 'extend') {
+        const nextContent = joinSuggestionToContent(
+          baseContent,
+          stripPrefillEcho(result)
+        );
         await updateChapter(currentUnit.id, {
           content: joinSuggestionToContent(baseContent, stripPrefillEcho(result)),
         });
+        const linked = await api.scenes.autoLinkScope(
+          buildAutoLinkPayload(currentUnit, nextContent)
+        );
+        linked.scenes.forEach((scene: Scene): void => {
+          useStoryStore.getState().patchScene(scene);
+        });
       } else {
+        const nextContent = stripPrefillEcho(result);
         await updateChapter(currentUnit.id, {
           content: stripPrefillEcho(result),
+        });
+        const linked = await api.scenes.autoLinkScope(
+          buildAutoLinkPayload(currentUnit, nextContent)
+        );
+        linked.scenes.forEach((scene: Scene): void => {
+          useStoryStore.getState().patchScene(scene);
         });
       }
     } catch (error: unknown) {

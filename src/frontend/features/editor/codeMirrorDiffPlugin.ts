@@ -36,6 +36,8 @@ const diffMark = Decoration.mark({
   class: 'cm-diff-inserted',
 });
 
+const INLINE_SCENE_MARKER_REGEX = /<!--scene:\d+:(?:start|end)-->/g;
+
 type DeletedWsKind = 'space' | 'tab' | 'newline';
 
 /** Represents plain deleted text widget. */
@@ -92,10 +94,15 @@ function addDeletedDecorations(
   text: string,
   showWhitespace: boolean
 ): void {
+  const visibleText = text.replaceAll(INLINE_SCENE_MARKER_REGEX, '');
+  if (visibleText.length === 0) {
+    return;
+  }
+
   if (!showWhitespace) {
     decs.push(
       Decoration.widget({
-        widget: new DeletedTextWidget(text),
+        widget: new DeletedTextWidget(visibleText),
         side: 0,
       }).range(atPos)
     );
@@ -106,7 +113,9 @@ function addDeletedDecorations(
   let side = 0;
 
   const startsWithVisibleWhitespace =
-    text.startsWith(' ') || text.startsWith('\t') || text.startsWith('\n');
+    visibleText.startsWith(' ') ||
+    visibleText.startsWith('\t') ||
+    visibleText.startsWith('\n');
   if (startsWithVisibleWhitespace) {
     decs.push(
       Decoration.widget({
@@ -158,7 +167,7 @@ function addDeletedDecorations(
     side += 1;
   };
 
-  for (const ch of text) {
+  for (const ch of visibleText) {
     if (ch === ' ') {
       pushTextBuffer();
       pushWs('space');

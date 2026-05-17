@@ -246,12 +246,12 @@ class SourcebookValidationTest(TestCase):
 
     def test_pydantic_schema_validates_images_on_create_tool(self):
         from augmentedquill.services.chat.chat_tools.sourcebook_tools import (
-            CreateSourcebookEntryParams,
+            ManageSourcebookEntryData,
         )
         from pydantic import ValidationError
 
         # Valid
-        params = CreateSourcebookEntryParams(
+        params = ManageSourcebookEntryData(
             name="Valid Model",
             description="Valid",
             category="Character",
@@ -260,14 +260,14 @@ class SourcebookValidationTest(TestCase):
         self.assertEqual(params.images, ["img1", "img2"])
 
         # Default is empty list
-        params2 = CreateSourcebookEntryParams(
+        params2 = ManageSourcebookEntryData(
             name="Valid Model 2", description="Valid", category="Character"
         )
         self.assertEqual(params2.images, [])
 
         # Invalid
         with self.assertRaises(ValidationError):
-            CreateSourcebookEntryParams(
+            ManageSourcebookEntryData(
                 name="Invalid Model",
                 description="Valid",
                 category="Character",
@@ -276,30 +276,30 @@ class SourcebookValidationTest(TestCase):
 
     def test_pydantic_schema_validates_images_on_update_tool(self):
         from augmentedquill.services.chat.chat_tools.sourcebook_tools import (
-            UpdateSourcebookEntryParams,
+            ManageSourcebookUpdateData,
         )
         from pydantic import ValidationError
 
         # Valid
-        params = UpdateSourcebookEntryParams(name_or_id="id1", images=["img1"])
+        params = ManageSourcebookUpdateData(images=["img1"])
         self.assertEqual(params.images, ["img1"])
 
         # Default is None
-        params2 = UpdateSourcebookEntryParams(name_or_id="id1")
+        params2 = ManageSourcebookUpdateData()
         self.assertIsNone(params2.images)
 
         # Invalid
         with self.assertRaises(ValidationError):
-            UpdateSourcebookEntryParams(name_or_id="id1", images="not a list")
+            ManageSourcebookUpdateData(images="not a list")
 
     def test_chat_tool_update_without_fields_returns_error(self):
         ensure_tool_registry_loaded()
-        tool = get_tool_function("update_sourcebook_entry")
+        tool = get_tool_function("manage_sourcebook")
         self.assertIsNotNone(tool)
 
         response = self._run_async(
             tool(
-                {"name_or_id": "id1"},
+                {"action": "update", "name_or_id": "id1", "update_data": {}},
                 "call_test",
                 payload={},
                 mutations={},
@@ -307,7 +307,7 @@ class SourcebookValidationTest(TestCase):
         )
 
         self.assertIsInstance(response, dict)
-        self.assertEqual(response.get("name"), "update_sourcebook_entry")
+        self.assertEqual(response.get("name"), "manage_sourcebook")
         self.assertEqual(response.get("tool_call_id"), "call_test")
 
         content = response.get("content")
@@ -355,6 +355,62 @@ class SourcebookValidationTest(TestCase):
         )
         self.assertNotIn("error", updated)
         self.assertEqual(updated.get("keywords", []), [])
+
+    # -------------------------------------------------------------------------
+    # Time Travel category tests
+    # -------------------------------------------------------------------------
+
+    def test_create_time_travel_entry_succeeds(self):
+        """The 'Time Travel' category must be accepted by the backend."""
+        result = sourcebook_create_entry(
+            name="Journey to the Past",
+            description="A portal that sends the protagonist 30 years back.",
+            category="Time Travel",
+        )
+        self.assertNotIn("error", result)
+        self.assertEqual(result["category"], "Time Travel")
+
+    def test_create_time_travel_entry_case_insensitive(self):
+        """Category normalisation must accept 'time travel' (lowercase)."""
+        result = sourcebook_create_entry(
+            name="Future Leap",
+            description="Leaps 10 years forward.",
+            category="time travel",
+        )
+        self.assertNotIn("error", result)
+        self.assertEqual(result["category"], "Time Travel")
+
+    def test_create_time_travel_entry_with_fields(self):
+        """Time Travel specific fields are stored and returned correctly."""
+        result = sourcebook_create_entry(
+            name="Flux Capacitor",
+            description="Makes time travel possible at 88 mph.",
+            category="Time Travel",
+            destination_datetime="1955-11-05T00:00:00Z",
+            destination_relative="30 years earlier",
+            creates_new_timeline=True,
+        )
+        self.assertNotIn("error", result)
+        self.assertEqual(result.get("destination_datetime"), "1955-11-05T00:00:00Z")
+        self.assertEqual(result.get("destination_relative"), "30 years earlier")
+        self.assertTrue(result.get("creates_new_timeline"))
+
+    def test_update_time_travel_entry_fields(self):
+        """Time Travel specific fields can be updated."""
+        created = sourcebook_create_entry(
+            name="Time Vortex",
+            description="A swirling vortex.",
+            category="Time Travel",
+        )
+        self.assertNotIn("error", created)
+        updated = sourcebook_update_entry(
+            name_or_id=created["id"],
+            destination_relative="100 years forward",
+            creates_new_timeline=False,
+        )
+        self.assertNotIn("error", updated)
+        self.assertEqual(updated.get("destination_relative"), "100 years forward")
+        self.assertFalse(updated.get("creates_new_timeline"))
 
     def _get_entries(self):
         story_path = self.pdir / "story.json"

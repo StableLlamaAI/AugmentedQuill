@@ -43,16 +43,18 @@ export type ChatToolMutationPayload = ChatToolExecutionResponse & {
 const PROJECT_CONTEXT_TOOL_NAMES = new Set<string>([
   'refresh_project_context',
   'get_current_chapter_id',
-  'get_project_overview',
-  'get_story_metadata',
-  'update_story_metadata',
-  'read_story_content',
+  'manage_project',
+  'manage_story_core',
+  'manage_sourcebook',
+  'manage_images',
+  'manage_scratchpad',
+  'search_and_replace',
+  'manage_scenes',
   'write_story_content',
   'get_book_metadata',
   'update_book_metadata',
   'read_book_content',
   'write_book_content',
-  'sync_story_summary',
   'get_chapter_metadata',
   'update_chapter_metadata',
   'get_chapter_summaries',
@@ -71,20 +73,10 @@ const PROJECT_CONTEXT_TOOL_NAMES = new Set<string>([
   'get_chapter_summary',
   'delete_chapter',
   'recommend_metadata_updates',
-  'get_sourcebook_entry',
-  'create_sourcebook_entry',
-  'update_sourcebook_entry',
-  'delete_sourcebook_entry',
-  'list_sourcebook_entries',
-  'add_sourcebook_relation',
-  'remove_sourcebook_relation',
-  'search_in_project',
-  'replace_in_project',
   'reorder_chapters',
   'reorder_books',
   'delete_book',
   'create_new_book',
-  'change_project_type',
 ]);
 
 const trimText = (value: string, maxLength: number): string => {
@@ -152,6 +144,56 @@ const buildSectionRefreshPayload = (
 ): Record<string, unknown> => {
   const results: Record<string, unknown> = {};
 
+  const assignChapterSection = (section: string): boolean => {
+    const chapterMatch = section.match(/^chapter:([^\.]+)\.(summary|notes|conflicts)$/);
+    if (!chapterMatch) {
+      return false;
+    }
+    const [, chapterId, field] = chapterMatch;
+    const chapter = story.chapters.find(
+      (candidate: Chapter): boolean => candidate.id === chapterId
+    );
+    if (!chapter) {
+      return true;
+    }
+    if (field === 'summary') {
+      results[section] = chapter.summary;
+      return true;
+    }
+    if (field === 'notes') {
+      results[section] = chapter.notes ?? '';
+      return true;
+    }
+    results[section] = chapter.conflicts ?? [];
+    return true;
+  };
+
+  const assignSourcebookSection = (section: string): boolean => {
+    const sourcebookMatch = section.match(
+      /^sourcebook:([^\.]+)\.(description|synonyms|relations)$/
+    );
+    if (!sourcebookMatch) {
+      return false;
+    }
+    const [, entryId, field] = sourcebookMatch;
+    const entry = (story.sourcebook ?? []).find(
+      (candidate: SourcebookEntry): boolean => candidate.id === entryId
+    );
+    if (!entry) {
+      return true;
+    }
+    if (field === 'description') {
+      results[section] = trimText(entry.description ?? '', 600);
+      return true;
+    }
+    if (field === 'synonyms') {
+      results[section] = entry.synonyms.slice(0, 10);
+      return true;
+    }
+    results[section] = (entry.relations ?? []).slice(0, 10);
+    return true;
+  };
+
   for (const section of sections) {
     if (section === 'story.summary') {
       results[section] = story.summary;
@@ -166,56 +208,11 @@ const buildSectionRefreshPayload = (
       continue;
     }
 
-    if (section.startsWith('chapter:')) {
-      const chapterMatch = section.match(
-        /^chapter:([^\.]+)\.(summary|notes|conflicts)$/
-      );
-      if (!chapterMatch) {
-        continue;
-      }
-      const [, chapterId, field] = chapterMatch;
-      const chapter = story.chapters.find(
-        (candidate: Chapter): boolean => candidate.id === chapterId
-      );
-      if (!chapter) {
-        continue;
-      }
-      if (field === 'summary') {
-        results[section] = chapter.summary;
-      }
-      if (field === 'notes') {
-        results[section] = chapter.notes ?? '';
-      }
-      if (field === 'conflicts') {
-        results[section] = chapter.conflicts ?? [];
-      }
+    if (assignChapterSection(section)) {
       continue;
     }
 
-    if (section.startsWith('sourcebook:')) {
-      const sourcebookMatch = section.match(
-        /^sourcebook:([^\.]+)\.(description|synonyms|relations)$/
-      );
-      if (!sourcebookMatch) {
-        continue;
-      }
-      const [, entryId, field] = sourcebookMatch;
-      const entry = (story.sourcebook ?? []).find(
-        (candidate: SourcebookEntry): boolean => candidate.id === entryId
-      );
-      if (!entry) {
-        continue;
-      }
-      if (field === 'description') {
-        results[section] = trimText(entry.description ?? '', 600);
-      }
-      if (field === 'synonyms') {
-        results[section] = entry.synonyms.slice(0, 10);
-      }
-      if (field === 'relations') {
-        results[section] = (entry.relations ?? []).slice(0, 10);
-      }
-    }
+    assignSourcebookSection(section);
   }
 
   return results;
@@ -324,7 +321,12 @@ export type ExecuteChatRequestContext = {
   currentChapterId: string | null;
   getCurrentChatId: () => string | null;
   currentChapter?: { id: string; title: string } | null;
-  onProseChunk?: (chapId: number, writeMode: string, accumulated: string) => void;
+  onProseChunk?: (
+    chapId: number,
+    writeMode: string,
+    accumulated: string,
+    streamId: number
+  ) => void;
   refreshProjects: () => Promise<void>;
   refreshStory: () => Promise<void>;
   requestToolCallLoopAccess: (
