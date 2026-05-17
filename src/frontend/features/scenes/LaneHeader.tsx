@@ -33,6 +33,8 @@ export interface LaneHeaderProps {
   laneWidths?: Map<string, number>;
   /** Width (px) of each button when laneWidths is not provided. Default: 144. */
   defaultButtonWidth?: number;
+  /** Optional content rendered as the first item inside the lane track. */
+  prefixContent?: React.ReactNode;
 }
 
 // ---------------------------------------------------------------------------
@@ -44,6 +46,7 @@ export const LaneHeader: React.FC<LaneHeaderProps> = ({
   laneTrackRef,
   laneWidths,
   defaultButtonWidth = 144,
+  prefixContent,
 }: LaneHeaderProps) => {
   const { t } = useTranslation();
   const { isLight } = useTheme();
@@ -80,6 +83,7 @@ export const LaneHeader: React.FC<LaneHeaderProps> = ({
       className="relative flex items-start gap-2 w-max min-w-full"
       style={{ transform: `translateX(${-laneScrollLeft}px)` }}
     >
+      {prefixContent}
       {visibleLaneEntryIds.map((entryId: string, index: number) => {
         const entry = sourcebookEntriesById.get(entryId);
         if (!entry) return null;

@@ -34,7 +34,7 @@ import { useSceneLanes } from './useSceneLanes';
 import { LaneHeader } from './LaneHeader';
 import { SceneCard } from './SceneCard';
 import { useSceneSelection } from './useSceneSelection';
-import { buildChapterOrderMap, chronologicalSort } from './sceneSortUtils';
+import { buildChapterOrderMap, chronologicalSort, proseSort } from './sceneSortUtils';
 import type { ProjectType } from './sceneSortUtils';
 import {
   buildTimelinePanelModel,
@@ -61,8 +61,10 @@ interface ConvergenceMapViewProps {
 // Constants
 // ---------------------------------------------------------------------------
 
-const TRACK_W = 16; // px — lateral track spacing for hairpin turns
+const TRACK_W = 32; // px — lateral spacing between neighboring snake lanes
 const R = TRACK_W / 2; // hairpin arc radius (= 8 px)
+const TRANSITION_DX = TRACK_W / 2; // horizontal offset from down-lane to middle up-lane
+const TURN_R = TRANSITION_DX / 2; // radius for top/bottom half-circle turns
 const SCENE_CIRCLE_R = 5; // snake node circle radius
 
 // Left timeline panel
@@ -71,10 +73,11 @@ const TL_LANE_GAP = 28; // px — horizontal spacing between timeline lanes
 const TL_DOT_R = 4; // px — radius of scene dots on timeline
 const TL_LOOP_W_CROSS = 30; // px — baseline bow for cross-lane jumps
 const TL_LOOP_W_SAME = 14; // px — baseline bow for same-lane jumps (= TL_LANE_GAP/2)
-const TL_MAX_LOOP_W = 56; // px — reserved right-side space for routed jump channels
 const TL_CORNER_R = 6; // px — rounded corner radius on loop arrows
 const TL_RIGHT_PAD = 8; // px — right breathing room for arrow heads
 const DEFAULT_PLACEHOLDER_ROW_HEIGHT = 84; // px — fallback until card heights are measured
+const PROSE_LANE_ID = '__prose__'; // synthetic lane id for the prose-order snake
+const PROSE_SNAKE_OPACITY = 0.45; // lower opacity to distinguish prose snake from entry snakes
 
 // ---------------------------------------------------------------------------
 // Geometry helpers
@@ -89,52 +92,21 @@ const getLayoutCenterY = (layout: { y: number; h: number }): number => {
 };
 
 /**
- * Count how many times the path direction changes (DOWN→UP or UP→DOWN)
- * when visiting proseScenes in order, using cardLayouts for Y coordinates.
- * Each direction change corresponds to one hairpin arc (+TRACK_W lateral shift).
- */
-function countDirectionChanges(
-  proseScenes: Scene[],
-  cardLayouts: Map<SceneId, CardLayoutEntry>
-): number {
-  let changes = 0;
-  let prevY: number | null = null;
-  let goingDown: boolean | null = null;
-
-  for (const scene of proseScenes) {
-    const layout = cardLayouts.get(scene.id);
-    if (!layout) continue;
-    const y = layout.y + layout.h / 2;
-
-    if (prevY !== null) {
-      const movingDown = y >= prevY;
-      if (goingDown === null) {
-        goingDown = movingDown;
-      } else if (goingDown !== movingDown) {
-        changes++;
-        goingDown = movingDown;
-      }
-    }
-    prevY = y;
-  }
-  return changes;
-}
-
-/**
  * Build an SVG path string for one entry's snake.
  *
- * Scenes are visited in prose order; cardLayouts provides the measured Y of
- * each card's top edge. The path starts at (laneCenterX offset for centering,
- * first scene Y) and:
- *   - goes straight when direction is unchanged
- *   - inserts a BOTTOM hairpin (CW horizontal semicircle, bows downward) when
- *     direction changes from DOWN → UP (time travel backward)
- *   - inserts a TOP hairpin (CCW horizontal semicircle, bows upward) when
- *     direction changes from UP → DOWN (return to forward chronology)
+ * Scenes are visited in prose order. The path is divided into "downward runs" —
+ * consecutive subsequences where each scene's Y ≥ the previous scene's Y. Each
+ * run occupies its own horizontal lane (laneX = startX + runIndex * TRACK_W).
+ * When the next prose-ordered scene is above the current position, a transition
+ * connector is emitted that moves one TRACK_W to the right and travels UP to the
+ * top of the next run. Scene markers therefore only appear at the start of, or
+ * within, downward segments — the snake always reads top-to-bottom within a lane.
  *
- * Arc geometry (dy = 0 horizontal semicircles):
- *   Bottom hairpin: a R,R 0 0 0 TRACK_W,0  (CCW, tangent DOWN→UP)
- *   Top    hairpin: a R,R 0 0 1 TRACK_W,0  (CW, tangent UP→DOWN)
+ * Connector geometry (down → up → down via middle channel):
+ *   - each downward run stays on its own laneX
+ *   - the upward connector uses transitionX = (laneX + nextLaneX) / 2
+ *     so upward travel is visibly centered between neighboring down-lanes
+ *   - both the bottom and top turns are rendered as half-circle arcs
  */
 function buildSnakePath(
   proseScenes: Scene[],
@@ -142,60 +114,117 @@ function buildSnakePath(
   laneCenterX: number
 ): { pathData: string; sceneXById: Map<SceneId, number> } {
   const sceneXById = new Map<SceneId, number>();
-  const parts: string[] = [];
 
-  const numChanges = countDirectionChanges(proseScenes, cardLayouts);
-  let currentX = laneCenterX - (numChanges * TRACK_W) / 2;
+  const validScenes = proseScenes.filter((s: Scene) => cardLayouts.has(s.id));
+  if (validScenes.length === 0) return { pathData: '', sceneXById };
 
-  let prevY: number | null = null;
-  let goingDown: boolean | null = null;
-  let started = false;
+  // Normalize consecutive upward prose steps so a new lane starts at the
+  // highest marker of that upward chain, then proceeds top-to-bottom.
+  // Example Y sequence: 20 -> 13 -> 12 -> 14 becomes 20 -> 12 -> 13 -> 14.
+  const normalizedScenes: Scene[] = [validScenes[0]];
+  let idx = 0;
+  while (idx < validScenes.length - 1) {
+    const currentY = getLayoutCenterY(cardLayouts.get(validScenes[idx].id)!);
+    const nextY = getLayoutCenterY(cardLayouts.get(validScenes[idx + 1].id)!);
 
-  for (const scene of proseScenes) {
-    const layout = cardLayouts.get(scene.id);
-    if (!layout) continue;
-    const y = layout.y + layout.h / 2;
+    if (nextY < currentY) {
+      let end = idx + 1;
+      while (end < validScenes.length - 1) {
+        const aY = getLayoutCenterY(cardLayouts.get(validScenes[end].id)!);
+        const bY = getLayoutCenterY(cardLayouts.get(validScenes[end + 1].id)!);
+        if (bY < aY) {
+          end += 1;
+          continue;
+        }
+        break;
+      }
 
-    if (!started) {
-      parts.push(`M ${currentX},${y}`);
-      sceneXById.set(scene.id, currentX);
-      started = true;
-      prevY = y;
+      for (let k = end; k > idx; k--) {
+        normalizedScenes.push(validScenes[k]);
+      }
+      idx = end;
       continue;
     }
 
-    const movingDown = y >= prevY!;
+    normalizedScenes.push(validScenes[idx + 1]);
+    idx += 1;
+  }
 
-    if (goingDown === null) {
-      // First move after start — go straight and record direction.
-      parts.push(`L ${currentX},${y}`);
-      sceneXById.set(scene.id, currentX);
-      goingDown = movingDown;
-    } else if (goingDown === movingDown) {
-      // Continuing in same direction — straight line.
-      parts.push(`L ${currentX},${y}`);
-      sceneXById.set(scene.id, currentX);
-    } else if (goingDown && !movingDown) {
-      // Was going DOWN, now going UP → BOTTOM hairpin.
-      // Continue down R px to the arc bottom, then CW semicircle bowing down.
-      parts.push(`L ${currentX},${prevY! + R}`);
-      parts.push(`a ${R},${R} 0 0 1 ${TRACK_W},0`);
-      currentX += TRACK_W;
-      parts.push(`L ${currentX},${y}`);
-      sceneXById.set(scene.id, currentX);
-      goingDown = false;
+  // Split into downward runs — maximal consecutive subsequences where
+  // each scene's Y is ≥ the previous scene's Y.
+  const runs: Scene[][] = [];
+  let currentRun: Scene[] = [normalizedScenes[0]];
+  for (let i = 1; i < normalizedScenes.length; i++) {
+    const prevY = getLayoutCenterY(cardLayouts.get(normalizedScenes[i - 1].id)!);
+    const currY = getLayoutCenterY(cardLayouts.get(normalizedScenes[i].id)!);
+    if (currY >= prevY) {
+      currentRun.push(normalizedScenes[i]);
     } else {
-      // Was going UP, now going DOWN → TOP hairpin.
-      // Continue up R px to the arc top, then CCW semicircle bowing up.
-      parts.push(`L ${currentX},${prevY! - R}`);
-      parts.push(`a ${R},${R} 0 0 0 ${TRACK_W},0`);
-      currentX += TRACK_W;
-      parts.push(`L ${currentX},${y}`);
-      sceneXById.set(scene.id, currentX);
-      goingDown = true;
+      runs.push(currentRun);
+      currentRun = [normalizedScenes[i]];
+    }
+  }
+  runs.push(currentRun);
+
+  const numRuns = runs.length;
+  const startX = laneCenterX - ((numRuns - 1) * TRACK_W) / 2;
+  const parts: string[] = [];
+  const processedYs: number[] = [];
+
+  for (let runIdx = 0; runIdx < numRuns; runIdx++) {
+    const laneX = startX + runIdx * TRACK_W;
+    const run = runs[runIdx];
+
+    for (let j = 0; j < run.length; j++) {
+      const scene = run[j];
+      const y = getLayoutCenterY(cardLayouts.get(scene.id)!);
+
+      if (runIdx === 0 && j === 0) {
+        parts.push(`M ${laneX},${y}`);
+      } else if (j === 0) {
+        // Connector already ends at the first point of this run.
+      } else {
+        parts.push(`L ${laneX},${y}`);
+      }
+      sceneXById.set(scene.id, laneX);
+      processedYs.push(y);
     }
 
-    prevY = y;
+    // Transition connector to the next run: go right one TRACK_W, then up.
+    if (runIdx < numRuns - 1) {
+      const nextLaneX = startX + (runIdx + 1) * TRACK_W;
+      const transitionX = laneX + TRANSITION_DX;
+      const lastScene = run[run.length - 1];
+      const lastY = getLayoutCenterY(cardLayouts.get(lastScene.id)!);
+      const firstNextScene = runs[runIdx + 1][0];
+      const firstNextY = getLayoutCenterY(cardLayouts.get(firstNextScene.id)!);
+      const priorMarkerAbove = processedYs
+        .filter((y: number) => y < firstNextY)
+        .reduce<number | null>((maxY: number | null, y: number) => {
+          if (maxY === null || y > maxY) return y;
+          return maxY;
+        }, null);
+      const entryY = priorMarkerAbove ?? firstNextY;
+
+      // Bottom U-turn: half-circle from current down-lane to middle up-lane.
+      // Sweep=0 yields the downward bow while reversing direction to upward.
+      if (lastY > entryY) {
+        parts.push(`a ${TURN_R},${TURN_R} 0 0 0 ${TRANSITION_DX},0`);
+        parts.push(`L ${transitionX},${entryY}`);
+      } else {
+        // Degenerate case fallback.
+        parts.push(`L ${transitionX},${lastY}`);
+        parts.push(`L ${transitionX},${entryY}`);
+      }
+
+      // Top U-turn: half-circle from middle up-lane to next down-lane.
+      // Sweep=1 yields the upward bow while reversing direction to downward.
+      parts.push(`a ${TURN_R},${TURN_R} 0 0 1 ${TRANSITION_DX},0`);
+
+      if (entryY < firstNextY) {
+        parts.push(`L ${nextLaneX},${firstNextY}`);
+      }
+    }
   }
 
   return { pathData: parts.join(' '), sceneXById };
@@ -466,6 +495,7 @@ export const ConvergenceMapView: React.FC<ConvergenceMapViewProps> = ({
   const rootRef = useRef<HTMLDivElement>(null);
   const innerContainerRef = useRef<HTMLDivElement>(null);
   const laneTrackRef = useRef<HTMLDivElement>(null);
+  const proseLaneRef = useRef<HTMLDivElement>(null);
   const bottomLaneScrollRef = useRef<HTMLDivElement>(null);
   const cardWrapperRefs = useRef(new Map<SceneId, HTMLDivElement>());
   const epochGapRefs = useRef(new Map<string, HTMLDivElement>());
@@ -514,6 +544,18 @@ export const ConvergenceMapView: React.FC<ConvergenceMapViewProps> = ({
         nextCenters.set(id, el.offsetLeft + el.offsetWidth / 2);
       }
     });
+    const proseLaneEl = proseLaneRef.current;
+    if (proseLaneEl) {
+      if (laneTrackRect) {
+        const rect = proseLaneEl.getBoundingClientRect();
+        nextCenters.set(PROSE_LANE_ID, rect.left - laneTrackRect.left + rect.width / 2);
+      } else {
+        nextCenters.set(
+          PROSE_LANE_ID,
+          proseLaneEl.offsetLeft + proseLaneEl.offsetWidth / 2
+        );
+      }
+    }
     setLaneCenterXById(nextCenters);
     setLanePlaneWidth(
       laneTrackRef.current?.scrollWidth ?? laneTrackRef.current?.offsetWidth ?? 0
@@ -604,6 +646,26 @@ export const ConvergenceMapView: React.FC<ConvergenceMapViewProps> = ({
   ]);
 
   // -------------------------------------------------------------------------
+  // Prose-order snake (shows the narrative/chapter sequence of all scenes)
+  // -------------------------------------------------------------------------
+
+  const proseSnakePath = useMemo(() => {
+    const centerX = laneCenterXById.get(PROSE_LANE_ID);
+    if (centerX === undefined) return null;
+
+    const proseOrderedScenes = [...filteredScenes].sort((a: Scene, b: Scene) =>
+      proseSort(a, b, chapterOrderMap)
+    );
+
+    const { pathData, sceneXById } = buildSnakePath(
+      proseOrderedScenes,
+      cardLayouts,
+      centerX
+    );
+    return { pathData, proseScenes: proseOrderedScenes, sceneXById };
+  }, [laneCenterXById, filteredScenes, chapterOrderMap, cardLayouts]);
+
+  // -------------------------------------------------------------------------
   // Time travel arrows for the left timeline panel
   // -------------------------------------------------------------------------
 
@@ -675,11 +737,40 @@ export const ConvergenceMapView: React.FC<ConvergenceMapViewProps> = ({
     return map;
   }, [timelinePanelModel.laneNumbers]);
 
+  /**
+   * Compute the actual rightmost X reached by any time-travel loop so the
+   * timeline panel is sized exactly to its content (no over-reservation).
+   */
+  const maxTimeTravelLoopX = useMemo((): number => {
+    let max = 0;
+    timelinePanelModel.events.forEach((ev: TimelineJumpEvent): void => {
+      const sourceX = timelineLaneXByNumber.get(ev.sourceLane);
+      if (sourceX === undefined) return;
+      if (ev.createsNewTimeline) {
+        // Branch-creation arrows use a midpoint — they stay within lane bounds.
+        const destinationLaneX =
+          timelineLaneXByNumber.get(ev.destinationLane) ?? sourceX;
+        max = Math.max(max, Math.max(sourceX, destinationLaneX));
+        return;
+      }
+      const destinationX = timelineLaneXByNumber.get(ev.destinationLane) ?? sourceX;
+      if (sourceX === destinationX) {
+        // Same-lane backward jump: bow right by TL_LOOP_W_SAME.
+        max = Math.max(max, sourceX + TL_LOOP_W_SAME);
+      } else {
+        // Cross-lane jump: bow right by TL_LOOP_W_CROSS from the rightmost lane.
+        max = Math.max(max, Math.max(sourceX, destinationX) + TL_LOOP_W_CROSS);
+      }
+    });
+    return max;
+  }, [timelinePanelModel.events, timelineLaneXByNumber]);
+
   const timelinePanelWidth = useMemo(() => {
     const maxLaneNumber = Math.max(0, ...timelinePanelModel.laneNumbers);
     const rightMostLaneX = TL_LANE_START_X + maxLaneNumber * TL_LANE_GAP;
-    return rightMostLaneX + TL_MAX_LOOP_W + TL_RIGHT_PAD;
-  }, [timelinePanelModel.laneNumbers]);
+    const contentRight = Math.max(rightMostLaneX, maxTimeTravelLoopX);
+    return contentRight + TL_RIGHT_PAD;
+  }, [timelinePanelModel.laneNumbers, maxTimeTravelLoopX]);
 
   const timelineSpawns = useMemo((): Map<number, number | null> => {
     const spawns = new Map<number, number | null>();
@@ -1056,7 +1147,28 @@ export const ConvergenceMapView: React.FC<ConvergenceMapViewProps> = ({
           className="overflow-hidden px-3 pt-2 pb-2"
           style={{ paddingLeft: `${cardsLeftPadding}px` }}
         >
-          <LaneHeader lanes={lanes} laneTrackRef={laneTrackRef} />
+          <LaneHeader
+            lanes={lanes}
+            laneTrackRef={laneTrackRef}
+            prefixContent={
+              <div
+                ref={proseLaneRef}
+                style={{ width: 144 }}
+                className={[
+                  'inline-flex flex-col items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium shadow-sm flex-shrink-0',
+                  isLight
+                    ? 'border-brand-500 bg-brand-100 text-brand-gray-900'
+                    : 'border-brand-300 bg-brand-gray-800 text-brand-gray-50',
+                ].join(' ')}
+                aria-label={t('Prose narrative order')}
+              >
+                <span className="block w-full truncate text-center">{t('Prose')}</span>
+                <span
+                  className={`h-12 w-12 rounded-md border border-brand-gray-300/60 flex-shrink-0 ${isLight ? 'bg-brand-gray-100/60' : 'bg-brand-gray-700/40'}`}
+                />
+              </div>
+            }
+          />
         </div>
       </div>
 
@@ -1089,6 +1201,39 @@ export const ConvergenceMapView: React.FC<ConvergenceMapViewProps> = ({
               className="absolute inset-0"
               style={{ overflow: 'visible', userSelect: 'none' }}
             >
+              {/* Prose-order snake — rendered first so it sits behind entry snakes */}
+              {proseSnakePath && proseSnakePath.pathData && (
+                <g transform={`translate(${cardsLeftPadding},0)`}>
+                  <path
+                    d={proseSnakePath.pathData}
+                    fill="none"
+                    stroke={trackColor}
+                    strokeWidth={2}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    opacity={PROSE_SNAKE_OPACITY}
+                  />
+                  {proseSnakePath.proseScenes.map((scene: Scene) => {
+                    const cx = proseSnakePath.sceneXById.get(scene.id);
+                    const layout = cardLayouts.get(scene.id);
+                    if (cx === undefined || !layout) return null;
+                    const cy = layout.y + layout.h / 2;
+                    const isPrimary = primarySelectedSceneId === scene.id;
+                    return (
+                      <circle
+                        key={scene.id}
+                        cx={cx}
+                        cy={cy}
+                        r={isPrimary ? SCENE_CIRCLE_R + 2 : SCENE_CIRCLE_R}
+                        fill={hollowFill}
+                        stroke={solidStroke}
+                        strokeWidth={isPrimary ? 2.5 : 1.5}
+                        opacity={PROSE_SNAKE_OPACITY}
+                      />
+                    );
+                  })}
+                </g>
+              )}
               {snakePaths.map((sp: (typeof snakePaths)[number]) => {
                 if (!sp || !sp.pathData) return null;
                 const { entryId, pathData, proseScenes, sceneXById } = sp;
