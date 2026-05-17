@@ -833,6 +833,31 @@ export const ConvergenceMapView: React.FC<ConvergenceMapViewProps> = ({
   const timeTravelArrows = useMemo((): TimeTravelArrow[] => {
     const arrows: TimeTravelArrow[] = [];
 
+    const findSceneCenterForEpochInLane = (
+      epochNs: bigint,
+      lane: number
+    ): number | null => {
+      let bestY: number | null = null;
+
+      sortedScenes.forEach((scene: Scene): void => {
+        const sceneEpoch = sceneEpochNanosecondsById.get(scene.id);
+        if (sceneEpoch === undefined || sceneEpoch !== epochNs) return;
+
+        const sceneLane = timelinePanelModel.laneBySceneId.get(scene.id) ?? 0;
+        if (sceneLane !== lane) return;
+
+        const layout = cardLayouts.get(scene.id);
+        if (!layout) return;
+
+        const y = getLayoutCenterY(layout);
+        if (bestY === null || y < bestY) {
+          bestY = y;
+        }
+      });
+
+      return bestY;
+    };
+
     timelinePanelModel.events.forEach((ev: TimelineJumpEvent): void => {
       const sourceX = timelineLaneXByNumber.get(ev.sourceLane);
       if (sourceX === undefined) return;
@@ -846,7 +871,11 @@ export const ConvergenceMapView: React.FC<ConvergenceMapViewProps> = ({
             })()
           : (() => {
               const gap = epochGapLayouts.get(ev.departureEpochNs.toString());
-              return gap ? getLayoutCenterY(gap) : null;
+              if (gap) return getLayoutCenterY(gap);
+
+              // If no synthetic gap row exists (because a real scene now occupies
+              // this exact epoch), anchor to the matching scene row on this lane.
+              return findSceneCenterForEpochInLane(ev.departureEpochNs, ev.sourceLane);
             })();
       if (depY === null) return;
 
