@@ -23,7 +23,7 @@
   },
   "dependencies": {
     "@codemirror/lang-markdown": "^6.5.0",
-    "@google/genai": "^1.51.0",
+    "@google/genai": "^2.15.0",
     "@js-temporal/polyfill": "^0.5.1",
     "@lezer/highlight": "^1.2.3",
     "@radix-ui/react-tooltip": "^1.2.8",
