@@ -22,7 +22,7 @@
     "node": ">=24"
   },
   "dependencies": {
-    "@codemirror/lang-markdown": "^6.5.0",
+    "@codemirror/lang-markdown": "^6.5.1",
     "@google/genai": "^1.51.0",
     "@js-temporal/polyfill": "^0.5.1",
     "@lezer/highlight": "^1.2.3",
