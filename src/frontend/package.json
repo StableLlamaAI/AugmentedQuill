@@ -53,7 +53,7 @@
     "@tailwindcss/postcss": "^4.3.3",
     "@testing-library/react": "^16.3.2",
     "@types/dompurify": "^3.2.0",
-    "@types/node": "^25.9.5",
+    "@types/node": "^26.1.2",
     "@types/pngjs": "^6.0.5",
     "@types/turndown": "^5.0.6",
     "@typescript-eslint/eslint-plugin": "^8.66.0",
