@@ -97,6 +97,8 @@ _Note: Chat histories and generated images are currently not included in project
 
 The Machine Settings tab is where you configure the AI models (providers) that power AugmentedQuill. You can add multiple providers and assign each one to specific roles.
 
+> **Provider choice is up to you.** AugmentedQuill runs entirely on your machine and never requires a cloud connection. You can use only local models (`llama.cpp`, Ollama) — which costs nothing and keeps all your data private — or connect to a cloud API if you prefer. A cloud provider is never a requirement; it is simply an option.
+
 ![The Machine Settings tab showing the provider list on the left and the configuration form on the right](screenshots/02_machine_settings_1.png)
 
 ### The Three AI Model Roles

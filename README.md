@@ -24,10 +24,16 @@ AugmentedQuill is a project-based writing environment for short stories, novels,
 - **Story structure** — chapters, books, scenes, conflicts, and summaries keep long-form work organized.
 - **Image prompts** — manage reference art and generate optimized image prompts from your project's style.
 
+### Free, private, local-first
+
+- **Open source & free** — AugmentedQuill is open source (GPLv3). There is no subscription, account, or usage fee.
+- **Runs on your machine** — the app never runs in the cloud. Your projects, chapters, and Sourcebook stay in local folders on your own machine.
+- **AI is your choice** — connect a local LLM (`llama.cpp`/Ollama) for zero running cost and full privacy, or optionally connect a cloud API (OpenAI, Claude, Google, DeepSeek, OpenRouter) if you prefer — a cloud provider is never required.
+
 ## Quick start
 
 1. **Install** — download a ready-to-run build from the [Releases](https://github.com/StableLlamaAI/AugmentedQuill/releases) page, use [Docker](INSTALL.md#3-docker-best-for-self-hosters--home-servers), or [build from source](DEVELOPMENT.md). The full [Installation Guide](INSTALL.md) walks through every method.
-2. **Connect an LLM provider** — AugmentedQuill does not bundle an AI server. Point it at a local `llama.cpp`/Ollama endpoint or a cloud OpenAI-compatible API (OpenAI, Claude, Google Gemini, DeepSeek, OpenRouter) under **Settings → Machine Settings**.
+2. **Connect an LLM provider** — AugmentedQuill does not bundle an AI server. Point it at a local `llama.cpp`/Ollama endpoint (free and private) or, if you choose, a cloud OpenAI-compatible API (OpenAI, Claude, Google Gemini, DeepSeek, OpenRouter) under **Settings → Machine Settings**.
 3. **Start writing** — create a project (or let the Writing Partner do it for you) and talk to the AI chat.
 
 ## Documentation

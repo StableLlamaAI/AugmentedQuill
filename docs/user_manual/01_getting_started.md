@@ -6,7 +6,7 @@ AugmentedQuill is designed to be a seamless extension of your creative process. 
 
 ## Installation
 
-AugmentedQuill does not run entirely in the cloud — you install it on your own machine (or a server you control) and it talks to an AI model provider you configure. Choose the method that fits you best:
+AugmentedQuill **never runs in the cloud**. It is free and open source (GPLv3), and you install it on your own machine (or a server you control) — there is no subscription, no account, and no usage fee. The only thing you may connect, entirely at your own discretion, is an AI model provider. Choose the method that fits you best:
 
 | Method                                  | Best for                                          | Where to look                                                                                                                                                                                            |
 | --------------------------------------- | ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -25,6 +25,8 @@ AugmentedQuill is a writing tool, not a model host — it does **not** bundle an
 
 1. **Choose a provider** — a local server on your machine (`llama.cpp` or Ollama), or a cloud API (OpenAI, Anthropic Claude, Google Gemini, DeepSeek, OpenRouter, or any other OpenAI-compatible service). Local models run on your hardware for free; cloud APIs charge per token and need an API key.
 2. **Configure it in _Machine Settings_** — open **Settings** → **Machine Settings**, add a provider with its base URL, API key (if any), and model ID, then assign it to the **WRITING**, **EDITING**, and **CHAT** roles.
+
+> **Cost & privacy:** Using a **local** model (`llama.cpp` or Ollama) is completely free — no subscription and no API fees — and your story data never leaves your machine. Using a **cloud** API (OpenAI, Claude, Google, DeepSeek, OpenRouter, …) is always optional and entirely your choice; the provider's usage fees then apply, and only the text you send to that provider is transmitted to it. Everything else — your projects, chapters, and Sourcebook — always stays in local folders on your machine.
 
 The [Machine Settings tab](02_projects_and_settings.md#the-machine-settings-tab) in [Projects and Settings](02_projects_and_settings.md) explains the roles, fields, and parameters in full, and the [Connecting to Popular Providers](02_projects_and_settings.md#connecting-to-popular-providers) section gives ready-made base URLs and example model IDs for **local llama.cpp, Ollama, OpenRouter, OpenAI, Claude, Google Gemini, and DeepSeek**.
 
