@@ -12,14 +12,19 @@ are turned into categorized, actionable messages that surface in the Debug
 window and raw LLM log.
 """
 
+import asyncio
 import errno
 import socket
 import ssl
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 
-from augmentedquill.services.llm.llm_http_ops import _classify_transport_error
+from augmentedquill.services.llm.llm_http_ops import (
+    _classify_transport_error,
+    is_loopback_url,
+    logged_request,
+)
 
 
 def _request() -> MagicMock:
@@ -94,3 +99,71 @@ def test_unknown_connect_error_falls_back_to_generic():
 def test_plain_exception_is_not_classified_as_network():
     summary, _ = _classify_transport_error(ValueError("not network"), "https://x/v1")
     assert "Request to https://x/v1 failed" in summary
+
+
+# ─── Loopback proxy bypass ───────────────────────────────────────────────────
+
+
+def test_loopback_urls_are_detected():
+    assert is_loopback_url("http://localhost:8080/v1") is True
+    assert is_loopback_url("http://127.0.0.1:11434/v1") is True
+    assert is_loopback_url("http://127.0.0.2:8080/v1") is True
+    assert is_loopback_url("http://[::1]:8080/v1") is True
+    assert is_loopback_url("http://0.0.0.0:8080/v1") is True
+    assert is_loopback_url("http://LOCALHOST:8080/v1") is True
+    assert is_loopback_url("http://host.docker.internal:11434/v1") is True
+    assert is_loopback_url("http://host-gateway:11434/v1") is True
+
+
+def test_non_loopback_urls_are_not_detected():
+    assert is_loopback_url("https://api.openai.com/v1") is False
+    assert is_loopback_url("http://192.168.1.10:8080/v1") is False
+    assert is_loopback_url("http://localhost.evil.com/v1") is False
+
+
+def _capture_client_kwargs(url: str, status: int = 200) -> dict:
+    """Run logged_request and return the kwargs AsyncClient was created with."""
+    captured: dict = {}
+
+    async def _run():
+        resp = MagicMock(spec=httpx.Response)
+        resp.status_code = status
+        resp.headers = {"content-type": "application/json"}
+        resp.json.return_value = {}
+        resp.text = ""
+        resp.raise_for_status = MagicMock()
+        with (
+            patch("httpx.AsyncClient") as mock_client_cls,
+            patch("augmentedquill.services.llm.llm_http_ops.add_llm_log"),
+            patch(
+                "augmentedquill.services.llm.llm_http_ops.create_log_entry",
+                return_value={},
+            ),
+        ):
+            mock_client = AsyncMock()
+            mock_client_cls.return_value.__aenter__.return_value = mock_client
+            mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+            mock_client.request = AsyncMock(return_value=resp)
+
+            await logged_request(
+                caller_id="test",
+                method="POST",
+                url=url,
+                headers={},
+                timeout=httpx.Timeout(5.0),
+                body={},
+            )
+            captured.update(mock_client_cls.call_args.kwargs)
+
+    asyncio.run(_run())
+    return captured
+
+
+def test_local_llm_bypasses_system_proxy():
+    kwargs = _capture_client_kwargs("http://localhost:8080/v1")
+    assert kwargs.get("trust_env") is False
+
+
+def test_cloud_provider_still_uses_proxy_env():
+    kwargs = _capture_client_kwargs("https://api.openai.com/v1")
+    assert kwargs.get("trust_env") is True

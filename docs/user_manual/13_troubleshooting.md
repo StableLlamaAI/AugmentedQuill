@@ -89,6 +89,38 @@ services:
 
 4. Check `data/logs/llm_raw.log` for full request/response details (set `AUGQ_LLM_DUMP=1`).
 
+### 2.6 “Desktop / portable executable can’t reach a local model” (system proxy)
+
+The **portable executable** (a PyInstaller-bundled Python backend, not
+Electron) and the experimental **Electron desktop app** both run the same
+backend, so the connection behavior is identical. A very common cause of
+“local model unreachable” in these builds is an **HTTP(S) proxy**:
+
+- The HTTP client honors `HTTP_PROXY` / `HTTPS_PROXY` / `ALL_PROXY`
+  environment variables — and on Windows it also picks up the system proxy
+  from the registry (Internet Options).
+- By default that proxy would be used for _every_ request, including ones to
+  `localhost` / `127.0.0.1`. If the proxy can’t reach your local model (or
+  refuses to proxy local addresses), the request fails even though the model
+  is running.
+- Browsers and `curl` bypass `localhost` by default. AugmentedQuill now does
+  too: **loopback addresses are never routed through a proxy** (`localhost`,
+  `127.0.0.1`, `::1`, `0.0.0.0`, and the Docker host aliases). Cloud providers
+  still go through the proxy when one is configured.
+
+If you still can’t reach a local model from a desktop build:
+
+1. Confirm the model server is listening — from a terminal:
+   `curl http://127.0.0.1:8080/v1/models`.
+2. Prefer `http://127.0.0.1:<port>/v1` over `http://localhost:<port>/v1`: on
+   some Windows setups `localhost` resolves to IPv6 `::1` while the model
+   server listens only on IPv4 `127.0.0.1`.
+3. Save the provider in **Settings → Machine Settings**, then use the **Debug
+   Logs** window → **Network diagnostics** panel (or
+   `GET /api/v1/debug/connectivity?url=…`) to see which step fails (DNS, TCP,
+   HTTP).
+4. Check `data/logs/llm_raw.log` for the request/response error detail.
+
 ## 3. Known limitations (2026)
 
 - No per-user or per-project authentication.

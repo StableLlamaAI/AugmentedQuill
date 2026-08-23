@@ -49,6 +49,39 @@ def _require_caller_id(caller_id: str) -> str:
     return normalized
 
 
+#: Hostnames/addresses that are local to the machine running AugmentedQuill.
+#: ``host.docker.internal`` / ``host-gateway`` are the Docker-host aliases and
+#: resolve to the local host, so they belong here too.
+_LOOPBACK_HOSTS = frozenset(
+    {
+        "localhost",
+        "127.0.0.1",
+        "::1",
+        "0.0.0.0",
+        "host.docker.internal",
+        "host-gateway",
+        "gateway.docker.internal",
+    }
+)
+
+
+def is_loopback_url(url: str) -> bool:
+    """Return True when *url* targets a loopback / local address.
+
+    Local LLM servers (localhost, 127.0.0.1, ::1, the Docker host alias) must
+    never be reached through an HTTP(S) proxy: system or environment proxies —
+    which httpx picks up automatically, including the Windows system proxy
+    from the registry — would otherwise hijack localhost traffic and the
+    connection would fail inside packaged/desktop builds.
+    """
+    host = urlparse(str(url or "")).hostname or ""
+    lowered = host.lower()
+    if lowered in _LOOPBACK_HOSTS:
+        return True
+    # The whole 127.0.0.0/8 range is loopback.
+    return lowered.startswith("127.")
+
+
 def _safe_log_headers(headers: dict[str, str] | None) -> dict[str, str]:
     """Return a safe log headers.."""
     return {
@@ -293,7 +326,9 @@ async def logged_request(
                 delay = _RETRY_BACKOFF_BASE_S * (2 ** (attempt - 1))
                 await asyncio.sleep(delay)
             try:
-                async with httpx.AsyncClient(timeout=timeout) as client:
+                async with httpx.AsyncClient(
+                    timeout=timeout, trust_env=not is_loopback_url(url)
+                ) as client:
                     response = await client.request(
                         method=method, url=url, headers=headers, json=body
                     )
@@ -374,7 +409,9 @@ async def logged_stream_request(
 
     try:
         async with (
-            httpx.AsyncClient(timeout=timeout) as client,
+            httpx.AsyncClient(
+                timeout=timeout, trust_env=not is_loopback_url(url)
+            ) as client,
             client.stream(
                 method=str(method).upper(), url=url, headers=headers, json=body
             ) as response,

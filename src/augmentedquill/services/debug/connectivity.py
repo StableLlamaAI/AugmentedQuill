@@ -22,6 +22,7 @@ from urllib.parse import urlparse
 import httpx
 
 from augmentedquill.models.debug import ConnectivityResult, ConnectivityStep
+from augmentedquill.services.llm.llm_http_ops import is_loopback_url
 
 
 def _host_port(url: str) -> tuple[str, int]:
@@ -80,7 +81,10 @@ async def _probe_http(url: str, timeout_s: float) -> ConnectivityStep:
     """Issue a plain GET to *url*; any HTTP response proves the path works."""
     try:
         async with httpx.AsyncClient(
-            timeout=httpx.Timeout(timeout_s), follow_redirects=False
+            timeout=httpx.Timeout(timeout_s),
+            follow_redirects=False,
+            # A local LLM must never be routed through a system proxy.
+            trust_env=not is_loopback_url(url),
         ) as client:
             response = await client.get(url)
         return ConnectivityStep(
