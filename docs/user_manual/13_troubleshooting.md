@@ -12,7 +12,7 @@ AugmentedQuill is designed for local desktop or local server usage. It has no bu
   - `data/config/` for local config
   - `data/logs/` for runtime logs
 - No “sync with external editor” integration exists yet. If you want versioned backups, use your own source control (Git) on `data/projects` or manual export via the UI.
-- Accessibility support is implemented for core flows (ARIA semantics, visible keyboard focus, keyboard shortcuts, focus-trapped dialogs, reduced-motion support) and is checked by automated `axe` audits, but the app is not WCAG-certified. See [Keyboard Shortcuts & Accessibility](14_keyboard_shortcuts_and_accessibility.md) for what is covered and the known gaps.
+- Accessibility support is implemented for core flows (screen-reader semantics, visible keyboard focus, keyboard shortcuts, focus-trapped dialogs, reduced-motion support) and is checked automatically as part of development, but the app is not WCAG-certified. See [Keyboard Shortcuts & Accessibility](14_keyboard_shortcuts_and_accessibility.md) for what is covered and the known gaps.
 
 ## 2. Common user-reported issues
 
@@ -20,7 +20,7 @@ AugmentedQuill is designed for local desktop or local server usage. It has no bu
 
 - Ensure `Machine Settings` has at least one provider with valid base URL and API key.
 - Test the provider in Settings. Inspect connection status and model status.
-- CORS issues are common for browser clients; check your target API’s CORS headers. The app can proxy `/api/v1/openai/models`, but the endpoint itself must support browser requests or local proxy configuration.
+- Some providers refuse requests that appear to come from a browser. AugmentedQuill routes cloud-provider requests through its own local server to avoid this; if a provider still refuses connections, check the model-loading guidance above.
 
 ### 2.2 “LLM request fails, 401/403”
 
@@ -49,7 +49,7 @@ Containers get outbound internet access **by default** through the host's NAT, s
 
 - The Docker host itself can reach the internet (DNS + egress).
 - No host firewall blocks traffic leaving the Docker bridge (e.g. `ufw`/`iptables`, a VPN, or a corporate egress proxy).
-- If the host needs an HTTP(S) proxy, pass it into the container with `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY` environment variables (see the Compose example below). AugmentedQuill's HTTP client honors these.
+- If the host needs an HTTP(S) proxy, pass it into the container with `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY` environment variables (see the Compose example below). AugmentedQuill uses these settings when calling cloud providers.
 
 **2. A provider running on the same Docker _host_** (e.g. Ollama / llama.cpp on the host machine)
 
@@ -74,12 +74,12 @@ services:
       - NO_PROXY=${NO_PROXY:-}
 ```
 
-**Base URL trust (SSRF guard).** AugmentedQuill only sends requests to base URLs it considers trusted: local endpoints (`localhost`, `127.0.0.1`, `0.0.0.0`, `host.docker.internal`), any URL **saved in Machine Settings** (written to `data/config/machine.json`), or the `OPENAI_BASE_URL` environment variable. If you pass an ad-hoc URL into a request payload (e.g. a bridge IP such as `172.17.0.1`), it is rejected with `Untrusted or unconfirmed base_url`. Fix: save the provider in **Settings → Machine Settings**, or set `OPENAI_BASE_URL`.
+**Base URL trust.** AugmentedQuill only sends requests to addresses it trusts: local addresses (`localhost`, `127.0.0.1`, `0.0.0.0`, `host.docker.internal`) and any address you **save in Machine Settings** (or set via the `OPENAI_BASE_URL` setting when you run a server yourself). If you type an ad-hoc address directly into a request (e.g. a bridge IP such as `172.17.0.1`), it is rejected. Fix: save the provider in **Settings → Machine Settings**, or set `OPENAI_BASE_URL`.
 
 **How to diagnose**
 
 1. Open the **Debug Logs** window (header button → _LLM Communication Logs_). Failed requests now show a categorized network error (e.g. _DNS lookup failed_, _Connection refused_, _timed out_) with an actionable hint.
-2. Use the **Network diagnostics** panel in the Debug Logs window (or `GET /api/v1/debug/connectivity?url=<base_url>`) to test DNS, TCP and HTTPS from _inside the container_ — this separates “the container can't reach the provider” from “the provider rejected the request”.
+2. Use the **Network diagnostics** panel in the Debug Logs window to test DNS, TCP and HTTPS from _inside the container_ — this separates “the container can't reach the provider” from “the provider rejected the request”.
 3. From the host shell, test outbound connectivity directly:
 
    ```bash
@@ -87,14 +87,11 @@ services:
      "import urllib.request; print(urllib.request.urlopen('https://api.openai.com/v1', timeout=10).status)"
    ```
 
-4. Check `data/logs/llm_raw.log` for full request/response details (set `AUGQ_LLM_DUMP=1`).
+4. For full request/response details, enable the raw request log (see the [Developer Guide](../../DEVELOPMENT.md#debug-diagnostics)).
 
 ### 2.6 “Desktop / portable executable can’t reach a local model” (system proxy)
 
-The **portable executable** (a PyInstaller-bundled Python backend, not
-Electron) and the experimental **Electron desktop app** both run the same
-backend, so the connection behavior is identical. A very common cause of
-“local model unreachable” in these builds is an **HTTP(S) proxy**:
+The **portable desktop app** and the experimental **desktop app (Electron)** both run the same application code, so connection behavior is identical. A very common cause of “local model unreachable” in these builds is an **HTTP(S) proxy**:
 
 - The HTTP client honors `HTTP_PROXY` / `HTTPS_PROXY` / `ALL_PROXY`
   environment variables — and on Windows it also picks up the system proxy
@@ -116,10 +113,9 @@ If you still can’t reach a local model from a desktop build:
    some Windows setups `localhost` resolves to IPv6 `::1` while the model
    server listens only on IPv4 `127.0.0.1`.
 3. Save the provider in **Settings → Machine Settings**, then use the **Debug
-   Logs** window → **Network diagnostics** panel (or
-   `GET /api/v1/debug/connectivity?url=…`) to see which step fails (DNS, TCP,
-   HTTP).
-4. Check `data/logs/llm_raw.log` for the request/response error detail.
+   Logs** window → **Network diagnostics** panel to see which step fails (DNS,
+   TCP, HTTP).
+4. Check the raw request/response log for details (see the [Developer Guide](../../DEVELOPMENT.md#debug-diagnostics)).
 
 ## 3. Known limitations (2026)
 
@@ -130,10 +126,10 @@ If you still can’t reach a local model from a desktop build:
 
 ## 4. Troubleshooting checklist
 
-1. Restart the app (stop and rerun `augmentedquill` or the Electron front-end).
+1. Restart the app (close and reopen it, or restart the server).
 2. Confirm the target provider is reachable and model has low-latency.
-3. Check browser developer tools for network errors (CORS, 502, 503).
-4. Review `data/logs/llm_raw.log` for request/response details.
+3. Check the browser's developer tools for network errors (e.g. connection failures, HTTP 502/503).
+4. Review the request/response log for details (see the [Developer Guide](../../DEVELOPMENT.md#debug-diagnostics)).
 5. Use “Clear Debug Logs” in UI before reproducing the issue.
 
 ## 5. FAQ

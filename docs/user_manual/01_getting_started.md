@@ -30,7 +30,7 @@ AugmentedQuill is a writing tool, not a model host — it does **not** bundle an
 
 The [Machine Settings tab](02_projects_and_settings.md#the-machine-settings-tab) in [Projects and Settings](02_projects_and_settings.md) explains the roles, fields, and parameters in full, and the [Connecting to Popular Providers](02_projects_and_settings.md#connecting-to-popular-providers) section gives ready-made base URLs and example model IDs for **local llama.cpp, Ollama, OpenRouter, OpenAI, Claude, Google Gemini, and DeepSeek**.
 
-If your provider is not reachable, the [Troubleshooting & FAQ](13_troubleshooting.md) chapter covers the common causes (wrong base URL, missing key, CORS, and Docker/container networking when running in a container).
+If your provider is not reachable, the [Troubleshooting & FAQ](13_troubleshooting.md) chapter covers the common causes (wrong base URL, missing key, browser restrictions, and Docker/container networking when running in a container).
 
 ## What AugmentedQuill Can Do For You
 
@@ -45,7 +45,7 @@ If your provider is not reachable, the [Troubleshooting & FAQ](13_troubleshootin
 - AugmentedQuill is local-first and not designed for public internet deployment without adding your own security layer.
 - No built-in user authentication or per-project access control exists. Treat the running instance as trusted local software.
 - No external editor sync is provided; project data is kept in local folders (e.g., `data/projects/`).
-- Accessibility support is implemented for core flows (ARIA semantics, visible keyboard focus, keyboard shortcuts, focus-trapped dialogs, reduced-motion support) and is checked by automated `axe` audits, but it is not WCAG-certified. See [Keyboard Shortcuts & Accessibility](14_keyboard_shortcuts_and_accessibility.md) for the full picture, including known gaps.
+- Accessibility support is implemented for core flows (screen-reader semantics, visible keyboard focus, keyboard shortcuts, focus-trapped dialogs, reduced-motion support) and is checked automatically as part of development, but it is not WCAG-certified. See [Keyboard Shortcuts & Accessibility](14_keyboard_shortcuts_and_accessibility.md) for the full picture, including known gaps.
 
 ## Core Concepts
 

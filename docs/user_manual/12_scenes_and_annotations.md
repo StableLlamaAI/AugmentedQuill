@@ -245,9 +245,9 @@ For time-travel stories, each character tag on a scene can optionally override t
 
 The left sidebar (containing Story, Chapters, and Sourcebook sections) received several improvements:
 
-- **Resizable sections** — Drag the **`GripHorizontal` icon** (grip lines) between sections to resize them.
-- **Section focus** — Click the **`Maximize2` icon** in a section's header to focus that section (it expands fully, collapsing others). Click the **`Minimize2` icon** to return to the multi-section view.
-- **Scene tree in chapters** — Expand a chapter node to see its assigned scenes listed underneath in a compact tree view, using the **`ChevronRight` / `ChevronDown` icons** to expand and collapse.
+- **Resizable sections** — Drag the grip lines between sections to resize them.
+- **Section focus** — Click the expand icon in a section's header to focus that section (it expands fully, collapsing others). Click the collapse icon to return to the multi-section view.
+- **Scene tree in chapters** — Expand a chapter node to see its assigned scenes listed underneath in a compact tree view, using the expand/collapse arrows to toggle chapters.
 - **Drag scenes onto chapters** — Drag a scene card from the scenes panel and drop it onto a chapter in the sidebar to link them.
 - **Desktop behaviour** — On wide screens, selecting a chapter no longer closes the sidebar.
 

@@ -111,6 +111,23 @@ npm run check:generated-types
 cd src/frontend && npm run test:accessibility
 ```
 
+Accessibility in the frontend is guarded by layered checks:
+
+- **Lint:** `jsx-a11y` rules (accessible markup, keyboard handlers, label associations) are enforced as part of `npm run lint`.
+- **Automated audits:** `axe-core` via `vitest-axe` scans key dialogs and the Machine Settings screen (`npm run test:accessibility`) and fails the suite on any violation; additional focused checks live in the `features/*` test files.
+- **CSS regression tests:** `index.css.test.ts` guards the global accessibility CSS — the `prefers-reduced-motion` block and the prose-editor focus suppression — so those rules cannot silently regress.
+
+**Design note — no focus ring around the prose:** the CodeMirror writing editor (`src/frontend/features/editor`) manages its own caret, and `index.css` explicitly suppresses any `:focus-visible` outline on `.cm-content`. A ring around the whole page looked like an error state when the editor was clicked into, so the caret (plus the inline chapter title's own focus underline) is the focus indicator. Keep it that way unless there is a strong accessibility reason not to.
+
+### Debug diagnostics
+
+Developer-oriented endpoints and knobs used when investigating AI/LLM behaviour (all are advanced and intentionally not part of the user-facing workflow):
+
+- `GET /api/v1/debug/llm_logs` and `DELETE /api/v1/debug/llm_logs` — read / clear the in-memory list of LLM requests (shown in the app's Debug Logs window).
+- `GET /api/v1/debug/connectivity?url=<base_url>` — probes DNS → TCP → HTTP(S) from the backend process (the same probe the Debug Logs “Network diagnostics” panel runs) to separate “cannot reach the provider” from “provider rejected the request”.
+- Raw LLM request/response dump: set `AUGQ_LLM_DUMP=1` (optionally `AUGQ_LLM_DUMP_PATH`; default `data/logs/llm_raw.log`) to append finalized entries to a file. `AUGQ_LLM_DUMP_LEVEL` (`compact` | `normal` | `debug`) controls verbosity.
+- Transport failures are categorised (DNS, connection refused, timeout, proxy, TLS) with actionable hints in `src/augmentedquill/services/llm/llm_http_ops.py` (`_classify_transport_error`); loopback targets bypass any HTTP(S) proxy.
+
 ## Dev container (optional)
 
 Prefer a fully sandboxed environment? A [Development Container](https://code.visualstudio.com/docs/devcontainers/containers) is defined in `.devcontainer/` (Python 3.12 + Node 24) with the Python venv, frontend dependencies, and Playwright Chromium installed automatically on first start:

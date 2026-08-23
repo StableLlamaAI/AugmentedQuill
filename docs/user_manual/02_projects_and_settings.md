@@ -6,7 +6,7 @@ To access your projects and configure the application, click the <img src="asset
 
 The About tab provides version and runtime information about AugmentedQuill and the environment it is running in:
 
-- **Version** (from `src/frontend/package.json`)
+- **Version** (the app's release version)
 - **Git revision** (short commit hash)
 - **Built** timestamp
 - **Python version** (build environment)
@@ -209,7 +209,7 @@ AugmentedQuill talks to every provider through the **OpenAI-compatible chat comp
 
 > **Notes:**
 >
-> - **Security validation:** AugmentedQuill validates base URLs to prevent SSRF. Local endpoints (`localhost`, `127.0.0.1`, `0.0.0.0`, `host.docker.internal`) are always trusted. Cloud endpoints must be **saved in Machine Settings** (which writes them to `data/config/machine.json`) — once saved, they are trusted.
+> - **Security validation:** AugmentedQuill only sends requests to addresses it trusts. Addresses on your own machine (`localhost`, `127.0.0.1`, `0.0.0.0`, `host.docker.internal`) are always allowed; cloud addresses must first be **saved in Machine Settings** — once saved, they are trusted.
 > - **Model status:** after saving, the **Model status** indicator will confirm whether the model ID was found. Green = ready; red = check the base URL, key, and model ID.
 > - **Function calling:** the CHAT role uses tool calls to manage your project. Cloud models and modern local models (e.g. Llama 3.x, Qwen) support them; if chat actions fail, check the provider's **Function Calling** capability setting.
 > - **CORS:** browser-based requests to cloud providers go through AugmentedQuill's built-in proxy, which avoids CORS restrictions. If a provider still refuses connections, see [Troubleshooting & FAQ](13_troubleshooting.md#21-models-dont-load--no-models-found).

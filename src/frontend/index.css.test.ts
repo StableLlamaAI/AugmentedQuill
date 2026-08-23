@@ -12,8 +12,8 @@
  * these tests guard the static rules that implement two core accessibility
  * behaviours:
  *   1. prefers-reduced-motion support (disables animations/transitions).
- *   2. A visible keyboard focus indicator for the CodeMirror editor (which
- *      suppresses its own outline).
+ *   2. The prose editor (CodeMirror) manages its own caret and must never draw
+ *      a focus ring around the writing area (the caret is the indicator).
  */
 
 import { readFileSync } from 'node:fs';
@@ -40,14 +40,16 @@ describe('global accessibility CSS', () => {
     expect(body).toMatch(/scroll-behavior\s*:\s*auto/);
   });
 
-  it('provides a visible keyboard focus indicator for the CodeMirror editor', () => {
+  it('never draws a focus ring around the prose editor (the caret is the indicator)', () => {
     const match = css.match(/\.cm-content\s*:focus-visible\s*{([^}]*)}/);
     expect(
       match,
-      'expected a .cm-content:focus-visible rule so keyboard focus into the editor is visible'
+      'expected a .cm-content:focus-visible rule that suppresses the outline around the prose'
     ).toBeTruthy();
     const body = match?.[1] ?? '';
-    expect(body).toMatch(/outline\s*:/);
-    expect(body).toMatch(/outline-offset\s*:/);
+    // The rule must explicitly disable the outline (with !important so it beats
+    // the generic :focus-visible ring and CodeMirror's injected stylesheet).
+    expect(body).toMatch(/outline\s*:\s*none/i);
+    expect(body).toMatch(/!important/);
   });
 });

@@ -301,13 +301,14 @@ mark.search-highlight {
   outline-offset: 2px;
 }
 
-/* The CodeMirror editor suppresses its own outline (it manages its caret), so
-   give keyboard users a visible ring around the writing area.  `.cm-content`
-   is the tabbable editor surface (tabindex=0); :focus-visible keeps the ring
-   keyboard-only where the browser heuristic allows. */
+/* The CodeMirror editor manages its own caret, so it must never draw a focus
+   ring around the prose: a ring frames the whole page when the editor is
+   clicked into, which looks like an error state.  Keyboard focus stays
+   visible through the blinking caret (and the inline chapter title keeps its
+   own subtle focus underline).  `!important` also wins over the generic
+   `:focus-visible` outline and CodeMirror's injected stylesheet. */
 .cm-content:focus-visible {
-  outline: 2px solid #f59e0b !important;
-  outline-offset: 2px;
+  outline: none !important;
 }
 
 /* Accessibility: honour the user's reduced-motion preference.  Disable

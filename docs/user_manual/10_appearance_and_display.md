@@ -54,17 +54,15 @@ Open it by clicking the **Bug** icon on the right side of the top header bar.
 
 ### Network diagnostics
 
-At the top of the Debug Logs dialog, the **Network diagnostics** panel tests whether the backend can actually reach a provider — DNS, then TCP, then HTTPS — in one click. It is the fastest way to tell _“the machine/container can’t reach the provider”_ apart from _“the provider rejected the request”_.
+At the top of the Debug Logs dialog, the **Network diagnostics** panel tests whether AugmentedQuill can actually reach a provider — DNS, then TCP, then HTTPS — in one click. It is the fastest way to tell _“the machine/container can’t reach the provider”_ apart from _“the provider rejected the request”_.
 
 ![The Debug Logs Network diagnostics panel showing a successful connectivity test to a local model endpoint](screenshots/08_debug_connectivity.png)
 
 > **In this screenshot:** a successful connectivity test against a local model endpoint. Each step (DNS, TCP, HTTP) is shown with its result; if a step fails, the panel highlights it so you know exactly where the connection breaks.
 
 1. Enter the provider's base URL in the **Base URL** field (e.g. `http://127.0.0.1:11434/v1` or `https://api.openai.com/v1`).
-2. Click **Test connectivity**. The panel probes the URL from the backend process, so it reflects what a real AI request would see — including inside Docker containers or a packaged desktop build.
+2. Click **Test connectivity**. The panel probes the URL from the app itself (its local server), so it reflects what a real AI request would see — including inside Docker containers or a packaged desktop build.
 3. A green **Reachable** summary means the network path works (auth/model errors are a separate problem). A red summary names the failing step — **DNS** (name resolution), **TCP** (can’t connect), or **HTTP** (TLS/request failure) — with an actionable hint.
-
-The same check is available programmatically via `GET /api/v1/debug/connectivity?url=<base_url>`.
 
 ### View Modes
 
@@ -73,7 +71,7 @@ The toolbar at the top of the dialog offers two ways to inspect logs:
 | Mode           | Icon        | Description                                                                                                                            |
 | -------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------- |
 | **Aggregated** | Layers icon | Shows each request as a clean summary: the full assembled response text and any tool calls. Best for quickly reading what the AI said. |
-| **Chunks**     | List icon   | Shows every raw JSON streaming chunk received from the API. Best for deep debugging of streaming issues or token usage.                |
+| **Chunks**     | List icon   | Shows the raw data stream received from the provider. Best for deep debugging of streaming issues or token usage.                      |
 
 ### Toolbar Actions
 
@@ -83,15 +81,9 @@ The toolbar at the top of the dialog offers two ways to inspect logs:
 | **Clear** (<img src="assets/trash-2.svg" alt="Trash icon" width="16" height="16" style="vertical-align:text-bottom;" />)        | Deletes all stored log entries after confirmation.                                                          |
 | **Close** (<img src="assets/x.svg" alt="Close icon" width="16" height="16" style="vertical-align:text-bottom;" />)              | Closes the dialog.                                                                                          |
 
-### LLM Raw Log Verbosity
+### Raw Logs
 
-The backend writes raw LLM interaction data to `data/logs/llm_raw.log` when `AUGQ_LLM_DUMP=1` is set in your environment. You can adjust the verbosity using `AUGQ_LLM_DUMP_LEVEL`:
-
-- `compact` (default): writes one entry per communication with minimal request/response payload, streaming data is summarized into `chunk_count` and `full_content_summary` with truncated chunks.
-- `normal`: writes one entry per communication with reduced payload, includes streaming chunk previews (up to 20 truncated items) and non-streaming response text up to 400 characters.
-- `debug`: includes full request/response objects and full streaming chunks, useful only for deep network and protocol debugging.
-
-The compact mode is recommended for normal use because it keeps log files readable while preserving every communication event.
+For deep protocol debugging, AugmentedQuill can write the raw request/response data for every AI call to a log file. This is a developer feature — see the [Developer Guide](../../DEVELOPMENT.md#debug-diagnostics) for how to enable and tune it.
 
 ### Log Entries
 
@@ -99,7 +91,7 @@ Each entry in the log list is a collapsible row. The collapsed row shows:
 
 - An **HTTP method badge** (POST in green, other methods in blue).
 - A **model type badge** indicating which role made the call: <img src="assets/pen.svg" alt="Pen icon" width="16" height="16" style="vertical-align:text-bottom;" /> EDITING (purple), <img src="assets/book-open.svg" alt="Book Open icon" width="16" height="16" style="vertical-align:text-bottom;" /> WRITING (blue), or <img src="assets/message-square.svg" alt="Message Square icon" width="16" height="16" style="vertical-align:text-bottom;" /> CHAT (orange).
-- The **API endpoint name** (e.g. `/api/v1/chat/completions`).
+- The **endpoint** that was called (e.g. the chat-completions API).
 - The **HTTP status code** (200 in green, errors in red).
 - **Start and end timestamps** with elapsed time.
 
