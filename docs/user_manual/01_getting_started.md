@@ -4,6 +4,32 @@ AugmentedQuill is designed to be a seamless extension of your creative process. 
 
 > Your story belongs to you. AugmentedQuill keeps you in the driver seat: every beat, character voice, and plot decision is always yours. AI is here as a collaborator—to brainstorm, refine, and ghostwrite in ways that match your intent, not replace it.
 
+## Installation
+
+AugmentedQuill does not run entirely in the cloud — you install it on your own machine (or a server you control) and it talks to an AI model provider you configure. Choose the method that fits you best:
+
+| Method                                  | Best for                                          | Where to look                                                                                                                                                                                            |
+| --------------------------------------- | ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Portable executable**                 | Authors & artists who want to double-click and go | Download the executable for your OS from the [Releases](https://github.com/StableLlamaAI/AugmentedQuill/releases) page. It starts a local server and opens AugmentedQuill in your browser automatically. |
+| **Docker**                              | Self-hosters & home servers                       | `docker compose up -d`, then open `http://localhost:8000/`.                                                                                                                                              |
+| **Electron desktop app** (experimental) | A native-feeling windowed application             | Work in progress; see the installation guide.                                                                                                                                                            |
+| **From source**                         | Tinkerers & contributors                          | See the [Developer Guide](../../DEVELOPMENT.md).                                                                                                                                                         |
+
+The complete, step-by-step [Installation Guide](../../INSTALL.md) covers every method in detail. You can come back to install later — everything below assumes the app is already running in your browser.
+
+> **Tip:** For the simplest setup, use the published releases. Building from source is intended for development and contribution.
+
+## Setting Up Your AI Models
+
+AugmentedQuill is a writing tool, not a model host — it does **not** bundle an AI server. Before you can use the AI features (chat, Extend/Rewrite, suggestions, summaries), you need to point AugmentedQuill at an LLM provider. Two steps are required:
+
+1. **Choose a provider** — a local server on your machine (`llama.cpp` or Ollama), or a cloud API (OpenAI, Anthropic Claude, Google Gemini, DeepSeek, OpenRouter, or any other OpenAI-compatible service). Local models run on your hardware for free; cloud APIs charge per token and need an API key.
+2. **Configure it in _Machine Settings_** — open **Settings** → **Machine Settings**, add a provider with its base URL, API key (if any), and model ID, then assign it to the **WRITING**, **EDITING**, and **CHAT** roles.
+
+The [Machine Settings tab](02_projects_and_settings.md#the-machine-settings-tab) in [Projects and Settings](02_projects_and_settings.md) explains the roles, fields, and parameters in full, and the [Connecting to Popular Providers](02_projects_and_settings.md#connecting-to-popular-providers) section gives ready-made base URLs and example model IDs for **local llama.cpp, Ollama, OpenRouter, OpenAI, Claude, Google Gemini, and DeepSeek**.
+
+If your provider is not reachable, the [Troubleshooting & FAQ](13_troubleshooting.md) chapter covers the common causes (wrong base URL, missing key, CORS).
+
 ## What AugmentedQuill Can Do For You
 
 - **Write with AI that knows your world** — the editor's **Extend**, **Rewrite**, and **Suggest** tools draft, continue, and polish prose using your story's own context.
@@ -17,7 +43,7 @@ AugmentedQuill is designed to be a seamless extension of your creative process. 
 - AugmentedQuill is local-first and not designed for public internet deployment without adding your own security layer.
 - No built-in user authentication or per-project access control exists. Treat the running instance as trusted local software.
 - No external editor sync is provided; project data is kept in local folders (e.g., `data/projects/`).
-- Accessibility support is currently not implemented (no dedicated keyboard shortcuts, ARIA, screen-reader enhancements).
+- Accessibility support is implemented for core flows (ARIA semantics, visible focus, keyboard shortcuts, focus-trapped dialogs) but not WCAG-certified. See [Keyboard Shortcuts & Accessibility](14_keyboard_shortcuts_and_accessibility.md) for the full picture, including known gaps.
 
 ## Core Concepts
 

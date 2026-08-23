@@ -181,6 +181,35 @@ Exactly one provider should be assigned to each role. You can assign all three r
 | **Model status**      | A dot and label: **Model OK** (green), **Model unavailable** (red), **Checking…**, or **Idle**.                                                                                                                                                                                                               |
 | **Timeout (ms)**      | How many milliseconds to wait for a response before giving up. Increase this for slow local models; decrease it to fail fast.                                                                                                                                                                                 |
 
+#### Connecting to Popular Providers
+
+AugmentedQuill talks to every provider through the **OpenAI-compatible chat completions API**, so connecting any of the providers below is just a matter of filling in **Name**, **Base URL**, **API Key**, and **Model ID**. The ready-made values are:
+
+| Provider                       | Base URL                                                   | API key                                             | Example model IDs                                                                              |
+| ------------------------------ | ---------------------------------------------------------- | --------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| **Local llama.cpp**            | `http://localhost:8080/v1`                                 | (none — leave blank)                                | The model you loaded into `llama-server` (e.g. a GGUF file name)                               |
+| **Ollama** (local)             | `http://localhost:11434/v1`                                | (none — leave blank)                                | `llama3.2`, `qwen3`, `gemma3`                                                                  |
+| **OpenRouter**                 | `https://openrouter.ai/api/v1`                             | Your OpenRouter API key                             | `anthropic/claude-sonnet-4-5`, `openai/gpt-4o`, `google/gemini-2.5-pro`                        |
+| **OpenAI**                     | `https://api.openai.com/v1`                                | Your OpenAI API key (platform.openai.com)           | `gpt-4o`, `gpt-4o-mini`                                                                        |
+| **Anthropic Claude**           | `https://api.anthropic.com/v1/`                            | Your Anthropic API key                              | `claude-sonnet-4-5`, `claude-haiku-4-5`, `claude-opus-4-1`                                     |
+| **Google Gemini**              | `https://generativelanguage.googleapis.com/v1beta/openai/` | Your Google AI Studio API key (aistudio.google.com) | `gemini-2.5-pro`, `gemini-2.5-flash`                                                           |
+| **DeepSeek**                   | `https://api.deepseek.com`                                 | Your DeepSeek API key                               | `deepseek-v4-flash`, `deepseek-v4-pro` (classic aliases `deepseek-chat` / `deepseek-reasoner`) |
+| Any OpenAI-compatible endpoint | Your provider's `/v1` endpoint                             | As required by the provider                         | As listed by the provider                                                                      |
+
+**Practical steps for each scenario:**
+
+1. **Local `llama.cpp`** — run the llama.cpp server (`llama-server` / `llama-server.exe -m <model.gguf> --port 8080`), leave the API key blank, and set the base URL to `http://localhost:8080/v1`. The model ID is whatever GGUF you loaded.
+2. **Ollama** — start Ollama, `ollama pull <model>` (e.g. `ollama pull llama3.2`), leave the API key blank, and use `http://localhost:11434/v1` with the pulled model name as the model ID.
+3. **OpenRouter** — create a key at [openrouter.ai/keys](https://openrouter.ai/keys) and use `https://openrouter.ai/api/v1`. OpenRouter gives you access to hundreds of models from many vendors through a single endpoint; use its provider-qualified model IDs (e.g. `anthropic/claude-sonnet-4-5`).
+4. **Cloud API providers (OpenAI, Claude, Google, DeepSeek)** — create an API key at the provider's console, paste it into **API Key**, and copy the base URL and a model ID from the table above. Model IDs change frequently, so check the provider's documentation for the current list — or click the <img src="assets/chevron-down.svg" alt="Chevron icon" width="16" height="16" style="vertical-align:text-bottom;" /> chevron button in the **Model ID** field to fetch and pick from the models the endpoint actually serves.
+
+> **Notes:**
+>
+> - **Security validation:** AugmentedQuill validates base URLs to prevent SSRF. Local endpoints (`localhost`, `127.0.0.1`, `0.0.0.0`) are always trusted. Cloud endpoints must be **saved in Machine Settings** (which writes them to `data/config/machine.json`) — once saved, they are trusted.
+> - **Model status:** after saving, the **Model status** indicator will confirm whether the model ID was found. Green = ready; red = check the base URL, key, and model ID.
+> - **Function calling:** the CHAT role uses tool calls to manage your project. Cloud models and modern local models (e.g. Llama 3.x, Qwen) support them; if chat actions fail, check the provider's **Function Calling** capability setting.
+> - **CORS:** browser-based requests to cloud providers go through AugmentedQuill's built-in proxy, which avoids CORS restrictions. If a provider still refuses connections, see [Troubleshooting & FAQ](13_troubleshooting.md#21-models-dont-load--no-models-found).
+
 #### Model Capabilities
 
 | Setting              | Options                        | Description                                                                                                                                                                                                                                                     |

@@ -187,7 +187,7 @@ Apply the useful feedback and tighten the manuscript. Revision is where a good s
 
 The story is solid; now make it clean and presentable.
 
-> Note: At the time of writing, AugmentedQuill does not have a comprehensive keyboard shortcut guide and relies primarily on UI interactions.
+> **Tip:** AugmentedQuill supports keyboard shortcuts for the most common actions (undo/redo, search, suggestions, annotations). See [Keyboard Shortcuts & Accessibility](14_keyboard_shortcuts_and_accessibility.md) for the full list.
 
 ### 16. Copyediting & Proofreading
 

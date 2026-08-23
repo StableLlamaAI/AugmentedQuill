@@ -23,3 +23,4 @@ Welcome to AugmentedQuill, your AI-assisted prose writing companion. This manual
 11. [Writing Your Story: A Practical Roadmap](11_writing_a_story.md)
 12. [Scenes, Annotations, and Structural Improvements](12_scenes_and_annotations.md)
 13. [Troubleshooting & FAQ](13_troubleshooting.md)
+14. [Keyboard Shortcuts & Accessibility](14_keyboard_shortcuts_and_accessibility.md)
