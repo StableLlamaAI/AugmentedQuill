@@ -9,6 +9,7 @@ This file is intentionally concise to reduce token overhead.
 
 ## Always-enforced highlights
 
+- Never run `git stash` or `git commit` unless the user explicitly asks for it. Leave the user's git state (stashes, staged/unstaged changes, branches) untouched.
 - Keep all application LLM instructions separated from code and stored in `resources/config/instructions.json`.
 - Project/story file format changes must be backward compatible or include explicit schema/version bumps with automatic chainable migrations.
 - Prioritize maintainable, compact code with strict separation of concerns and minimal duplication.

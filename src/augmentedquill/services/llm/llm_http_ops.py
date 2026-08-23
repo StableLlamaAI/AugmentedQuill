@@ -14,6 +14,9 @@ from __future__ import annotations
 
 import asyncio
 import datetime
+import errno
+import socket
+import ssl
 import traceback
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -101,6 +104,118 @@ _RETRYABLE_TRANSPORT_ERRORS = (
 def _is_retryable(exc: Exception) -> bool:
     """Return True when *exc* represents a transient failure worth retrying."""
     return isinstance(exc, _RETRYABLE_TRANSPORT_ERRORS)
+
+
+def _classify_transport_error(exc: Exception, url: str) -> tuple[str, str]:
+    """Return a (summary, hint) pair turning a raw transport failure into an
+    actionable diagnosis.
+
+    Network failures inside containers (Docker) usually come from DNS, egress
+    firewalls, proxies or wrong host addressing. Surfacing a categorized
+    message (instead of a bare traceback) makes the cause obvious in the Debug
+    window and in the raw LLM log.
+    """
+    if isinstance(exc, httpx.ConnectTimeout):
+        return (
+            f"Connection to {url} timed out (no response within the configured timeout).",
+            (
+                "The provider did not respond in time. If you are running in Docker, verify the "
+                "container can reach the provider: outbound HTTPS from the container is NAT-ed "
+                "through the Docker host, and a host firewall or a required egress proxy can "
+                "block it."
+            ),
+        )
+    if isinstance(exc, (httpx.ReadTimeout, httpx.WriteTimeout, httpx.PoolTimeout)):
+        return (
+            f"Request to {url} timed out while streaming data ({type(exc).__name__}).",
+            (
+                "The provider stopped responding mid-request. A reverse proxy or firewall that "
+                "drops long-lived connections can cause this."
+            ),
+        )
+    if isinstance(exc, httpx.ProxyError):
+        return (
+            f"Proxy error while connecting to {url}.",
+            (
+                "The HTTP(S) proxy configured via HTTP_PROXY/HTTPS_PROXY/ALL_PROXY could not "
+                "relay the request. Verify the proxy is reachable from the container and that "
+                "NO_PROXY is set correctly."
+            ),
+        )
+    if isinstance(exc, httpx.ConnectError):
+        cause = exc.__cause__ or exc
+        if isinstance(cause, ssl.SSLError):
+            return (
+                f"TLS/SSL error while connecting to {url}.",
+                (
+                    f"Certificate or TLS handshake failure: {cause!s}. If a corporate proxy "
+                    "performs TLS inspection, the container may reject its certificate."
+                ),
+            )
+        if isinstance(cause, socket.gaierror):
+            return (
+                f"Could not resolve {url} (DNS lookup failed).",
+                (
+                    "DNS resolution failed inside the container. Check that the Docker host can "
+                    "resolve the provider's hostname and that the container's embedded DNS "
+                    "(127.0.0.11) is working. Try a different hostname or the provider's IP "
+                    "address."
+                ),
+            )
+        if getattr(cause, "errno", None) in (errno.ENETUNREACH, errno.EHOSTUNREACH):
+            return (
+                f"Network is unreachable for {url} (errno {getattr(cause, 'errno', None)}).",
+                (
+                    "The container cannot reach the destination network. A host firewall/egress "
+                    "filter may be blocking outbound traffic from the Docker bridge, or the "
+                    "destination network does not exist."
+                ),
+            )
+        if isinstance(cause, ConnectionRefusedError):
+            return (
+                f"Connection refused for {url}.",
+                (
+                    "Nothing is listening on that host/port from inside the container. If the "
+                    "provider runs on the Docker host, remember that 'localhost' inside the "
+                    "container is the container itself - use http://host.docker.internal:PORT "
+                    "(requires 'extra_hosts: [\"host.docker.internal:host-gateway\"]') or the "
+                    "Docker bridge gateway (e.g. http://172.17.0.1:PORT)."
+                ),
+            )
+        if isinstance(cause, (ConnectionResetError, ConnectionAbortedError)):
+            return (
+                f"Connection to {url} was reset.",
+                (
+                    "The connection was closed by the peer or an intermediate device. A "
+                    "firewall, TLS-inspecting proxy, or rate limiter may have dropped the "
+                    "connection."
+                ),
+            )
+        return (
+            f"Could not connect to {url}.",
+            (
+                f"Transport error while connecting: {cause!s}. If you are running in Docker, "
+                "verify outbound connectivity from the container (see the Troubleshooting "
+                "chapter)."
+            ),
+        )
+    if isinstance(exc, ssl.SSLError):
+        return (
+            f"TLS/SSL error while connecting to {url}.",
+            (
+                f"Certificate or TLS handshake failure: {exc!s}. If a corporate proxy performs "
+                "TLS inspection, the container may reject its certificate."
+            ),
+        )
+    if isinstance(exc, httpx.ReadError):
+        return (
+            f"Connection to {url} failed while reading the response.",
+            f"Read error: {exc!s}. The provider may have closed the stream unexpectedly.",
+        )
+    return (
+        f"Request to {url} failed: {type(exc).__name__}: {exc!s}",
+        "See the raw exception detail below; this is not a recognized network failure.",
+    )
 
 
 def _finalize_log_entry(
@@ -203,19 +318,19 @@ async def logged_request(
         if last_exc is not None:
             raise last_exc
     except Exception as exc:
-        # For the common case of a ReadTimeout or other transport-level
-        # error, we don't need the entire Python traceback in the log; the
-        # message is usually sufficient and saves space.  Otherwise fall back
-        # to formatting the full traceback for diagnostics.
-        if isinstance(exc, (httpx.ReadTimeout, httpx.RequestError)):
-            detail = f"{type(exc).__name__}: {exc!s}"
+        # Transport-level failures (DNS, refused, timeout, proxy, TLS) get a
+        # categorized, actionable summary so the Debug window and raw log show
+        # the cause immediately. Non-network errors keep the full traceback.
+        if isinstance(exc, httpx.RequestError):
+            summary, hint = _classify_transport_error(exc, url)
+            detail = f"{summary}\n\n{hint}\n\n{type(exc).__name__}: {exc!s}"
         else:
+            summary = (
+                f"An internal error occurred during the LLM request: "
+                f"{type(exc).__name__} {exc}"
+            )
             detail = traceback.format_exc()
-        _finalize_log_entry(
-            log_entry,
-            error=f"An internal error occurred during the LLM request: {type(exc).__name__} {exc}",
-            error_detail=detail,
-        )
+        _finalize_log_entry(log_entry, error=summary, error_detail=detail)
         raise
 
     response_body = _log_response_body(response)
@@ -267,12 +382,16 @@ async def logged_stream_request(
             log_entry["response"]["status_code"] = response.status_code
             yield response, log_entry
     except Exception as exc:
-        tb = traceback.format_exc()
-        _finalize_log_entry(
-            log_entry,
-            error=f"An internal error occurred during the LLM request: {type(exc).__name__} {exc}",
-            error_detail=tb,
-        )
+        if isinstance(exc, httpx.RequestError):
+            summary, hint = _classify_transport_error(exc, url)
+            detail = f"{summary}\n\n{hint}\n\n{type(exc).__name__}: {exc!s}"
+        else:
+            summary = (
+                f"An internal error occurred during the LLM request: "
+                f"{type(exc).__name__} {exc}"
+            )
+            detail = traceback.format_exc()
+        _finalize_log_entry(log_entry, error=summary, error_detail=detail)
         raise
     finally:
         if not log_entry.get("timestamp_end"):

@@ -39,6 +39,56 @@ AugmentedQuill is designed for local desktop or local server usage. It has no bu
 - Auto mode depends on AI relevance prediction and might miss entries in complex contexts.
 - Use manual include/exclude toggles in Sourcebook list and disable Auto if needed.
 
+### 2.5 Docker / container networking (LLM providers unreachable)
+
+If you run AugmentedQuill in Docker (or a dev container) and _“Models don’t load”_ / every AI request fails, the cause is usually **container networking** rather than a bad API key. The right fix depends on where your provider runs:
+
+**1. Cloud providers (OpenAI, Anthropic, Gemini, DeepSeek, OpenRouter, …)**
+
+Containers get outbound internet access **by default** through the host's NAT, so no special settings are needed. If cloud calls fail, check:
+
+- The Docker host itself can reach the internet (DNS + egress).
+- No host firewall blocks traffic leaving the Docker bridge (e.g. `ufw`/`iptables`, a VPN, or a corporate egress proxy).
+- If the host needs an HTTP(S) proxy, pass it into the container with `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY` environment variables (see the Compose example below). AugmentedQuill's HTTP client honors these.
+
+**2. A provider running on the same Docker _host_** (e.g. Ollama / llama.cpp on the host machine)
+
+Inside a container, `localhost` / `127.0.0.1` refers to the **container itself**, not the Docker host — so `http://localhost:11434/v1` fails with _connection refused_ even though the server is running. Use the special hostname `host.docker.internal` instead, which requires the container to be started with `extra_hosts: ["host.docker.internal:host-gateway"]` (Docker ≥ 20.10; automatic on Docker Desktop for macOS/Windows). `host.docker.internal` is treated as a trusted local endpoint by AugmentedQuill.
+
+**3. A provider running in _another container_ on the same Docker server**
+
+Reach it by its service/container name on a shared user-defined network (e.g. an `ollama` service at `http://ollama:11434/v1`), or via the Docker bridge gateway IP (commonly `http://172.17.0.1:11434/v1`).
+
+**Compose example** — allow the container to reach a provider on the host and let cloud calls use the host's proxy:
+
+```yaml
+services:
+  augmentedquill:
+    # ...existing augmentedquill service config...
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+    environment:
+      - OPENAI_BASE_URL=http://host.docker.internal:11434/v1 # optional: host-local provider
+      - HTTP_PROXY=${HTTP_PROXY:-}
+      - HTTPS_PROXY=${HTTPS_PROXY:-}
+      - NO_PROXY=${NO_PROXY:-}
+```
+
+**Base URL trust (SSRF guard).** AugmentedQuill only sends requests to base URLs it considers trusted: local endpoints (`localhost`, `127.0.0.1`, `0.0.0.0`, `host.docker.internal`), any URL **saved in Machine Settings** (written to `data/config/machine.json`), or the `OPENAI_BASE_URL` environment variable. If you pass an ad-hoc URL into a request payload (e.g. a bridge IP such as `172.17.0.1`), it is rejected with `Untrusted or unconfirmed base_url`. Fix: save the provider in **Settings → Machine Settings**, or set `OPENAI_BASE_URL`.
+
+**How to diagnose**
+
+1. Open the **Debug Logs** window (header button → _LLM Communication Logs_). Failed requests now show a categorized network error (e.g. _DNS lookup failed_, _Connection refused_, _timed out_) with an actionable hint.
+2. Use the **Network diagnostics** panel in the Debug Logs window (or `GET /api/v1/debug/connectivity?url=<base_url>`) to test DNS, TCP and HTTPS from _inside the container_ — this separates “the container can't reach the provider” from “the provider rejected the request”.
+3. From the host shell, test outbound connectivity directly:
+
+   ```bash
+   docker exec -it augmentedquill python -c \
+     "import urllib.request; print(urllib.request.urlopen('https://api.openai.com/v1', timeout=10).status)"
+   ```
+
+4. Check `data/logs/llm_raw.log` for full request/response details (set `AUGQ_LLM_DUMP=1`).
+
 ## 3. Known limitations (2026)
 
 - No per-user or per-project authentication.

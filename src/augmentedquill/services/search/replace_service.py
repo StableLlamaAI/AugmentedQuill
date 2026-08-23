@@ -151,13 +151,19 @@ def _replace_in_chapter_content(
     is_regex: bool,
     is_phonetic: bool,
     match_index: int | None,
-) -> tuple[int, str | None, ReplaceChangeLocation | None]:
-    """Replace in a single chapter's prose.  Returns (count, label_or_None, location_or_None)."""
+    current_content: str | None = None,
+    write_changes: bool = True,
+) -> tuple[int, str | None, ReplaceChangeLocation | None, str | None]:
+    """Replace in a single chapter's prose.  Returns (count, label_or_None, location_or_None, new_content_or_None)."""
     from augmentedquill.services.projects.projects import write_chapter_content
 
-    content = _read_chapter_content(chap_id)
+    content = (
+        current_content
+        if current_content is not None
+        else _read_chapter_content(chap_id)
+    )
     if not content:
-        return 0, None, None
+        return 0, None, None, None
 
     if match_index is None:
         new_content, count = _apply_replace(
@@ -175,14 +181,16 @@ def _replace_in_chapter_content(
         )
 
     if count > 0:
-        write_chapter_content(chap_id, new_content)
+        if write_changes:
+            write_chapter_content(chap_id, new_content)
         label = f"Chapter {chap_id} content"
         return (
             count,
             label,
             _make_change_location("chapter", str(chap_id), "content", label),
+            new_content,
         )
-    return 0, None, None
+    return 0, None, None, None
 
 
 # ─── Chapter metadata ────────────────────────────────────────────────────────
@@ -844,7 +852,12 @@ def _replace_in_sourcebook(
 # ─── Public API ──────────────────────────────────────────────────────────────
 
 
-def replace_all(req: ReplaceAllRequest, active: Path) -> ReplaceResponse:
+def replace_all(
+    req: ReplaceAllRequest,
+    active: Path,
+    current_contents: dict[int, str] | None = None,
+    write_changes: bool = True,
+) -> ReplaceResponse:
     """Replace every occurrence of the query within the specified scope."""
     q = req.query
     r = req.replacement
@@ -859,6 +872,7 @@ def replace_all(req: ReplaceAllRequest, active: Path) -> ReplaceResponse:
     total = 0
     changed: list[str] = []
     changed_locations: list[ReplaceChangeLocation] = []
+    new_contents: dict[int, str] = {}
 
     chapter_ids = _get_all_chapter_ids()
 
@@ -874,14 +888,26 @@ def replace_all(req: ReplaceAllRequest, active: Path) -> ReplaceResponse:
             else chapter_ids
         )
         for chap_id in ids:
-            count, label, location = _replace_in_chapter_content(
-                chap_id, q, r, cs, rx, ph, match_index=None
+            count, label, location, new_content = _replace_in_chapter_content(
+                chap_id,
+                q,
+                r,
+                cs,
+                rx,
+                ph,
+                match_index=None,
+                current_content=(
+                    current_contents.get(chap_id) if current_contents else None
+                ),
+                write_changes=write_changes,
             )
             if count > 0 and label:
                 total += count
                 changed.append(label)
                 if location is not None:
                     changed_locations.append(location)
+                if new_content is not None:
+                    new_contents[chap_id] = new_content
 
     if scope in (SearchScope.metadata, SearchScope.all):
         n, labels, locations = _replace_in_chapter_metadata(
@@ -909,6 +935,7 @@ def replace_all(req: ReplaceAllRequest, active: Path) -> ReplaceResponse:
         replacements_made=total,
         changed_sections=changed,
         changed_sections_meta=changed_locations,
+        new_contents=new_contents,
     )
 
 
@@ -931,13 +958,15 @@ def replace_single(req: ReplaceSingleRequest, active: Path) -> ReplaceResponse:
             chap_id = int(sec_id)
         except ValueError:
             return ReplaceResponse(replacements_made=0, changed_sections=[])
-        count, label, location = _replace_in_chapter_content(
-            chap_id, q, r, cs, rx, ph, match_index=idx
+        count, label, location, new_content = _replace_in_chapter_content(
+            chap_id, q, r, cs, rx, ph, match_index=idx, write_changes=True
         )
+        new_contents = {chap_id: new_content} if new_content is not None else {}
         return ReplaceResponse(
             replacements_made=count,
             changed_sections=[label] if count and label else [],
             changed_sections_meta=[location] if location is not None else [],
+            new_contents=new_contents,
         )
 
     if sec_type == "chapter_metadata":

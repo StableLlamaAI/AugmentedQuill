@@ -307,6 +307,12 @@ export const en = {
     Chunks: 'Chunks',
     'Refresh Logs': 'Refresh Logs',
     'Clear Logs': 'Clear Logs',
+    'Network diagnostics': 'Network diagnostics',
+    'Test connectivity to a model base URL from inside this container (useful for Docker).':
+      'Test connectivity to a model base URL from inside this container (useful for Docker).',
+    'Base URL': 'Base URL',
+    'Test connectivity': 'Test connectivity',
+    'Testing…': 'Testing…',
     'No LLM communications logged yet.': 'No LLM communications logged yet.',
     Caller: 'Caller',
     Start: 'Start',

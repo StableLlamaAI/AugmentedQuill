@@ -9,7 +9,7 @@
  * Defines the debug unit so this responsibility stays isolated, testable, and easy to evolve.
  */
 
-import { DebugLogsResponse } from '../apiTypes';
+import { ConnectivityResult, DebugLogsResponse } from '../apiTypes';
 import { fetchJson, deleteJson } from './shared';
 
 export const debugApi = {
@@ -25,6 +25,14 @@ export const debugApi = {
     return deleteJson<{ status: string }>(
       '/debug/llm_logs?_t=' + Date.now(),
       'Failed to clear debug logs'
+    );
+  },
+
+  testConnectivity: async (url: string): Promise<ConnectivityResult> => {
+    return fetchJson<ConnectivityResult>(
+      '/debug/connectivity?url=' + encodeURIComponent(url) + '&_t=' + Date.now(),
+      undefined,
+      'Failed to test connectivity'
     );
   },
 };

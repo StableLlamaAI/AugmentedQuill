@@ -146,6 +146,8 @@ export type SourcebookUpsertPayload = components['schemas']['SourcebookEntryCrea
 
 export type DebugLogEntry = components['schemas']['DebugLogEntry'];
 export type DebugLogsResponse = components['schemas']['DebugLogsResponse'];
+export type ConnectivityStep = components['schemas']['ConnectivityStep'];
+export type ConnectivityResult = components['schemas']['ConnectivityResult'];
 
 // ---------------------------------------------------------------------------
 // Helper functions

@@ -301,6 +301,12 @@ export const de = {
     Chunks: 'Chunks',
     'Refresh Logs': 'Protokolle aktualisieren',
     'Clear Logs': 'Protokolle löschen',
+    'Network diagnostics': 'Netzwerkdiagnose',
+    'Test connectivity to a model base URL from inside this container (useful for Docker).':
+      'Verbindung zu einer Modell-Basis-URL aus diesem Container testen (nützlich für Docker).',
+    'Base URL': 'Basis-URL',
+    'Test connectivity': 'Verbindung testen',
+    'Testing…': 'Teste…',
     'No LLM communications logged yet.': 'Noch keine LLM-Kommunikation protokolliert.',
     Caller: 'Aufrufer',
     Start: 'Start',

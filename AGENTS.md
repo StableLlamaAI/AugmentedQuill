@@ -209,6 +209,7 @@ python tools/check_copyright.py .
 
 ## 11. Agent Workflow Heuristics
 
+- **Never run `git stash` or `git commit` (or any history-changing git operation such as `rebase`, `reset`, or creating/deleting branches) unless the user explicitly instructed you to.** Git state — stashes, staged/unstaged changes, and branches — is the user's work-in-progress and must be left untouched. In particular, never use `git stash` to temporarily move changes aside, and never create commits on the user's behalf.
 - Read only what is needed for the current task.
 - Prefer surgical edits over broad rewrites. But also do not hesitate a rewrite when that increases maintainability and prevents duplication.
 - After edits, run relevant checks and report concrete outcomes.

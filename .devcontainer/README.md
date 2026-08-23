@@ -84,6 +84,27 @@ environment (`remoteEnv` → `${localEnv:...}`). Set them in your host shell or
 in a `.env` before launching the container. No secrets are committed to the
 repository.
 
+### Reaching LLM providers from the container
+
+- **Cloud providers** (OpenAI, Anthropic, Gemini, DeepSeek, OpenRouter, …)
+  work out of the box — the dev container reaches the internet through the
+  host's NAT. If your host needs an egress proxy, the container also passes
+  through `HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY` and `ALL_PROXY`, which
+  AugmentedQuill's HTTP client honors.
+- **Providers on the Docker host** (e.g. Ollama on `localhost:11434`) are
+  reachable via `http://host.docker.internal:<port>` — the dev container is
+  started with `runArgs: ["--add-host=host.docker.internal:host-gateway"]`, so
+  the name resolves to the host. Remember that `localhost` inside the container
+  points at the container itself, not the host.
+- **Providers in another container** can be reached by service/container name
+  on a shared user-defined network, or via the Docker bridge gateway
+  (`http://172.17.0.1:<port>`).
+- Base URLs for host-local providers may need to be saved in **Settings →
+  Machine Settings** (or set via `OPENAI_BASE_URL`) to pass AugmentedQuill's
+  SSRF base-URL validation; `host.docker.internal` is already trusted. See the
+  [Troubleshooting & FAQ](../docs/user_manual/13_troubleshooting.md#25-docker--container-networking-llm-providers-unreachable)
+  chapter for details.
+
 ## Troubleshooting
 
 - **`Permission denied` while installing dependencies**: a stale root-owned

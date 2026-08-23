@@ -44,4 +44,23 @@ describe('debugApi', () => {
       'Failed to clear debug logs'
     );
   });
+
+  it('calls GET /debug/connectivity with an encoded url', async () => {
+    vi.mocked(fetchJson).mockResolvedValueOnce({
+      ok: true,
+      url: 'http://host.docker.internal:11434/v1',
+      summary: 'Reachable',
+      steps: [],
+    });
+
+    await debugApi.testConnectivity('http://host.docker.internal:11434/v1');
+
+    expect(fetchJson).toHaveBeenCalledWith(
+      expect.stringMatching(
+        /^\/debug\/connectivity\?url=http%3A%2F%2Fhost\.docker\.internal%3A11434%2Fv1&_t=\d+$/
+      ),
+      undefined,
+      'Failed to test connectivity'
+    );
+  });
 });

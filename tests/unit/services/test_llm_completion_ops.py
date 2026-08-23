@@ -11,10 +11,14 @@ import os
 import tempfile
 from pathlib import Path
 from unittest import TestCase
+from unittest.mock import patch
+
+import pytest
 
 from augmentedquill.services.llm.llm_completion_ops import (
     _prepare_llm_request,
     _resolve_temperature_max_tokens,
+    _validate_base_url,
 )
 
 
@@ -136,3 +140,64 @@ class ResolveTemperatureMaxTokensTest(TestCase):
     def test_partial_override_temperature_only(self):
         temp, _ = _resolve_temperature_max_tokens(0.1, None, model_cfg=None)
         assert temp == 0.1
+
+
+class ValidateBaseUrlTest(TestCase):
+    """Verify the SSRF base-URL validation used by all LLM request paths.
+
+    Depends on the session machine.json (conftest) that saves
+    ``https://api.openai.com/v1``. Environment override variables are forced
+    empty so the local-whitelist behavior is deterministic.
+    """
+
+    _ENV_OVERRIDES = (
+        "OPENAI_BASE_URL",
+        "ANTHROPIC_BASE_URL",
+        "GOOGLE_BASE_URL",
+    )
+
+    def setUp(self) -> None:
+        patcher = patch.dict(os.environ, {k: "" for k in self._ENV_OVERRIDES})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_localhost_is_trusted(self):
+        _validate_base_url("http://localhost:8080/v1")
+        _validate_base_url("http://127.0.0.1:11434/v1")
+
+    def test_docker_host_alias_is_trusted(self):
+        # host.docker.internal is the Docker-host alias (container-localhost).
+        _validate_base_url("http://host.docker.internal:11434/v1")
+        _validate_base_url("https://host.docker.internal/v1")
+
+    def test_saved_machine_model_is_trusted(self):
+        # Saved in the session machine.json by conftest.
+        _validate_base_url("https://api.openai.com/v1")
+
+    def test_env_override_is_trusted(self):
+        with patch.dict(os.environ, {"OPENAI_BASE_URL": "https://my-proxy.invalid/v1"}):
+            _validate_base_url("https://my-proxy.invalid/v1")
+
+    def test_unknown_cloud_url_rejected_with_hint(self):
+        with pytest.raises(ValueError) as excinfo:
+            _validate_base_url("https://unknown-provider.invalid/v1")
+        assert "Untrusted or unconfirmed base_url" in str(excinfo.value)
+        assert "Machine Settings" in str(excinfo.value)
+
+    def test_docker_bridge_ip_rejected_with_docker_hint(self):
+        with pytest.raises(ValueError) as excinfo:
+            _validate_base_url("http://172.17.0.1:11434/v1")
+        message = str(excinfo.value)
+        assert "Untrusted or unconfirmed base_url" in message
+        assert "private/LAN address" in message
+
+    def test_invalid_scheme_rejected(self):
+        with pytest.raises(ValueError):
+            _validate_base_url("ftp://example.com/v1")
+
+    def test_dangerous_url_rejected(self):
+        with pytest.raises(ValueError):
+            _validate_base_url("http://user@evil.com/v1")
+
+    def test_skip_validation_bypasses(self):
+        _validate_base_url("https://unknown-provider.invalid/v1", skip_validation=True)

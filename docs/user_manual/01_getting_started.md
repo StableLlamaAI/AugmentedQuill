@@ -30,7 +30,7 @@ AugmentedQuill is a writing tool, not a model host — it does **not** bundle an
 
 The [Machine Settings tab](02_projects_and_settings.md#the-machine-settings-tab) in [Projects and Settings](02_projects_and_settings.md) explains the roles, fields, and parameters in full, and the [Connecting to Popular Providers](02_projects_and_settings.md#connecting-to-popular-providers) section gives ready-made base URLs and example model IDs for **local llama.cpp, Ollama, OpenRouter, OpenAI, Claude, Google Gemini, and DeepSeek**.
 
-If your provider is not reachable, the [Troubleshooting & FAQ](13_troubleshooting.md) chapter covers the common causes (wrong base URL, missing key, CORS).
+If your provider is not reachable, the [Troubleshooting & FAQ](13_troubleshooting.md) chapter covers the common causes (wrong base URL, missing key, CORS, and Docker/container networking when running in a container).
 
 ## What AugmentedQuill Can Do For You
 

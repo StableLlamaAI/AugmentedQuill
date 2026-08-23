@@ -308,6 +308,12 @@ export const fr = {
     Chunks: 'Fragments',
     'Refresh Logs': 'Actualiser les journaux',
     'Clear Logs': 'Effacer les journaux',
+    'Network diagnostics': 'Diagnostic réseau',
+    'Test connectivity to a model base URL from inside this container (useful for Docker).':
+      'Testez la connectivité vers une URL de base de modèle depuis ce conteneur (utile pour Docker).',
+    'Base URL': 'URL de base',
+    'Test connectivity': 'Tester la connectivité',
+    'Testing…': 'Test en cours…',
     'No LLM communications logged yet.':
       'Aucune communication LLM enregistrée pour le moment.',
     Caller: 'Appelant',

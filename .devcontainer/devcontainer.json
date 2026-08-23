@@ -13,15 +13,25 @@
     }
   },
 
-  // Pass through LLM endpoint config from the host without committing secrets.
-  // Unset variables simply expand to empty and fall back to app defaults.
+  // Pass through LLM endpoint config and egress proxy settings from the host
+  // without committing secrets. Unset variables simply expand to empty and fall
+  // back to app defaults; the HTTP client honors HTTP(S)_PROXY when set.
   "remoteEnv": {
     "OPENAI_API_KEY": "${localEnv:OPENAI_API_KEY}",
     "OPENAI_BASE_URL": "${localEnv:OPENAI_BASE_URL}",
     "OPENAI_MODEL": "${localEnv:OPENAI_MODEL}",
     "OPENAI_TIMEOUT_S": "${localEnv:OPENAI_TIMEOUT_S}",
-    "VITE_BACKEND_URL": "${localEnv:VITE_BACKEND_URL}"
+    "VITE_BACKEND_URL": "${localEnv:VITE_BACKEND_URL}",
+    "HTTP_PROXY": "${localEnv:HTTP_PROXY}",
+    "HTTPS_PROXY": "${localEnv:HTTPS_PROXY}",
+    "NO_PROXY": "${localEnv:NO_PROXY}",
+    "ALL_PROXY": "${localEnv:ALL_PROXY}"
   },
+
+  // Let the dev container reach LLM providers running on the Docker host
+  // (e.g. Ollama/llama.cpp) via http://host.docker.internal:<port>. Requires
+  // Docker >= 20.10 (host-gateway). Cloud providers need no extra settings.
+  "runArgs": ["--add-host=host.docker.internal:host-gateway"],
 
   // Keep the container's Python venv, node_modules and Playwright browser cache
   // in isolated named volumes instead of sharing the host copies:

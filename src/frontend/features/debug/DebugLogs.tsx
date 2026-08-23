@@ -26,7 +26,11 @@ import { useFocusTrap } from '../layout/useFocusTrap';
 import { AppTheme } from '../../types';
 import { useThemeClasses } from '../layout/ThemeContext';
 import { api } from '../../services/api';
-import { DebugLogEntry } from '../../services/apiTypes';
+import {
+  ConnectivityResult,
+  ConnectivityStep,
+  DebugLogEntry,
+} from '../../services/apiTypes';
 
 interface DebugLogsProps {
   isOpen: boolean;
@@ -242,6 +246,116 @@ const DebugLogsHeader: React.FC<DebugLogsHeaderProps> = ({
     </div>
   </div>
 );
+
+interface NetworkDiagnosticsProps {
+  t: (key: string) => string;
+  bgMain: string;
+  textMain: string;
+  borderMain: string;
+  bgSecondary: string;
+}
+
+/**
+ * Runs the backend connectivity diagnostic (DNS -> TCP -> HTTPS) against a
+ * target base URL so the user can tell whether the container can reach a
+ * provider at all — the classic Docker failure mode — versus the provider
+ * rejecting the request.
+ */
+const NetworkDiagnostics: React.FC<NetworkDiagnosticsProps> = ({
+  t,
+  bgMain,
+  textMain,
+  borderMain,
+  bgSecondary,
+}: NetworkDiagnosticsProps): React.ReactElement => {
+  const [url, setUrl] = useState<string>('https://api.openai.com/v1');
+  const [result, setResult] = useState<ConnectivityResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [isTesting, setIsTesting] = useState<boolean>(false);
+
+  const runTest = async (): Promise<void> => {
+    const target = url.trim();
+    if (!target) return;
+    setIsTesting(true);
+    setError(null);
+    try {
+      const data = await api.debug.testConnectivity(target);
+      setResult(data);
+    } catch (err) {
+      setResult(null);
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsTesting(false);
+    }
+  };
+
+  return (
+    <div className={`p-6 border-b ${borderMain} space-y-3`}>
+      <div className="space-y-1">
+        <h3 className={`text-sm font-bold ${textMain}`}>{t('Network diagnostics')}</h3>
+        <p className="text-xs text-brand-gray-500">
+          {t(
+            'Test connectivity to a model base URL from inside this container (useful for Docker).'
+          )}
+        </p>
+      </div>
+      <div className="flex gap-2">
+        <input
+          type="url"
+          value={url}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>): void =>
+            setUrl(e.target.value)
+          }
+          onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>): void => {
+            if (e.key === 'Enter') void runTest();
+          }}
+          aria-label={t('Base URL')}
+          placeholder="https://api.openai.com/v1"
+          className={`flex-1 min-w-0 px-3 py-2 text-sm rounded-lg border ${borderMain} ${bgMain} ${textMain}`}
+        />
+        <button
+          onClick={(): void => void runTest()}
+          disabled={isTesting}
+          className={`px-4 py-2 text-sm font-medium rounded-lg transition-opacity text-white ${
+            isTesting ? 'opacity-60' : 'hover:opacity-80'
+          } bg-blue-500`}
+        >
+          {isTesting ? t('Testing…') : t('Test connectivity')}
+        </button>
+      </div>
+      {error && (
+        <div className="p-3 rounded-lg border border-red-500/30 bg-red-500/5 text-red-500 text-xs whitespace-pre-wrap">
+          {error}
+        </div>
+      )}
+      {result && (
+        <div className={`rounded-lg border ${borderMain} ${bgSecondary} p-3 space-y-2`}>
+          <div
+            className={`text-xs font-semibold ${
+              result.ok ? 'text-green-500' : 'text-red-500'
+            }`}
+          >
+            {result.summary}
+          </div>
+          {result.steps.map((step: ConnectivityStep) => (
+            <div key={step.name} className="flex items-start gap-2 text-xs">
+              <span
+                className={`shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                  step.ok
+                    ? 'bg-green-500/10 text-green-500'
+                    : 'bg-red-500/10 text-red-500'
+                }`}
+              >
+                {step.name}
+              </span>
+              <span className={`${textMain} break-words min-w-0`}>{step.detail}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
 
 interface StreamingAggregatedViewProps {
   response: NonNullable<LogEntry['response']>;
@@ -591,6 +705,14 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({
           borderMain={borderMain}
           bgSecondary={bgSecondary}
           t={t}
+        />
+
+        <NetworkDiagnostics
+          t={t}
+          bgMain={bgMain}
+          textMain={textMain}
+          borderMain={borderMain}
+          bgSecondary={bgSecondary}
         />
 
         <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-4">
