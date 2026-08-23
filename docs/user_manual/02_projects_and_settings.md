@@ -6,7 +6,7 @@ To access your projects and configure the application, click the <img src="asset
 
 The About tab provides version and runtime information about AugmentedQuill and the environment it is running in:
 
-- **Version** (from `src/frontend/package.json`)
+- **Version** (the app's release version)
 - **Git revision** (short commit hash)
 - **Built** timestamp
 - **Python version** (build environment)
@@ -97,6 +97,8 @@ _Note: Chat histories and generated images are currently not included in project
 
 The Machine Settings tab is where you configure the AI models (providers) that power AugmentedQuill. You can add multiple providers and assign each one to specific roles.
 
+> **Provider choice is up to you.** AugmentedQuill runs entirely on your machine and never requires a cloud connection. You can use only local models (`llama.cpp`, Ollama) — which costs nothing and keeps all your data private — or connect to a cloud API if you prefer. A cloud provider is never a requirement; it is simply an option.
+
 ![The Machine Settings tab showing the provider list on the left and the configuration form on the right](screenshots/02_machine_settings_1.png)
 
 ### The Three AI Model Roles
@@ -171,15 +173,46 @@ Exactly one provider should be assigned to each role. You can assign all three r
 
 #### Connection Fields
 
-| Field                 | Description                                                                                                                                                                                                                                                                                                   |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Name**              | A display name for this provider (e.g. "OpenAI GPT-4o" or "Local Llama").                                                                                                                                                                                                                                     |
-| **Base URL**          | The OpenAI-compatible API endpoint (e.g. `https://api.openai.com/v1`). Use this to point to Ollama, LM Studio, or any other compatible API.                                                                                                                                                                   |
-| **API Key**           | Your API key. Displayed in plain text — keep this page private. Not required for local providers that skip authentication.                                                                                                                                                                                    |
-| **Connection status** | A dot and label showing: **Connected** (green), **Connection failed** (red), **Testing…** (spinning), or **Idle** (grey, not yet tested).                                                                                                                                                                     |
-| **Model ID**          | The model identifier to use (e.g. `gpt-4o`, `llama3.2`). Start typing to filter, or click the <img src="assets/chevron-down.svg" alt="Chevron icon" width="16" height="16" style="vertical-align:text-bottom;" /> chevron button to fetch the list of available models from the API and pick from a dropdown. |
-| **Model status**      | A dot and label: **Model OK** (green), **Model unavailable** (red), **Checking…**, or **Idle**.                                                                                                                                                                                                               |
-| **Timeout (ms)**      | How many milliseconds to wait for a response before giving up. Increase this for slow local models; decrease it to fail fast.                                                                                                                                                                                 |
+| Field                 | Description                                                                                                                                                                                                                                                                                                          |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Name**              | A display name for this provider (e.g. "OpenAI GPT-5.6" or "Local Llama").                                                                                                                                                                                                                                           |
+| **Base URL**          | The OpenAI-compatible API endpoint (e.g. `https://api.openai.com/v1`). Use this to point to Ollama, LM Studio, or any other compatible API.                                                                                                                                                                          |
+| **API Key**           | Your API key. Displayed in plain text — keep this page private. Not required for local providers that skip authentication.                                                                                                                                                                                           |
+| **Connection status** | A dot and label showing: **Connected** (green), **Connection failed** (red), **Testing…** (spinning), or **Idle** (grey, not yet tested).                                                                                                                                                                            |
+| **Model ID**          | The model identifier to use (e.g. `gpt-5.6-terra`, `llama3.2`). Start typing to filter, or click the <img src="assets/chevron-down.svg" alt="Chevron icon" width="16" height="16" style="vertical-align:text-bottom;" /> chevron button to fetch the list of available models from the API and pick from a dropdown. |
+| **Model status**      | A dot and label: **Model OK** (green), **Model unavailable** (red), **Checking…**, or **Idle**.                                                                                                                                                                                                                      |
+| **Timeout (ms)**      | How many milliseconds to wait for a response before giving up. Increase this for slow local models; decrease it to fail fast.                                                                                                                                                                                        |
+
+#### Connecting to Popular Providers
+
+AugmentedQuill talks to every provider through the **OpenAI-compatible chat completions API**, so connecting any of the providers below is just a matter of filling in **Name**, **Base URL**, **API Key**, and **Model ID**. The ready-made values (as of August 2026) are:
+
+| Provider                       | Base URL                                                   | API key                                             | Example model IDs                                                              |
+| ------------------------------ | ---------------------------------------------------------- | --------------------------------------------------- | ------------------------------------------------------------------------------ |
+| **Local llama.cpp**            | `http://localhost:8080/v1`                                 | (none — leave blank)                                | The model you loaded into `llama-server` (e.g. a GGUF file name)               |
+| **Ollama** (local)             | `http://localhost:11434/v1`                                | (none — leave blank)                                | `llama3.2`, `qwen3`, `gemma3`                                                  |
+| **OpenRouter**                 | `https://openrouter.ai/api/v1`                             | Your OpenRouter API key                             | `anthropic/claude-sonnet-5`, `openai/gpt-5.6-terra`, `google/gemini-3.5-flash` |
+| **OpenAI**                     | `https://api.openai.com/v1`                                | Your OpenAI API key (platform.openai.com)           | `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`                                 |
+| **Anthropic Claude**           | `https://api.anthropic.com/v1/`                            | Your Anthropic API key                              | `claude-opus-5`, `claude-sonnet-5`, `claude-haiku-4-5`                         |
+| **Google Gemini**              | `https://generativelanguage.googleapis.com/v1beta/openai/` | Your Google AI Studio API key (aistudio.google.com) | `gemini-3.6-flash`, `gemini-3.5-flash`, `gemini-2.5-pro`                       |
+| **DeepSeek**                   | `https://api.deepseek.com`                                 | Your DeepSeek API key                               | `deepseek-v4-flash`, `deepseek-v4-pro`, `deepseek-v4-flash-vision-exp`         |
+| Any OpenAI-compatible endpoint | Your provider's `/v1` endpoint                             | As required by the provider                         | As listed by the provider                                                      |
+
+**Practical steps for each scenario:**
+
+1. **Local `llama.cpp`** — run the llama.cpp server (`llama-server` / `llama-server.exe -m <model.gguf> --port 8080`), leave the API key blank, and set the base URL to `http://localhost:8080/v1`. The model ID is whatever GGUF you loaded.
+2. **Ollama** — start Ollama, `ollama pull <model>` (e.g. `ollama pull llama3.2`), leave the API key blank, and use `http://localhost:11434/v1` with the pulled model name as the model ID.
+3. **OpenRouter** — create a key at [openrouter.ai/keys](https://openrouter.ai/keys) and use `https://openrouter.ai/api/v1`. OpenRouter gives you access to hundreds of models from many vendors through a single endpoint; use its provider-qualified model IDs (e.g. `anthropic/claude-sonnet-5`).
+4. **Cloud API providers (OpenAI, Claude, Google, DeepSeek)** — create an API key at the provider's console, paste it into **API Key**, and copy the base URL and a model ID from the table above. Model IDs change frequently, so check the provider's documentation for the current list — or click the <img src="assets/chevron-down.svg" alt="Chevron icon" width="16" height="16" style="vertical-align:text-bottom;" /> chevron button in the **Model ID** field to fetch and pick from the models the endpoint actually serves.
+
+> **Running in Docker?** Inside a container, `localhost` / `127.0.0.1` point at the **container itself**, not the Docker host. To use a model that runs on the Docker host, set the base URL to `http://host.docker.internal:<port>/v1` (the container must be started with `extra_hosts: ["host.docker.internal:host-gateway"]`); a model running in another container is reached by its service name (e.g. `http://ollama:11434/v1`). Cloud providers need no special setup. See [Docker / container networking](13_troubleshooting.md#25-docker--container-networking-llm-providers-unreachable) in Troubleshooting & FAQ.
+
+> **Notes:**
+>
+> - **Security validation:** AugmentedQuill only sends requests to addresses it trusts. Addresses on your own machine (`localhost`, `127.0.0.1`, `0.0.0.0`, `host.docker.internal`) are always allowed; cloud addresses must first be **saved in Machine Settings** — once saved, they are trusted.
+> - **Model status:** after saving, the **Model status** indicator will confirm whether the model ID was found. Green = ready; red = check the base URL, key, and model ID.
+> - **Function calling:** the CHAT role uses tool calls to manage your project. Cloud models and modern local models (e.g. Llama 3.x, Qwen) support them; if chat actions fail, check the provider's **Function Calling** capability setting.
+> - **CORS:** browser-based requests to cloud providers go through AugmentedQuill's built-in proxy, which avoids CORS restrictions. If a provider still refuses connections, see [Troubleshooting & FAQ](13_troubleshooting.md#21-models-dont-load--no-models-found).
 
 #### Model Capabilities
 

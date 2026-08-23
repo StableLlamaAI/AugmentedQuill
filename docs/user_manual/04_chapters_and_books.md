@@ -18,7 +18,7 @@ You can convert a project between types using the dropdown next to the active pr
 
 1. Converting from **series to novel** requires only one book. If more exist, the dropdown shows “Too many items.”
 2. Converting to **short story** requires just a single chapter. Neither novels nor series with more than one chapter (or series with >1 book) can yet become short stories until you remove the extras.
-3. The dropdown gives instant feedback and disables the target type when the code detects too much content (the enable/disable logic lives in the Projects tab component and mirrors the warning text you read there).
+3. The dropdown gives instant feedback and disables the target type when the app detects too much content (the same warning text appears in the Projects tab).
 
 ## Managing Chapters
 

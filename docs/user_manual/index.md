@@ -7,6 +7,7 @@ Welcome to AugmentedQuill, your AI-assisted prose writing companion. This manual
 - **New to AugmentedQuill?** Start at [Getting Started](01_getting_started.md), then follow the [Tutorial: Writing Your First Story](06_tutorial_first_story.md) to write a complete first story from idea to polished draft.
 - **Looking for one feature?** Jump straight to the chapter you need. Each chapter is self-contained, and every screenshot is annotated with what to look for.
 - **Stuck?** The [Troubleshooting & FAQ](13_troubleshooting.md) chapter collects the most common issues and their fixes.
+- **Building AugmentedQuill or contributing?** This manual is written for end users. Developers and contributors should use the [Developer Guide](../../DEVELOPMENT.md) instead.
 
 ## Table of Contents
 
@@ -23,3 +24,4 @@ Welcome to AugmentedQuill, your AI-assisted prose writing companion. This manual
 11. [Writing Your Story: A Practical Roadmap](11_writing_a_story.md)
 12. [Scenes, Annotations, and Structural Improvements](12_scenes_and_annotations.md)
 13. [Troubleshooting & FAQ](13_troubleshooting.md)
+14. [Keyboard Shortcuts & Accessibility](14_keyboard_shortcuts_and_accessibility.md)

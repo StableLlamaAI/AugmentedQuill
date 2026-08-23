@@ -10,19 +10,18 @@
 from __future__ import annotations
 
 import json as _json
-import os
 from collections.abc import AsyncIterator
 from typing import Any
 
 import httpx
 
-from augmentedquill.core.config import (
-    load_machine_config,
-)
 from augmentedquill.services.chat.chat_tool_decorator import EDITING_ROLE
 from augmentedquill.services.llm.llm_http_ops import logged_stream_request
 from augmentedquill.services.llm.llm_request_helpers import (
     apply_native_tool_calling_mode,
+)
+from augmentedquill.services.llm.llm_request_helpers import (
+    validate_base_url as _validate_base_url,
 )
 from augmentedquill.utils.llm_parsing import (
     parse_complete_assistant_output,
@@ -51,64 +50,6 @@ def _enforce_writing_no_thinking(
         merged["enable_thinking"] = False
 
     return merged
-
-
-def _validate_base_url(base_url: str, skip_validation: bool = False) -> None:
-    """Validate base_url against configured models or environment overrides to prevent SSRF."""
-    if not base_url or skip_validation:
-        return
-
-    # Check for suspicious schemes or non-HTTP/HTTPS URLs
-    if not (base_url.startswith(("http://", "https://"))):
-        raise ValueError(f"Invalid base_url scheme: {base_url}")
-
-    # Check for forbidden characters in URL (basic SSRF protection)
-    if any(c in base_url for c in "@[]"):
-        raise ValueError(f"Potentially dangerous base_url: {base_url}")
-
-    # 1. Check environment overrides (trusted)
-    overrides = {
-        os.getenv("OPENAI_BASE_URL"),
-        os.getenv("ANTHROPIC_BASE_URL"),
-        os.getenv("GOOGLE_BASE_URL"),
-    }
-    if base_url in overrides:
-        return
-
-    # 2. Check machine.json models
-    machine_config = load_machine_config()
-    if not machine_config:
-        from augmentedquill.services.exceptions import ConfigurationError
-
-        raise ConfigurationError(
-            "No OpenAI models configured. Configure openai.models[] in machine.json.",
-        )
-
-    for provider in ["openai", "anthropic", "google"]:
-        all_models = machine_config.get(provider, {}).get("models", [])
-        for model in all_models:
-            model_url = model.get("base_url")
-            if model_url and base_url == model_url:
-                return
-
-    # 3. Allow explicitly trusted local inference servers (e.g. Ollama, LM Studio)
-    trusted_locals = {
-        "http://localhost",
-        "http://127.0.0.1",
-        "http://0.0.0.0",
-        "https://localhost",
-        "https://127.0.0.1",
-        "http://fake",  # Trusted for unit tests
-    }
-    for trusted in trusted_locals:
-        if base_url == trusted or base_url.startswith(trusted + ":"):
-            suffix = base_url[len(trusted) :]
-            if not suffix or (
-                suffix.startswith(":") and suffix[1:].split("/")[0].isdigit()
-            ):
-                return
-
-    raise ValueError(f"Untrusted or unconfirmed base_url: {base_url}")
 
 
 async def unified_chat_stream(

@@ -6,10 +6,16 @@
 // (at your option) any later version.
 
 /**
- * Vitest setup file for initializing i18n and mocking DOM APIs.
+ * Vitest setup file for initializing i18n, mocking DOM APIs, and registering
+ * the axe accessibility matchers (toHaveNoViolations).
  */
 
 import './features/app/i18n';
+import * as axeMatchers from 'vitest-axe/matchers';
+import 'vitest-axe/extend-expect';
+import { expect } from 'vitest';
+
+expect.extend(axeMatchers);
 
 // Mock getClientRects for CodeMirror tests in jsdom
 Object.defineProperty(Range.prototype, 'getClientRects', {

@@ -66,6 +66,13 @@ If you run a home server, NAS, or just prefer keeping your applications containe
 
 _Note: Your stories and configuration will be saved in the `./data` and `./resources/config` directories next to your `docker-compose.yml` file._
 
+**Docker networking notes for AI providers:**
+
+- **Cloud providers** (OpenAI, Anthropic, Gemini, DeepSeek, OpenRouter, …) work out of the box — containers reach the internet through the host's NAT. If cloud calls fail, ensure the host has working DNS/egress and isn't blocking the Docker bridge, and pass any required egress proxy through with `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY` environment variables.
+- **A provider running on the same host** (e.g. Ollama on `localhost:11434`) is **not** reachable via `localhost` from inside the container (that points at the container itself). Add `extra_hosts: ["host.docker.internal:host-gateway"]` to the service and use `http://host.docker.internal:11434/v1` as the base URL.
+- **A provider running in another container** can be reached by its service/container name on a shared network (e.g. `http://ollama:11434/v1`) or via the Docker bridge gateway (`http://172.17.0.1:11434/v1`).
+- For full troubleshooting steps, see [Troubleshooting & FAQ](docs/user_manual/13_troubleshooting.md#25-docker--container-networking-llm-providers-unreachable).
+
 ---
 
 ## 4. Developer Setup (From Source)

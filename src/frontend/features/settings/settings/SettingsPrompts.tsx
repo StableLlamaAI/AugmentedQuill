@@ -159,10 +159,14 @@ export const SettingsPrompts: React.FC<SettingsPromptsProps> = ({
       <div className="space-y-4">
         <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-end">
           <div className="flex-1 min-w-0">
-            <label className="text-xs font-medium text-brand-gray-500 uppercase">
+            <label
+              htmlFor="prompt-override-select"
+              className="text-xs font-medium text-brand-gray-500 uppercase"
+            >
               Add prompt override
             </label>
             <select
+              id="prompt-override-select"
               value={selectedPromptId}
               onChange={(
                 e: React.ChangeEvent<HTMLSelectElement, HTMLSelectElement>

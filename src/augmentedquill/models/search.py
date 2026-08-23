@@ -164,3 +164,7 @@ class ReplaceResponse(BaseModel):
         default_factory=list,
         description="Structured information for each changed section",
     )
+    new_contents: dict[int, str] = Field(
+        default_factory=dict,
+        description="New content for chapters that were changed, keyed by chapter ID",
+    )

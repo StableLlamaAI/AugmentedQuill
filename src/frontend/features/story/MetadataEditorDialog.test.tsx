@@ -24,6 +24,7 @@ import {
 import { I18nextProvider } from 'react-i18next';
 import { SearchHighlightProvider } from '../search/SearchHighlightContext';
 import { describe, it, expect, vi, afterEach } from 'vitest';
+import { axe } from 'vitest-axe';
 import i18n from '../app/i18n';
 import { MetadataEditorDialog } from './MetadataEditorDialog';
 import { useMetadataEditorDialogState } from './useMetadataEditorDialogState';
@@ -677,5 +678,23 @@ describe('MetadataEditorDialog: LLM conflict integration', () => {
 
     // Still only the one "New" badge from the LLM-added conflict.
     expect(screen.getAllByText('New').length).toBe(1);
+  });
+});
+
+describe('MetadataEditorDialog accessibility', () => {
+  it('has no axe accessibility violations when open', async () => {
+    const { container } = renderWithI18n(
+      <MetadataEditorDialog
+        type="chapter"
+        title="Edit Chapter Metadata"
+        initialData={baseData}
+        onSave={vi.fn(async () => undefined)}
+        onClose={vi.fn()}
+        onAiGenerate={undefined}
+      />
+    );
+
+    const results = await axe(container);
+    expect(results).toHaveNoViolations();
   });
 });

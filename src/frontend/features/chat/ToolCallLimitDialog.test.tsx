@@ -15,6 +15,7 @@ import React from 'react';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { I18nextProvider } from 'react-i18next';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { axe } from 'vitest-axe';
 
 import i18n from '../app/i18n';
 import { ToolCallLimitDialog } from './ToolCallLimitDialog';
@@ -72,5 +73,14 @@ describe('ToolCallLimitDialog', () => {
     const card = dialog.querySelector('.p-6');
     expect(card).toBeTruthy();
     expect(card?.className).toContain('bg-brand-gray-900');
+  });
+
+  it('has no axe accessibility violations', async () => {
+    const { container } = renderWithI18n(
+      <ToolCallLimitDialog isOpen={true} count={12} theme="light" onResolve={vi.fn()} />
+    );
+
+    const results = await axe(container);
+    expect(results).toHaveNoViolations();
   });
 });

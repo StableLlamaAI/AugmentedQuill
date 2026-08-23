@@ -57,3 +57,25 @@ class DebugLogsResponse(BaseModel):
     """Response body for ``GET /api/v1/debug/llm_logs``."""
 
     logs: list[DebugLogEntry]
+
+
+class ConnectivityStep(BaseModel):
+    """Result of a single step of the outbound connectivity diagnostic."""
+
+    name: str
+    ok: bool
+    detail: str
+
+
+class ConnectivityResult(BaseModel):
+    """Result of testing outbound reachability of a target base URL.
+
+    Produced by ``GET /api/v1/debug/connectivity``; runs from the backend
+    process so it reflects what the container can actually reach (useful for
+    Docker deployments).
+    """
+
+    ok: bool
+    url: str
+    summary: str
+    steps: list[ConnectivityStep]

@@ -7,9 +7,12 @@
 
 """Tests the debug API endpoints to prevent regression of dynamic log binding."""
 
+from unittest.mock import AsyncMock, patch
+
 from fastapi.testclient import TestClient
 
 from augmentedquill.main import app
+from augmentedquill.models.debug import ConnectivityResult, ConnectivityStep
 from augmentedquill.services.llm import llm_logging
 
 client = TestClient(app)
@@ -58,3 +61,34 @@ def test_debug_llm_logs_dynamic_binding():
     response4 = client.get("/api/v1/debug/llm_logs")
     assert response4.status_code == 200
     assert response4.json()["logs"] == []
+
+
+def test_debug_connectivity_endpoint_returns_diagnostic():
+    fake_result = ConnectivityResult(
+        ok=True,
+        url="https://api.openai.com/v1",
+        summary="Reachable: https://api.openai.com/v1 (DNS, TCP and HTTP(S) all succeeded).",
+        steps=[
+            ConnectivityStep(name="dns", ok=True, detail="Resolved api.openai.com"),
+            ConnectivityStep(name="tcp", ok=True, detail="TCP ok"),
+            ConnectivityStep(name="http", ok=True, detail="HTTP 200"),
+        ],
+    )
+    with patch(
+        "augmentedquill.api.v1.debug.run_connectivity_diagnostic",
+        AsyncMock(return_value=fake_result),
+    ):
+        response = client.get(
+            "/api/v1/debug/connectivity",
+            params={"url": "https://api.openai.com/v1"},
+        )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["ok"] is True
+    assert body["url"] == "https://api.openai.com/v1"
+    assert {step["name"] for step in body["steps"]} == {"dns", "tcp", "http"}
+
+
+def test_debug_connectivity_requires_url():
+    response = client.get("/api/v1/debug/connectivity")
+    assert response.status_code == 400

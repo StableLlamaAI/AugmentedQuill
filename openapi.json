@@ -3118,6 +3118,49 @@
         }
       }
     },
+    "/api/v1/debug/connectivity": {
+      "get": {
+        "tags": ["debug"],
+        "summary": "Check Connectivity",
+        "description": "Diagnose outbound reachability of *url* from the backend process.\n\nRuns DNS, TCP and HTTP(S) probes exactly as the LLM client would, so it\nreflects what the container can actually reach. Useful for Docker\ndeployments to distinguish \"the container cannot reach the provider\" from\n\"the provider rejected the request\".",
+        "operationId": "check_connectivity_api_v1_debug_connectivity_get",
+        "parameters": [
+          {
+            "name": "url",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 2048,
+              "default": "",
+              "title": "Url"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectivityResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/projects/{project_name}/sourcebook/keywords": {
       "post": {
         "tags": ["Sourcebook"],
@@ -5675,6 +5718,53 @@
         "title": "CheckpointLoadDeleteRequest",
         "description": "Represents the CheckpointLoadDeleteRequest type."
       },
+      "ConnectivityResult": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/ConnectivityStep"
+            },
+            "type": "array",
+            "title": "Steps"
+          }
+        },
+        "type": "object",
+        "required": ["ok", "url", "summary", "steps"],
+        "title": "ConnectivityResult",
+        "description": "Result of testing outbound reachability of a target base URL.\n\nProduced by ``GET /api/v1/debug/connectivity``; runs from the backend\nprocess so it reflects what the container can actually reach (useful for\nDocker deployments)."
+      },
+      "ConnectivityStep": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "detail": {
+            "type": "string",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "required": ["name", "ok", "detail"],
+        "title": "ConnectivityStep",
+        "description": "Result of a single step of the outbound connectivity diagnostic."
+      },
       "CreateAnnotationRequest": {
         "properties": {
           "scope_type": {
@@ -7299,6 +7389,14 @@
             "type": "array",
             "title": "Changed Sections Meta",
             "description": "Structured information for each changed section"
+          },
+          "new_contents": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "New Contents",
+            "description": "New content for chapters that were changed, keyed by chapter ID"
           }
         },
         "type": "object",

@@ -301,6 +301,30 @@ mark.search-highlight {
   outline-offset: 2px;
 }
 
+/* The CodeMirror editor manages its own caret, so it must never draw a focus
+   ring around the prose: a ring frames the whole page when the editor is
+   clicked into, which looks like an error state.  Keyboard focus stays
+   visible through the blinking caret (and the inline chapter title keeps its
+   own subtle focus underline).  `!important` also wins over the generic
+   `:focus-visible` outline and CodeMirror's injected stylesheet. */
+.cm-content:focus-visible {
+  outline: none !important;
+}
+
+/* Accessibility: honour the user's reduced-motion preference.  Disable
+   animations, transitions, and smooth scrolling for everyone who requests it. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 button,
 a,
 [role='button'],

@@ -1432,6 +1432,31 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/debug/connectivity': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Check Connectivity
+     * @description Diagnose outbound reachability of *url* from the backend process.
+     *
+     *     Runs DNS, TCP and HTTP(S) probes exactly as the LLM client would, so it
+     *     reflects what the container can actually reach. Useful for Docker
+     *     deployments to distinguish "the container cannot reach the provider" from
+     *     "the provider rejected the request".
+     */
+    get: operations['check_connectivity_api_v1_debug_connectivity_get'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/projects/{project_name}/sourcebook/keywords': {
     parameters: {
       query?: never;
@@ -2294,6 +2319,36 @@ export interface components {
       timestamp: string;
     };
     /**
+     * ConnectivityResult
+     * @description Result of testing outbound reachability of a target base URL.
+     *
+     *     Produced by ``GET /api/v1/debug/connectivity``; runs from the backend
+     *     process so it reflects what the container can actually reach (useful for
+     *     Docker deployments).
+     */
+    ConnectivityResult: {
+      /** Ok */
+      ok: boolean;
+      /** Url */
+      url: string;
+      /** Summary */
+      summary: string;
+      /** Steps */
+      steps: components['schemas']['ConnectivityStep'][];
+    };
+    /**
+     * ConnectivityStep
+     * @description Result of a single step of the outbound connectivity diagnostic.
+     */
+    ConnectivityStep: {
+      /** Name */
+      name: string;
+      /** Ok */
+      ok: boolean;
+      /** Detail */
+      detail: string;
+    };
+    /**
      * CreateAnnotationRequest
      * @description Payload for creating a new annotation.
      */
@@ -2924,6 +2979,13 @@ export interface components {
        * @description Structured information for each changed section
        */
       changed_sections_meta?: components['schemas']['ReplaceChangeLocation'][];
+      /**
+       * New Contents
+       * @description New content for chapters that were changed, keyed by chapter ID
+       */
+      new_contents?: {
+        [key: string]: string;
+      };
     };
     /**
      * ReplaceSingleRequest
@@ -6396,6 +6458,37 @@ export interface operations {
         };
         content: {
           'application/json': unknown;
+        };
+      };
+    };
+  };
+  check_connectivity_api_v1_debug_connectivity_get: {
+    parameters: {
+      query?: {
+        url?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ConnectivityResult'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
         };
       };
     };

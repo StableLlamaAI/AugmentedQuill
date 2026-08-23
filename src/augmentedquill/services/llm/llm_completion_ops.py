@@ -29,6 +29,9 @@ from augmentedquill.services.llm.llm_request_helpers import (
     build_timeout,
     get_story_llm_preferences,
 )
+from augmentedquill.services.llm.llm_request_helpers import (
+    validate_base_url as _validate_base_url,
+)
 from augmentedquill.services.projects.projects import get_active_project_dir
 from augmentedquill.utils.llm_parsing import (
     parse_complete_assistant_output,
@@ -59,69 +62,6 @@ def _enforce_writing_no_thinking(
 def _llm_debug_enabled() -> bool:
     """Return whether verbose LLM request/response logging is enabled."""
     return os.getenv("AUGQ_LLM_DEBUG", "0") in ("1", "true", "TRUE", "yes", "on")
-
-
-def _validate_base_url(base_url: str, skip_validation: bool = False) -> None:
-    """Validate base_url against configured models or environment overrides to prevent SSRF."""
-    if not base_url or skip_validation:
-        return
-
-    # Check for suspicious schemes or non-HTTP/HTTPS URLs
-    if not (base_url.startswith(("http://", "https://"))):
-        raise ValueError(f"Invalid base_url scheme: {base_url}")
-
-    # Check for forbidden characters in URL (basic SSRF protection)
-    # This prevents using @ for credentials or [ ] for IPv6 scope which can be used to bypass filters
-    if any(c in base_url for c in "@[]"):
-        raise ValueError(f"Potentially dangerous base_url: {base_url}")
-
-    # 1. Check environment overrides (trusted)
-    overrides = {
-        os.getenv("OPENAI_BASE_URL"),
-        os.getenv("ANTHROPIC_BASE_URL"),
-        os.getenv("GOOGLE_BASE_URL"),
-    }
-    if base_url in overrides:
-        return
-
-    # 2. Check machine.json models
-    machine_config = load_machine_config()
-    if not machine_config:
-        from augmentedquill.services.exceptions import ConfigurationError
-
-        raise ConfigurationError(
-            "No OpenAI models configured. Configure openai.models[] in machine.json.",
-        )
-
-    for provider in ["openai", "anthropic", "google"]:
-        all_models = machine_config.get(provider, {}).get("models", [])
-        for model in all_models:
-            model_url = model.get("base_url")
-            if model_url and base_url == model_url:
-                return
-
-    # 3. Allow explicitly trusted local inference servers (e.g. Ollama, LM Studio)
-    # Note: Using a strict whitelist of local addresses.
-    trusted_locals = {
-        "http://localhost",
-        "http://127.0.0.1",
-        "http://0.0.0.0",
-        "https://localhost",
-        "https://127.0.0.1",
-        "http://fake",  # Trusted for unit tests
-    }
-
-    # Check if base_url starts with any of the trusted locals (with optional port)
-    for trusted in trusted_locals:
-        if base_url == trusted or base_url.startswith(trusted + ":"):
-            # Ensure the port part is numeric if present
-            suffix = base_url[len(trusted) :]
-            if not suffix or (
-                suffix.startswith(":") and suffix[1:].split("/")[0].isdigit()
-            ):
-                return
-
-    raise ValueError(f"Untrusted or unconfirmed base_url: {base_url}")
 
 
 def _prepare_llm_request(
