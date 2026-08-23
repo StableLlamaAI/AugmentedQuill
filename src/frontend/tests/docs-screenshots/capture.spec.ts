@@ -30,6 +30,7 @@ import { fileURLToPath } from 'url';
 
 const BACKEND = 'http://127.0.0.1:28010';
 const FRONTEND = 'http://127.0.0.1:28011';
+const MOCK_LLM = 'http://127.0.0.1:28012/v1';
 const DEMO_PROJECT = 'The Undrawn Valley';
 const SERIES_PROJECT = 'The Signal Fire';
 const BTTF_PROJECT = 'Back to the Future';
@@ -1018,6 +1019,31 @@ const screenshotDefs: ScreenshotDef[] = [
         console.log('  [warn] no collapsed debug-log entry found to expand');
       }
       await ctx.page.waitForTimeout(600);
+    },
+  },
+  {
+    id: '08_debug_connectivity',
+    marker:
+      'The Debug Logs Network diagnostics panel showing a successful connectivity test to a local model endpoint',
+    shot: { kind: 'element', selector: '[data-testid="network-diagnostics"]' },
+    viewport: { width: 1100, height: 900 },
+    setup: async (ctx: CaptureCtx) => {
+      await reset(ctx);
+      await clickFirst(ctx.page, ['[title="Debug Logs"]'], 'Debug Logs');
+      // Run the connectivity test against the in-suite mock LLM so the result
+      // is deterministic (real local DNS/TCP/HTTP all succeed against it).
+      await ctx.page.locator('[aria-label="Base URL"]').fill(`${MOCK_LLM}/models`);
+      await clickFirst(
+        ctx.page,
+        ['button:has-text("Test connectivity")'],
+        'Test connectivity'
+      );
+      await ctx.page
+        .locator('[data-testid="network-diagnostics"]')
+        .getByText('Reachable')
+        .first()
+        .waitFor({ state: 'visible', timeout: 15000 });
+      await ctx.page.waitForTimeout(800);
     },
   },
 

@@ -290,7 +290,10 @@ const NetworkDiagnostics: React.FC<NetworkDiagnosticsProps> = ({
   };
 
   return (
-    <div className={`p-6 border-b ${borderMain} space-y-3`}>
+    <div
+      data-testid="network-diagnostics"
+      className={`p-6 border-b ${borderMain} space-y-3`}
+    >
       <div className="space-y-1">
         <h3 className={`text-sm font-bold ${textMain}`}>{t('Network diagnostics')}</h3>
         <p className="text-xs text-brand-gray-500">

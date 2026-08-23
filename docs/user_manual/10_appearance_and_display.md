@@ -52,6 +52,20 @@ Open it by clicking the **Bug** icon on the right side of the top header bar.
 
 > **In this screenshot:** the Debug Logs dialog in Aggregated view. Each request is listed with the model and timing; one entry is expanded to show the full request and response JSON.
 
+### Network diagnostics
+
+At the top of the Debug Logs dialog, the **Network diagnostics** panel tests whether the backend can actually reach a provider — DNS, then TCP, then HTTPS — in one click. It is the fastest way to tell _“the machine/container can’t reach the provider”_ apart from _“the provider rejected the request”_.
+
+![The Debug Logs Network diagnostics panel showing a successful connectivity test to a local model endpoint](screenshots/08_debug_connectivity.png)
+
+> **In this screenshot:** a successful connectivity test against a local model endpoint. Each step (DNS, TCP, HTTP) is shown with its result; if a step fails, the panel highlights it so you know exactly where the connection breaks.
+
+1. Enter the provider's base URL in the **Base URL** field (e.g. `http://127.0.0.1:11434/v1` or `https://api.openai.com/v1`).
+2. Click **Test connectivity**. The panel probes the URL from the backend process, so it reflects what a real AI request would see — including inside Docker containers or a packaged desktop build.
+3. A green **Reachable** summary means the network path works (auth/model errors are a separate problem). A red summary names the failing step — **DNS** (name resolution), **TCP** (can’t connect), or **HTTP** (TLS/request failure) — with an actionable hint.
+
+The same check is available programmatically via `GET /api/v1/debug/connectivity?url=<base_url>`.
+
 ### View Modes
 
 The toolbar at the top of the dialog offers two ways to inspect logs:
