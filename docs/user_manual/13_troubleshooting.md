@@ -12,7 +12,7 @@ AugmentedQuill is designed for local desktop or local server usage. It has no bu
   - `data/config/` for local config
   - `data/logs/` for runtime logs
 - No “sync with external editor” integration exists yet. If you want versioned backups, use your own source control (Git) on `data/projects` or manual export via the UI.
-- Accessibility support is implemented for core flows (ARIA semantics, visible focus, keyboard shortcuts, focus-trapped dialogs), but the app is not WCAG-certified. See [Keyboard Shortcuts & Accessibility](14_keyboard_shortcuts_and_accessibility.md) for what is covered and the known gaps.
+- Accessibility support is implemented for core flows (ARIA semantics, visible keyboard focus, keyboard shortcuts, focus-trapped dialogs, reduced-motion support) and is checked by automated `axe` audits, but the app is not WCAG-certified. See [Keyboard Shortcuts & Accessibility](14_keyboard_shortcuts_and_accessibility.md) for what is covered and the known gaps.
 
 ## 2. Common user-reported issues
 

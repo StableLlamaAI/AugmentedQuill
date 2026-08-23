@@ -301,6 +301,29 @@ mark.search-highlight {
   outline-offset: 2px;
 }
 
+/* The CodeMirror editor suppresses its own outline (it manages its caret), so
+   give keyboard users a visible ring around the writing area.  `.cm-content`
+   is the tabbable editor surface (tabindex=0); :focus-visible keeps the ring
+   keyboard-only where the browser heuristic allows. */
+.cm-content:focus-visible {
+  outline: 2px solid #f59e0b !important;
+  outline-offset: 2px;
+}
+
+/* Accessibility: honour the user's reduced-motion preference.  Disable
+   animations, transitions, and smooth scrolling for everyone who requests it. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 button,
 a,
 [role='button'],

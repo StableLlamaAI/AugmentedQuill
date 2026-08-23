@@ -173,7 +173,10 @@ function renderNumberInput(
 ): React.ReactElement {
   return (
     <div className="space-y-1">
-      <label className="text-xs font-medium text-brand-gray-500 uppercase">
+      <label
+        htmlFor={`provider-${field}`}
+        className="text-xs font-medium text-brand-gray-500 uppercase"
+      >
         <span
           title={tooltip}
           className={
@@ -344,7 +347,10 @@ function renderApiKeyField(
   return (
     <div className="space-y-1">
       <div className="flex items-center justify-between gap-3">
-        <label className="text-xs font-medium text-brand-gray-500 uppercase flex items-center gap-2 dark:text-brand-gray-400">
+        <label
+          htmlFor="provider-apiKey"
+          className="text-xs font-medium text-brand-gray-500 uppercase flex items-center gap-2 dark:text-brand-gray-400"
+        >
           <Key size={12} /> API Key
         </label>
         <div className="flex items-center gap-2">
@@ -353,6 +359,9 @@ function renderApiKeyField(
           </span>
           <button
             type="button"
+            aria-label={
+              activeProvider.apiKeyEnabled ? 'Disable API key' : 'Enable API key'
+            }
             onClick={(): void =>
               onUpdateProvider(id, {
                 apiKeyEnabled: !activeProvider.apiKeyEnabled,
@@ -372,6 +381,7 @@ function renderApiKeyField(
       </div>
       <div className="relative">
         <input
+          id="provider-apiKey"
           data-no-smart-quotes="true"
           type="text"
           value={activeProvider.apiKey}
@@ -415,7 +425,10 @@ function renderModelIdField(
   }`;
   return (
     <div className="space-y-1">
-      <label className="text-xs font-medium text-brand-gray-500 uppercase flex items-center justify-between">
+      <label
+        htmlFor="provider-modelId"
+        className="text-xs font-medium text-brand-gray-500 uppercase flex items-center justify-between"
+      >
         <span>Model ID</span>
         <span className="text-xs text-brand-gray-400">
           You can type a custom model id
@@ -423,6 +436,7 @@ function renderModelIdField(
       </label>
       <div className="relative">
         <input
+          id="provider-modelId"
           data-no-smart-quotes="true"
           value={activeProvider.modelId}
           onFocus={(): void => setModelPickerOpenFor(id)}
@@ -551,10 +565,14 @@ function renderPresetsSection(
   return (
     <div className="space-y-3">
       <div className="space-y-1">
-        <label className="text-xs font-medium text-brand-gray-500 uppercase">
+        <label
+          htmlFor="provider-preset"
+          className="text-xs font-medium text-brand-gray-500 uppercase"
+        >
           Preset
         </label>
         <select
+          id="provider-preset"
           value={activeProvider.presetId || ''}
           onChange={(
             e: React.ChangeEvent<HTMLSelectElement, HTMLSelectElement>
@@ -601,7 +619,10 @@ function renderPresetsSection(
 
       {/* Delta tweak — applies partial parameter overrides on top of any preset */}
       <div className="space-y-1">
-        <label className="text-xs font-medium text-brand-gray-500 uppercase">
+        <label
+          htmlFor="provider-delta"
+          className="text-xs font-medium text-brand-gray-500 uppercase"
+        >
           Parameter Tweak{' '}
           <span className="normal-case font-normal text-brand-gray-400">
             (applied on top of preset)
@@ -609,6 +630,7 @@ function renderPresetsSection(
         </label>
         <div className="flex gap-2">
           <select
+            id="provider-delta"
             value=""
             onChange={(
               e: React.ChangeEvent<HTMLSelectElement, HTMLSelectElement>
@@ -750,7 +772,10 @@ function renderParametersSection(
 
       <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-1">
-          <label className="text-xs font-medium text-brand-gray-500 uppercase">
+          <label
+            htmlFor="provider-suggestLoopGuardEnabled"
+            className="text-xs font-medium text-brand-gray-500 uppercase"
+          >
             <span
               title="Enable suggestion loop guard: detects repeated n-gram loops and retries generation once or more."
               className="cursor-help underline decoration-dotted underline-offset-2"
@@ -759,6 +784,7 @@ function renderParametersSection(
             </span>
           </label>
           <select
+            id="provider-suggestLoopGuardEnabled"
             value={activeProvider.suggestLoopGuardEnabled === false ? 'off' : 'on'}
             onChange={(
               e: React.ChangeEvent<HTMLSelectElement, HTMLSelectElement>
@@ -775,7 +801,10 @@ function renderParametersSection(
         </div>
 
         <div className="space-y-1">
-          <label className="text-xs font-medium text-brand-gray-500 uppercase">
+          <label
+            htmlFor="provider-suggestLoopGuardNgram"
+            className="text-xs font-medium text-brand-gray-500 uppercase"
+          >
             <span
               title="N-gram size used for loop detection in suggestion mode."
               className="cursor-help underline decoration-dotted underline-offset-2"
@@ -784,6 +813,7 @@ function renderParametersSection(
             </span>
           </label>
           <select
+            id="provider-suggestLoopGuardNgram"
             value={activeProvider.suggestLoopGuardNgram === 4 ? '4' : '3'}
             onChange={(
               e: React.ChangeEvent<HTMLSelectElement, HTMLSelectElement>
@@ -800,7 +830,10 @@ function renderParametersSection(
         </div>
 
         <div className="space-y-1">
-          <label className="text-xs font-medium text-brand-gray-500 uppercase">
+          <label
+            htmlFor="provider-suggestLoopGuardMinRepeats"
+            className="text-xs font-medium text-brand-gray-500 uppercase"
+          >
             <span
               title="How many repeats of the same n-gram trigger loop detection."
               className="cursor-help underline decoration-dotted underline-offset-2"
@@ -809,6 +842,7 @@ function renderParametersSection(
             </span>
           </label>
           <input
+            id="provider-suggestLoopGuardMinRepeats"
             type="number"
             step={1}
             min={2}
@@ -829,7 +863,10 @@ function renderParametersSection(
         </div>
 
         <div className="space-y-1">
-          <label className="text-xs font-medium text-brand-gray-500 uppercase">
+          <label
+            htmlFor="provider-suggestLoopGuardMaxRegens"
+            className="text-xs font-medium text-brand-gray-500 uppercase"
+          >
             <span
               title="Maximum number of regeneration retries when loop/low-quality output is detected."
               className="cursor-help underline decoration-dotted underline-offset-2"
@@ -838,6 +875,7 @@ function renderParametersSection(
             </span>
           </label>
           <input
+            id="provider-suggestLoopGuardMaxRegens"
             type="number"
             step={1}
             min={0}
@@ -860,7 +898,10 @@ function renderParametersSection(
 
       <div className="mt-4 grid grid-cols-1 gap-4">
         <div className="space-y-1">
-          <label className="text-xs font-medium text-brand-gray-500 uppercase">
+          <label
+            htmlFor="provider-stop"
+            className="text-xs font-medium text-brand-gray-500 uppercase"
+          >
             <span
               title="Sequences that cause the model to stop generating immediately when encountered."
               className="cursor-help underline decoration-dotted underline-offset-2"
@@ -869,6 +910,7 @@ function renderParametersSection(
             </span>
           </label>
           <textarea
+            id="provider-stop"
             data-no-smart-quotes="true"
             rows={3}
             value={(activeProvider.stop || []).join('\n')}
@@ -886,7 +928,10 @@ function renderParametersSection(
           />
         </div>
         <div className="space-y-1">
-          <label className="text-xs font-medium text-brand-gray-500 uppercase">
+          <label
+            htmlFor="provider-extraBody"
+            className="text-xs font-medium text-brand-gray-500 uppercase"
+          >
             <span
               title="Additional JSON fields merged into the API request body. Use for provider-specific options not exposed above."
               className="cursor-help underline decoration-dotted underline-offset-2"
@@ -895,6 +940,7 @@ function renderParametersSection(
             </span>
           </label>
           <textarea
+            id="provider-extraBody"
             data-no-smart-quotes="true"
             rows={4}
             value={activeProvider.extraBody || ''}
@@ -1084,6 +1130,8 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
               theme={theme}
               size="sm"
               variant="danger"
+              aria-label="Delete provider"
+              title="Delete provider"
               onClick={(): void => onRemoveProvider(activeProvider.id)}
             >
               <Trash2 size={16} />
@@ -1119,10 +1167,14 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
         <div className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1">
-              <label className="text-xs font-medium text-brand-gray-500 uppercase">
+              <label
+                htmlFor="provider-name"
+                className="text-xs font-medium text-brand-gray-500 uppercase"
+              >
                 Name
               </label>
               <input
+                id="provider-name"
                 data-no-smart-quotes="true"
                 value={activeProvider.name}
                 onChange={(
@@ -1140,10 +1192,14 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
           </div>
 
           <div className="space-y-1">
-            <label className="text-xs font-medium text-brand-gray-500 uppercase flex items-center gap-2">
+            <label
+              htmlFor="provider-baseUrl"
+              className="text-xs font-medium text-brand-gray-500 uppercase flex items-center gap-2"
+            >
               <Terminal size={12} /> Base URL
             </label>
             <input
+              id="provider-baseUrl"
               data-no-smart-quotes="true"
               value={activeProvider.baseUrl}
               onChange={(
@@ -1220,7 +1276,10 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
           {/* Timeout + Max Tokens: not controlled by preset */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1">
-              <label className="text-xs font-medium text-brand-gray-500 uppercase">
+              <label
+                htmlFor="provider-timeout"
+                className="text-xs font-medium text-brand-gray-500 uppercase"
+              >
                 <span
                   title="Maximum time in seconds to wait for a response from the model API before timing out."
                   className="cursor-help underline decoration-dotted underline-offset-2"
@@ -1229,6 +1288,7 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
                 </span>
               </label>
               <input
+                id="provider-timeout"
                 type="number"
                 value={activeProvider.timeout}
                 onChange={(
@@ -1246,7 +1306,10 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
               />
             </div>
             <div className="space-y-1">
-              <label className="text-xs font-medium text-brand-gray-500 uppercase">
+              <label
+                htmlFor="provider-maxTokens"
+                className="text-xs font-medium text-brand-gray-500 uppercase"
+              >
                 <span
                   title="Maximum number of tokens the model will generate in a single response."
                   className="cursor-help underline decoration-dotted underline-offset-2"
@@ -1255,6 +1318,7 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
                 </span>
               </label>
               <input
+                id="provider-maxTokens"
                 type="number"
                 step={1}
                 value={activeProvider.maxTokens ?? ''}

@@ -65,9 +65,14 @@ AugmentedQuill is built with accessibility in mind. The following are implemente
 ### Keyboard Operability & Focus Management
 
 - **Visible focus indicator:** every keyboard-focusable control shows a clear amber outline when focused via keyboard (`:focus-visible`). Buttons, links, inputs, textareas, selects, and custom `role="button"` elements are all covered.
+- **Editor focus ring:** the CodeMirror writing editor suppresses its own outline (it manages its caret), so an explicit `:focus-visible` ring is applied to the editor surface — keyboard users always see where they are.
 - **Focus trapping:** every dialog traps keyboard focus while open — `Tab` cycles inside the dialog, `Escape` closes it, and focus returns to the element that opened it afterwards. Stacked dialogs (a dialog opened on top of another) isolate their own `Escape` handling.
 - **Keyboard-operable custom controls:** scene cards, chapter/scene tree rows, collapsible sections, and other non-standard widgets expose `tabindex` and respond to `Enter`/`Space`, so nothing requires a mouse.
 - **Undo/redo, search, and annotation shortcuts** are global (see above), reducing the need for the mouse during writing flow.
+
+### Motion & Reduced Motion
+
+- The app honours the `prefers-reduced-motion` preference: animations, transitions, and smooth scrolling are effectively disabled for users who request reduced motion (a global `@media (prefers-reduced-motion: reduce)` rule).
 
 ### Visual Comfort & Themes
 
@@ -77,19 +82,19 @@ AugmentedQuill is built with accessibility in mind. The following are implemente
 ### Quality Enforcement
 
 - The frontend enforces `jsx-a11y` linting rules (accessible markup, keyboard handlers, label associations) as part of its regular lint checks — accessibility regressions are caught in CI.
+- **Automated `axe` audits:** key dialogs and the Machine Settings screen are covered by `axe` scans (`vitest-axe`) that fail the test suite on any accessibility violation. Run them with `npm run test:accessibility`.
+- **CSS regression tests:** the global accessibility CSS (reduced-motion block and the editor focus ring) is guarded by unit tests so the rules cannot silently regress.
 
 ---
 
 ## Known Gaps & Planned Improvements
 
-AugmentedQuill has no official WCAG certification yet, and the following areas are not fully covered. They are tracked as future work:
+AugmentedQuill has no official WCAG certification yet. Core flows are covered by ARIA semantics, visible keyboard focus, reduced-motion support, and automated `axe` audits (see above), but the following areas are not fully covered and are tracked as future work:
 
-- **No `prefers-reduced-motion` handling** — UI transitions and spinner animations are not disabled for users who request reduced motion.
-- **No automated accessibility audits** — there is no `axe`/Lighthouse accessibility check in CI, and no dedicated screen-reader test pipeline (NVDA, VoiceOver, JAWS).
-- **Editor focus indicator** — the raw markdown editor intentionally suppresses its outer focus outline (it manages its own caret); a visible indication for the surrounding editor region is not yet provided.
 - **Complex canvas-like views** — the convergence map and pinboard are primarily pointer/mouse driven; full keyboard navigation through them is not guaranteed.
 - **Color contrast** — contrast is user-adjustable via the theme and contrast slider, but WCAG AA contrast ratios are not guaranteed across all theme/parameter combinations.
 - **Comprehensive shortcut coverage** — not every action has a shortcut yet; the table above is the complete, supported set.
+- **Broader `axe` coverage** — the automated `axe` scans currently target key dialogs and Machine Settings; a full-browser sweep (including the main dashboard and canvas views) and a dedicated screen-reader test pipeline (NVDA, VoiceOver, JAWS) are not yet in place.
 
 If accessibility is important to your workflow, use a modern browser with your platform's assistive technology (screen reader, magnifier, high-contrast OS theme). Report any specific barriers as a GitHub issue so they can be prioritized.
 

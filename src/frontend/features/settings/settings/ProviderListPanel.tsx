@@ -102,15 +102,6 @@ const ProviderListItem: React.FC<ProviderListItemProps> = ({
 
   return (
     <div
-      role="button"
-      tabIndex={0}
-      onClick={onSelect}
-      onKeyDown={(e: React.KeyboardEvent<HTMLDivElement>): void => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          onSelect();
-        }
-      }}
       className={`p-3 rounded-lg border cursor-pointer transition-all flex flex-col gap-2 group w-full text-left ${
         isEditing
           ? 'bg-brand-50 border-brand-500/50'
@@ -119,39 +110,46 @@ const ProviderListItem: React.FC<ProviderListItemProps> = ({
             : 'bg-brand-gray-800 border-brand-gray-700 hover:bg-brand-gray-750'
       }`}
     >
-      <div className="flex justify-between items-center w-full">
-        <div className="truncate flex-1">
-          <div
-            className={`font-medium text-sm ${
-              isLight ? 'text-brand-gray-800' : 'text-brand-gray-300'
-            }`}
-          >
-            {p.name}
+      <button
+        type="button"
+        onClick={onSelect}
+        aria-label={`Select provider ${p.name}`}
+        className="w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1 rounded"
+      >
+        <div className="flex justify-between items-center w-full">
+          <div className="truncate flex-1">
+            <div
+              className={`font-medium text-sm ${
+                isLight ? 'text-brand-gray-800' : 'text-brand-gray-300'
+              }`}
+            >
+              {p.name}
+            </div>
+          </div>
+          <div className="flex items-center space-x-1" aria-hidden="true">
+            {showMultimodal && (
+              <Eye
+                size={12}
+                className={isLight ? 'text-brand-gray-500' : 'text-brand-gray-400'}
+              />
+            )}
+            {showFunctionCalling && (
+              <Wand2
+                size={12}
+                className={isLight ? 'text-brand-gray-500' : 'text-brand-gray-400'}
+              />
+            )}
+            <span
+              className={`h-2.5 w-2.5 rounded-full border ${connDot}`}
+              title={`Connection: ${connectionStatus}`}
+            />
+            <span
+              className={`h-2.5 w-2.5 rounded-full border ${modelDot}`}
+              title={`Model: ${modelStatus}`}
+            />
           </div>
         </div>
-        <div className="flex items-center space-x-1">
-          {showMultimodal && (
-            <Eye
-              size={12}
-              className={isLight ? 'text-brand-gray-500' : 'text-brand-gray-400'}
-            />
-          )}
-          {showFunctionCalling && (
-            <Wand2
-              size={12}
-              className={isLight ? 'text-brand-gray-500' : 'text-brand-gray-400'}
-            />
-          )}
-          <span
-            className={`h-2.5 w-2.5 rounded-full border ${connDot}`}
-            title={`Connection: ${connectionStatus}`}
-          />
-          <span
-            className={`h-2.5 w-2.5 rounded-full border ${modelDot}`}
-            title={`Model: ${modelStatus}`}
-          />
-        </div>
-      </div>
+      </button>
       <div className="flex justify-between items-start">
         <div className="flex flex-wrap gap-1">
           {isWritingActive && (
@@ -175,10 +173,8 @@ const ProviderListItem: React.FC<ProviderListItemProps> = ({
         </div>
         <button
           type="button"
-          onClick={(e: React.MouseEvent<HTMLButtonElement, MouseEvent>): void => {
-            e.stopPropagation();
-            onDuplicate();
-          }}
+          aria-label={`Duplicate provider ${p.name}`}
+          onClick={onDuplicate}
           className={`p-1 rounded transition-colors opacity-100 sm:opacity-0 group-hover:opacity-100 ${
             isLight
               ? 'text-brand-gray-400 hover:text-brand-600 hover:bg-brand-gray-200'

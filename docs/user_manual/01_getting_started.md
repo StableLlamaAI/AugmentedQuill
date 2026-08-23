@@ -45,7 +45,7 @@ If your provider is not reachable, the [Troubleshooting & FAQ](13_troubleshootin
 - AugmentedQuill is local-first and not designed for public internet deployment without adding your own security layer.
 - No built-in user authentication or per-project access control exists. Treat the running instance as trusted local software.
 - No external editor sync is provided; project data is kept in local folders (e.g., `data/projects/`).
-- Accessibility support is implemented for core flows (ARIA semantics, visible focus, keyboard shortcuts, focus-trapped dialogs) but not WCAG-certified. See [Keyboard Shortcuts & Accessibility](14_keyboard_shortcuts_and_accessibility.md) for the full picture, including known gaps.
+- Accessibility support is implemented for core flows (ARIA semantics, visible keyboard focus, keyboard shortcuts, focus-trapped dialogs, reduced-motion support) and is checked by automated `axe` audits, but it is not WCAG-certified. See [Keyboard Shortcuts & Accessibility](14_keyboard_shortcuts_and_accessibility.md) for the full picture, including known gaps.
 
 ## Core Concepts
 

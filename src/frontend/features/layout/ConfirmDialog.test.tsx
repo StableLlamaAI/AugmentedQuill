@@ -14,12 +14,29 @@
 import React from 'react';
 import { cleanup, render, screen, fireEvent, within } from '@testing-library/react';
 import { afterEach, describe, it, expect, vi } from 'vitest';
+import { axe } from 'vitest-axe';
 
 import { ConfirmDialog } from './ConfirmDialog';
 
 afterEach(cleanup);
 
 describe('ConfirmDialog accessibility', () => {
+  it('has no axe accessibility violations', async () => {
+    const { container } = render(
+      <ConfirmDialog
+        isOpen={true}
+        title="Confirm deletion"
+        message="Are you sure?"
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+      />
+    );
+
+    const results = await axe(container);
+    expect(results).toHaveNoViolations();
+  });
   it('renders with appropriate aria attributes and labels', () => {
     const onConfirm = vi.fn();
     const onCancel = vi.fn();
