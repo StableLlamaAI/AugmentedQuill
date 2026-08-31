@@ -56,7 +56,7 @@
     "@types/node": "^26.2.0",
     "@types/pngjs": "^6.0.5",
     "@types/turndown": "^5.0.6",
-    "@typescript-eslint/eslint-plugin": "^8.67.0",
+    "@typescript-eslint/eslint-plugin": "^8.68.0",
     "@typescript-eslint/parser": "^8.67.0",
     "@typescript/native7": "npm:typescript@^7.0.2",
     "@vitejs/plugin-react": "^6.0.5",
