@@ -38,7 +38,7 @@
     "i18next": "^26.4.3",
     "lucide-react": "^1.55.0",
     "marked": "18.1.0",
-    "react": "^19.3.0",
+    "react": "^19.3.1",
     "react-dom": "^19.3.0",
     "react-i18next": "^17.0.16",
     "turndown": "7.2.4",
