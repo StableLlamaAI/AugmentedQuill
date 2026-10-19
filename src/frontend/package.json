@@ -35,7 +35,7 @@
     "codemirror": "^6.0.2",
     "diff-match-patch": "^1.0.5",
     "dompurify": "^3.4.16",
-    "i18next": "^26.4.3",
+    "i18next": "^26.4.7",
     "lucide-react": "^1.55.0",
     "marked": "18.1.0",
     "react": "^19.3.0",
