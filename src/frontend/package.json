@@ -37,7 +37,7 @@
     "dompurify": "^3.4.16",
     "i18next": "^26.4.3",
     "lucide-react": "^1.55.0",
-    "marked": "18.1.0",
+    "marked": "18.1.1",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "react-i18next": "^17.0.16",
