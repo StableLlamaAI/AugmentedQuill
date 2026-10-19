@@ -29,7 +29,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest>=9.1.1",
-    "ruff>=0.16.1,<0.17.0",
+    "ruff>=0.16.1,<0.18.0",
     "black>=26.5.1",
     "requests>=2.34.2",
     "pre-commit>=4.6.1",
