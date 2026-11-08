@@ -14,6 +14,10 @@ from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 from augmentedquill.services.projects.projects import select_project
+from augmentedquill.services.scenes.scene_markers import (
+    parse_scene_spans,
+    strip_internal_markers,
+)
 from tests.unit.api.v1.api_test_case import ApiTestCase
 
 
@@ -48,10 +52,14 @@ class ScenesApiTest(ApiTestCase):
 
     def _reset_project_content_tree(self) -> None:
         pdir = self.projects_root / self.pname
-        for rel in ("chapters", "books"):
+        for rel in ("chapters", "books", "content.md", "draft.md", "unlinked.txt"):
             path = pdir / rel
-            if path.exists():
+            if path.is_dir():
                 shutil.rmtree(path)
+            elif path.exists():
+                # Stale markers from a previous project-type iteration would
+                # otherwise make freshly created scenes look linked.
+                path.unlink()
 
     def _configure_scope(
         self,
@@ -741,11 +749,56 @@ class ScenesApiTest(ApiTestCase):
         self.assertEqual(payload["generated_text"], "Generated scene prose.")
         self.assertEqual(payload["scene"]["id"], scene["id"])
 
+    def test_write_scene_into_empty_span_starts_a_new_paragraph(self) -> None:
+        """Generated prose for an empty scene must not continue the previous paragraph."""
+        first = self._create(summary="One")
+        second = self._create(summary="Two")
+        pdir = self.projects_root / self.pname
+        # Scene 1 owns prose, scene 2 is an empty span right after it (no
+        # paragraph break in between).  This is the state left by an earlier
+        # boundary detection / linking step.
+        (pdir / "content.md").write_text(
+            f"<!--scene:{first['id']}:start-->Scene one prose."
+            f"<!--scene:{first['id']}:end-->"
+            f"<!--scene:{second['id']}:start-->"
+            f"<!--scene:{second['id']}:end-->",
+            encoding="utf-8",
+        )
+        (pdir / "unlinked.txt").write_text("", encoding="utf-8")
+
+        with patch(
+            "augmentedquill.services.scenes.scene_generation_service.llm.unified_chat_complete",
+            new=AsyncMock(return_value={"content": "Scene two prose."}),
+        ):
+            resp = self.client.post(
+                self._url(f"/{second['id']}/write"),
+                json={
+                    "scope_type": "story",
+                    "include_following_scenes": 0,
+                    "detect_boundaries": False,
+                },
+            )
+
+        self.assertEqual(resp.status_code, 200, resp.text)
+        content = (pdir / "content.md").read_text(encoding="utf-8")
+        self.assertIn(
+            f"<!--scene:{second['id']}:start-->\n\nScene two prose."
+            f"<!--scene:{second['id']}:end-->",
+            content,
+        )
+        # Scene 1 is untouched.
+        self.assertIn(
+            f"<!--scene:{first['id']}:start-->Scene one prose."
+            f"<!--scene:{first['id']}:end-->",
+            content,
+        )
+
     def test_write_scene_streams_prose_chunks_and_final_result(self) -> None:
-        """The streaming write-scene route emits prose_chunk then result events."""
+        """The streaming write-scene route emits thinking, prose_chunk then result events."""
         scene = self._create(summary="Write scene stream")
 
         async def fake_stream(**kwargs):
+            yield {"thinking": "Plan the scene"}
             yield {"content": "Generated"}
             yield {"content": " scene prose."}
 
@@ -767,6 +820,12 @@ class ScenesApiTest(ApiTestCase):
             resp.headers.get("content-type", "").startswith("text/event-stream"),
             resp.headers.get("content-type"),
         )
+        # Reasoning is forwarded so the UI can show progress before the first
+        # prose token arrives.
+        self.assertIn(
+            'data: {"type": "thinking", "accumulated": "Plan the scene"}',
+            resp.text,
+        )
         # Both prose chunks are streamed with accumulated text.
         self.assertIn(
             'data: {"type": "prose_chunk", "accumulated": "Generated"}', resp.text
@@ -781,6 +840,95 @@ class ScenesApiTest(ApiTestCase):
         self.assertIn('"generated_text": "Generated scene prose."', resp.text)
         self.assertIn(f'"id": {scene["id"]}', resp.text)
         self.assertTrue(resp.text.endswith("data: [DONE]\n\n"), repr(resp.text))
+
+    def test_generate_field_summary_from_beats_streams_and_returns_result(
+        self,
+    ) -> None:
+        """The field-generation stream emits chunk then result events."""
+        scene = self._create(
+            summary="Old summary",
+            beats=[{"id": "b1", "text": "Beat one"}],
+        )
+
+        async def fake_stream(**kwargs):
+            yield {"thinking": "Consider the beats"}
+            yield {"content": "Fresh "}
+            yield {"content": "summary."}
+
+        with patch(
+            "augmentedquill.services.scenes.scene_field_generation.llm.unified_chat_stream",
+            new=fake_stream,
+        ):
+            resp = self.client.post(
+                self._url(f"/{scene['id']}/generate/stream"),
+                json={
+                    "target": "summary",
+                    "source": "beats",
+                    "beats": [{"id": "b1", "text": "Beat one"}],
+                },
+            )
+
+        self.assertEqual(resp.status_code, 200, resp.text)
+        self.assertTrue(
+            resp.headers.get("content-type", "").startswith("text/event-stream")
+        )
+        self.assertIn(
+            'data: {"type": "thinking", "accumulated": "Consider the beats"}',
+            resp.text,
+        )
+        self.assertIn('"type": "chunk"', resp.text)
+        self.assertIn('"accumulated": "Fresh summary."', resp.text)
+        self.assertIn('"type": "result"', resp.text)
+        self.assertIn('"text": "Fresh summary."', resp.text)
+        self.assertTrue(resp.text.endswith("data: [DONE]\n\n"), repr(resp.text))
+
+    def test_generate_field_beats_from_summary_parses_lines(self) -> None:
+        scene = self._create(summary="A scene summary.")
+
+        with patch(
+            "augmentedquill.services.scenes.scene_field_generation.llm.unified_chat_complete",
+            new=AsyncMock(
+                return_value={"content": "First beat\n- Second beat\n3. Third beat"}
+            ),
+        ):
+            resp = self.client.post(
+                self._url(f"/{scene['id']}/generate"),
+                json={
+                    "target": "beats",
+                    "source": "summary",
+                    "summary": "A scene summary.",
+                },
+            )
+
+        self.assertEqual(resp.status_code, 200, resp.text)
+        payload = resp.json()
+        self.assertEqual(payload["target"], "beats")
+        self.assertEqual(
+            [beat["text"] for beat in payload["beats"]],
+            ["First beat", "Second beat", "Third beat"],
+        )
+
+    def test_generate_field_rejects_empty_source(self) -> None:
+        scene = self._create(summary="")
+        resp = self.client.post(
+            self._url(f"/{scene['id']}/generate/stream"),
+            json={"target": "summary", "source": "beats"},
+        )
+        # Empty source content surfaces as an error event on the stream.
+        self.assertEqual(resp.status_code, 200, resp.text)
+        self.assertIn('"type": "error"', resp.text)
+
+    def test_generate_field_unknown_scene_returns_error(self) -> None:
+        resp = self.client.post(
+            self._url("/999999/generate/stream"),
+            json={
+                "target": "summary",
+                "source": "beats",
+                "beats": [{"id": "b1", "text": "Beat one"}],
+            },
+        )
+        self.assertEqual(resp.status_code, 200, resp.text)
+        self.assertIn('"type": "error"', resp.text)
 
     def test_write_scene_writes_complete_generated_prose_to_disk(self) -> None:
         """The file on disk must contain the COMPLETE generated prose in markers.
@@ -1086,8 +1234,12 @@ class ScenesApiTest(ApiTestCase):
                     path = content_path
                     path.write_text("A B C", encoding="utf-8")
 
+                    # Link back-to-front so earlier offsets stay valid while
+                    # marker tokens are inserted into the file.
                     link_ranges = [(0, 1), (2, 3), (4, 5)]
-                    for scene, (start_offset, end_offset) in zip(scenes, link_ranges):
+                    for scene, (start_offset, end_offset) in reversed(
+                        list(zip(scenes, link_ranges))
+                    ):
                         link_resp = self.client.post(
                             self._url(f"/{scene['id']}/link-prose"),
                             json={
@@ -1097,6 +1249,14 @@ class ScenesApiTest(ApiTestCase):
                             },
                         )
                         self.assertEqual(link_resp.status_code, 200, link_resp.text)
+
+                    for scene in scenes:
+                        fetched_scene = self.client.get(self._url(f"/{scene['id']}"))
+                        self.assertEqual(fetched_scene.status_code, 200)
+                        self.assertIn(
+                            fetched_scene.json()["prose_link"]["scope_type"],
+                            {"story", "chapter"},
+                        )
 
                     for index, scene in enumerate(scenes):
                         if index == target_position:
@@ -1138,6 +1298,11 @@ class ScenesApiTest(ApiTestCase):
 
                     content = path.read_text(encoding="utf-8")
                     self._assert_scene_markers_if_present(content, scene_ids)
+                    self.assertEqual(
+                        self._extract_scene_payload(content, target_scene["id"]),
+                        generated,
+                        "Only the target scene prose may be replaced",
+                    )
                     for scene in scenes:
                         fetched = self.client.get(self._url(f"/{scene['id']}"))
                         self.assertEqual(fetched.status_code, 200, fetched.text)
@@ -1157,7 +1322,9 @@ class ScenesApiTest(ApiTestCase):
         scene_ids = [scene["id"] for scene in scenes]
 
         content_path.write_text("A B C", encoding="utf-8")
-        for scene, (start_offset, end_offset) in zip(scenes, [(0, 1), (2, 3), (4, 5)]):
+        for scene, (start_offset, end_offset) in reversed(
+            list(zip(scenes, [(0, 1), (2, 3), (4, 5)]))
+        ):
             link_resp = self.client.post(
                 self._url(f"/{scene['id']}/link-prose"),
                 json={
@@ -1249,9 +1416,8 @@ class ScenesApiTest(ApiTestCase):
                     path = content_path
                     path.write_text("A B", encoding="utf-8")
 
-                    for scene, (start_offset, end_offset) in zip(
-                        neighbor_scenes,
-                        [(0, 1), (2, 3)],
+                    for scene, (start_offset, end_offset) in reversed(
+                        list(zip(neighbor_scenes, [(0, 1), (2, 3)]))
                     ):
                         link_resp = self.client.post(
                             self._url(f"/{scene['id']}/link-prose"),
@@ -1301,6 +1467,12 @@ class ScenesApiTest(ApiTestCase):
                     content = path.read_text(encoding="utf-8")
                     scene_ids = [scene["id"] for scene in scenes]
                     self._assert_scene_markers_if_present(content, scene_ids)
+                    # The unlinked target must be written into the prose scope
+                    # (not the internal unlinked planner file) and linked there.
+                    self.assertEqual(
+                        self._extract_scene_payload(content, target_scene["id"]),
+                        generated,
+                    )
                     for scene in scenes:
                         fetched = self.client.get(self._url(f"/{scene['id']}"))
                         self.assertEqual(fetched.status_code, 200, fetched.text)
@@ -1321,7 +1493,9 @@ class ScenesApiTest(ApiTestCase):
         neighbor_scenes = [scenes[0], scenes[2]]
 
         content_path.write_text("A B", encoding="utf-8")
-        for scene, (start_offset, end_offset) in zip(neighbor_scenes, [(0, 1), (2, 3)]):
+        for scene, (start_offset, end_offset) in reversed(
+            list(zip(neighbor_scenes, [(0, 1), (2, 3)]))
+        ):
             link_resp = self.client.post(
                 self._url(f"/{scene['id']}/link-prose"),
                 json={
@@ -1363,10 +1537,144 @@ class ScenesApiTest(ApiTestCase):
         content = content_path.read_text(encoding="utf-8")
         scene_ids = [scene["id"] for scene in scenes]
         self._assert_scene_markers_if_present(content, scene_ids)
+        self.assertEqual(
+            self._extract_scene_payload(content, target_scene["id"]),
+            generated,
+            "Unlinked target prose must be written into the chapter and linked",
+        )
         for scene in scenes:
             fetched = self.client.get(self._url(f"/{scene['id']}"))
             self.assertEqual(fetched.status_code, 200, fetched.text)
             self.assertIsNotNone(fetched.json().get("prose_link"))
+
+    def test_write_scene_unlinked_links_whole_passage_to_the_written_scene(
+        self,
+    ) -> None:
+        """The written scene owns every generated paragraph.
+
+        Following unlinked scenes are context/preview only (the prompt explicitly
+        forbids including them).  Boundary detection used to distribute the
+        generated paragraphs onto those scenes, so the tail of the written prose
+        ended up outside the scene and showed up unlinked in the editor.
+        """
+        scope_payload, content_path = self._configure_scope(project_case="short-story")
+        target = self._create(summary="Target scene")
+        following = self._create(summary="Preview-only scene")
+        generated = "First paragraph.\n\nSecond paragraph.\n\nThird paragraph."
+
+        with patch(
+            "augmentedquill.services.scenes.scene_generation_service.llm.unified_chat_complete",
+            new=AsyncMock(return_value={"content": generated}),
+        ):
+            write_resp = self.client.post(
+                self._url(f"/{target['id']}/write"),
+                json={
+                    **scope_payload,
+                    "include_following_scenes": 1,
+                    "detect_boundaries": True,
+                },
+            )
+
+        self.assertEqual(write_resp.status_code, 200, write_resp.text)
+        write_payload = write_resp.json()
+        self.assertEqual(
+            {assignment["scene_id"] for assignment in write_payload["assignments"]},
+            {target["id"]},
+        )
+
+        content = content_path.read_text(encoding="utf-8")
+        self.assertEqual(self._extract_scene_payload(content, target["id"]), generated)
+        self.assertNotIn(f"<!--scene:{following['id']}:start-->", content)
+
+        following_scene = self.client.get(self._url(f"/{following['id']}"))
+        self.assertEqual(following_scene.status_code, 200, following_scene.text)
+        following_link = following_scene.json().get("prose_link") or {}
+        self.assertIn(following_link.get("scope_type"), (None, "unlinked"))
+
+    def test_list_scenes_exposes_creation_order_index(self) -> None:
+        """Scenes carry a creation-order rank so unlinked scenes can be
+        interleaved with linked ones instead of always sorting last."""
+        first = self._create(summary="First")
+        second = self._create(summary="Second")
+        third = self._create(summary="Third")
+
+        resp = self.client.get(self._url())
+        self.assertEqual(resp.status_code, 200, resp.text)
+        by_id = {int(scene["id"]): scene for scene in resp.json()}
+        self.assertEqual(by_id[first["id"]]["order_index"], 0)
+        self.assertEqual(by_id[second["id"]]["order_index"], 1)
+        self.assertEqual(by_id[third["id"]]["order_index"], 2)
+
+        single = self.client.get(self._url(f"/{second['id']}"))
+        self.assertEqual(single.status_code, 200, single.text)
+        self.assertEqual(single.json()["order_index"], 1)
+
+    def test_write_scene_unlinked_inserts_prose_before_the_next_scene(self) -> None:
+        """Filling an empty scene must not move it in the narrative order.
+
+        Scene 2 sits between the already written scenes 1 and 3.  Appending its
+        generated prose at the end of the scope put it behind scene 3, so the
+        narrative order changed just by writing prose.  The generated block must
+        be inserted before the next scene's marker block instead.
+        """
+        scope_payload, content_path = self._configure_scope(project_case="short-story")
+        before = self._create(summary="Before")
+        target = self._create(summary="Target")
+        after = self._create(summary="After")
+
+        original = "Before prose.\n\nAfter prose."
+        content_path.write_text(original, encoding="utf-8")
+        after_start = original.index("After prose.")
+
+        for scene, start_offset, end_offset in (
+            (after, after_start, len(original)),
+            (before, 0, len("Before prose.")),
+        ):
+            link_resp = self.client.post(
+                self._url(f"/{scene['id']}/link-prose"),
+                json={
+                    **scope_payload,
+                    "start_offset": start_offset,
+                    "end_offset": end_offset,
+                },
+            )
+            self.assertEqual(link_resp.status_code, 200, link_resp.text)
+
+        generated = "Target prose."
+        with patch(
+            "augmentedquill.services.scenes.scene_generation_service.llm.unified_chat_complete",
+            new=AsyncMock(return_value={"content": generated}),
+        ):
+            write_resp = self.client.post(
+                self._url(f"/{target['id']}/write"),
+                json={
+                    **scope_payload,
+                    "include_following_scenes": 1,
+                    "detect_boundaries": True,
+                },
+            )
+
+        self.assertEqual(write_resp.status_code, 200, write_resp.text)
+        content = content_path.read_text(encoding="utf-8")
+
+        import re as _re
+
+        marker_order = [
+            int(match.group(1))
+            for match in _re.finditer(r"<!--scene:(\d+):start-->", content)
+        ]
+        self.assertEqual(
+            marker_order,
+            [before["id"], target["id"], after["id"]],
+            f"Filling prose reordered the scenes: {content}",
+        )
+        self.assertEqual(self._extract_scene_payload(content, target["id"]), generated)
+
+        target_link = self.client.get(self._url(f"/{target['id']}")).json()[
+            "prose_link"
+        ]
+        after_link = self.client.get(self._url(f"/{after['id']}")).json()["prose_link"]
+        self.assertLess(target_link["start_offset"], after_link["start_offset"])
 
     def test_write_scene_linked_middle_empty_neighbors_preserves_order_and_returns_shifted_neighbors(
         self,
@@ -1380,7 +1688,9 @@ class ScenesApiTest(ApiTestCase):
         ]
 
         content_path.write_text("A B C", encoding="utf-8")
-        for scene, (start_offset, end_offset) in zip(scenes, [(0, 1), (2, 3), (4, 5)]):
+        for scene, (start_offset, end_offset) in reversed(
+            list(zip(scenes, [(0, 1), (2, 3), (4, 5)]))
+        ):
             link_resp = self.client.post(
                 self._url(f"/{scene['id']}/link-prose"),
                 json={
@@ -1564,6 +1874,62 @@ class ScenesApiTest(ApiTestCase):
         self.assertIn(f"<!--scene:{second['id']}:start-->", text)
         self.assertIn(f"<!--scene:{second['id']}:end-->", text)
         self.assertNotIn("<!--scene:2:start-<!--scene:1:end-->->", text)
+
+    def test_auto_link_scope_ignores_annotation_marker_lengths(self) -> None:
+        """Annotation markers must not shift the computed scene boundaries.
+
+        Auto-link measures the persisted text to split it between scenes.
+        Measuring with annotation tokens still in place made every offset too
+        large by the annotation marker length, so mid-document scenes swallowed
+        the following scene's prose and the last scene ended up empty.
+        """
+        first = self._create(summary="First")
+        second = self._create(summary="Second")
+        third = self._create(summary="Third")
+
+        pdir = self.projects_root / self.pname
+        saved = (
+            "Para one.\n\n"
+            "<!--annotation:a1:start-->Para two.<!--annotation:a1:end-->\n\n"
+            "Para three."
+        )
+        (pdir / "content.md").write_text(saved, encoding="utf-8")
+
+        resp = self.client.post(
+            self._url("/auto-link-scope"),
+            json={
+                "scope_type": "story",
+                "current_text": "Para one.\n\nPara two.\n\nPara three.",
+            },
+        )
+        self.assertEqual(resp.status_code, 200, resp.text)
+
+        text = (pdir / "content.md").read_text(encoding="utf-8")
+        spans = {span.scene_id: span for span in parse_scene_spans(text)}
+        for scene in (first, second, third):
+            self.assertIn(scene["id"], spans)
+
+        def visible_slice(span_start: int, span_end: int) -> str:
+            visible_text = strip_internal_markers(text)
+            visible_start = len(strip_internal_markers(text[:span_start]))
+            visible_end = len(strip_internal_markers(text[:span_end]))
+            return visible_text[visible_start:visible_end]
+
+        self.assertEqual(
+            visible_slice(spans[first["id"]].start, spans[first["id"]].end),
+            "Para one.",
+        )
+        self.assertEqual(
+            visible_slice(spans[second["id"]].start, spans[second["id"]].end),
+            "Para two.",
+        )
+        self.assertEqual(
+            visible_slice(spans[third["id"]].start, spans[third["id"]].end),
+            "Para three.",
+        )
+        # The annotation marker pair must survive the relink.
+        self.assertIn("<!--annotation:a1:start-->", text)
+        self.assertIn("<!--annotation:a1:end-->", text)
 
 
 # ============================================================================

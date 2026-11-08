@@ -541,6 +541,16 @@ export const en = {
     'Add Beat': 'Add Beat',
     'Beat text...': 'Beat text...',
     'Delete Beat': 'Delete Beat',
+    'Recreate Summary from Beats': 'Recreate Summary from Beats',
+    'Create Summary from Beats': 'Create Summary from Beats',
+    'Recreate Beats from Summary': 'Recreate Beats from Summary',
+    'Create Beats from Summary': 'Create Beats from Summary',
+    'Recreate Beats from Prose': 'Recreate Beats from Prose',
+    'Create Beats from Prose': 'Create Beats from Prose',
+    'Recreate Prose from Beats': 'Recreate Prose from Beats',
+    'Create Prose from Beats': 'Create Prose from Beats',
+    'Generating summary...': 'Generating summary...',
+    'Generating beats...': 'Generating beats...',
     'Active Characters': 'Active Characters',
     'Passive Characters': 'Passive Characters',
     Location: 'Location',
@@ -600,6 +610,9 @@ export const en = {
     'Scene {{index}} of {{total}}': 'Scene {{index}} of {{total}}',
     'Scene ID: {{id}}': 'ID: {{id}}',
     'AI changed fields: {{fields}}': 'AI changed: {{fields}}',
+    Failed: 'Failed',
+    'This tool call failed and changed nothing':
+      'This tool call failed and changed nothing',
     'Previous value: {{value}}': 'Previous: {{value}}',
     'Previous value unavailable': 'Previous value unavailable',
     'Chapter position {{index}} of {{total}}':
@@ -608,6 +621,8 @@ export const en = {
     'Next scene': 'Next scene',
     'Linked Prose': 'Linked Prose',
     'Unlink prose': 'Unlink prose',
+    'Prose saved, but the editor could not refresh. Reload the project to see the new text.':
+      'Prose saved, but the editor could not refresh. Reload the project to see the new text.',
     'Open in split mode to edit linked prose':
       'Open in split mode to edit linked prose',
     'Drag prose from the editor to link this scene':

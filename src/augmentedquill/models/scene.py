@@ -269,6 +269,14 @@ class Scene(BaseModel):
     timeline_id: str = "main"
     color_tag: str | None = None  # hex color, e.g. "#a855f7"
     prose_link: SceneProseLink | None = None  # used when beats is empty
+    order_index: int | None = Field(
+        default=None,
+        description=(
+            "Creation-order rank computed at read time (not persisted). Scenes "
+            "without prose use it so they keep their narrative position instead "
+            "of always sorting after written scenes."
+        ),
+    )
     causes: list[SceneId] = []  # scene IDs this scene causally precedes
     pinboard_x: float = 100.0
     pinboard_y: float = 100.0
@@ -575,3 +583,32 @@ class SceneWriteResponse(BaseModel):
     generated_text: str
     assignments: list[SceneBoundaryAssignment] = Field(default_factory=list)
     scenes: list[Scene] = Field(default_factory=list)
+
+
+class SceneFieldGenerateRequest(BaseModel):
+    """Payload for regenerating a derived scene field (summary or beats).
+
+    ``source`` names which scene field the target should be derived from, while
+    the optional ``summary`` / ``beats`` / ``prose`` values let the client send
+    its in-editor (unsaved) content instead of the persisted scene.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    target: Literal["summary", "beats"]
+    source: Literal["beats", "summary", "prose"]
+    summary: str | None = None
+    beats: list[SceneBeat] | None = None
+    prose: str | None = None
+
+
+class SceneFieldGenerateResponse(BaseModel):
+    """Result of regenerating a derived scene field.
+
+    ``text`` carries the raw generated text (always populated) while ``beats``
+    carries the parsed beat list when the target is ``beats``.
+    """
+
+    target: Literal["summary", "beats"]
+    text: str = ""
+    beats: list[SceneBeat] = Field(default_factory=list)

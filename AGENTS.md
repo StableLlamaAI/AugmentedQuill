@@ -107,6 +107,7 @@ npm run check:generated-types
 - Use shared response helpers in `src/augmentedquill/api/v1/http_responses.py` where applicable.
 - Use project dependency resolution (`ProjectDep`) from `src/augmentedquill/api/v1/dependencies.py` for project-scoped routes.
 - Keep all application LLM instructions separated from code and stored in `resources/config/instructions.json` so instruction sets can be project-language specific.
+- Chat tools are **atomic and independent**: one tool call either applies completely or changes nothing, and each call in a batch fails on its own without rolling back the others (never add cross-call transactions). Validate every payload and every placement target _before_ the first write; if a later step of the same call fails, restore what the earlier step wrote (see `scene_tools._restore_scene_field_values`). Validation failures must return before any write — regression tests: `tests/unit/services/test_chat_tools.py` → `test_manage_scenes_update_is_atomic_*`, `test_manage_scenes_update_does_not_move_the_scene_when_content_is_rejected`.
 
 ### Frontend
 
@@ -114,6 +115,100 @@ npm run check:generated-types
 - Keep reusable UI primitives in `src/frontend/components/ui`.
 - Use API facade/client modules in `src/frontend/services`.
 - Do not introduce ad-hoc fetch calls in features when an API client exists.
+- Failed tool calls must stay visible and must never look like changes: a mutation-producing call whose result carries `error` yields a red `failed` badge with no change hint (`mutationToolRegistry.buildFailedMutation`), failed calls are excluded from `tool_batch.operation_count` (backend `_tool_message_reports_error`), and the chat loop sends a corrective retry hint instead of accepting the model's summary (`chatExecutionHelpers.summarizeFailedToolCalls`).
+
+### Scene markers and prose linking (STRICT — single implementation only)
+
+Scene marker handling is brittle (offsets, exclusivity, annotations, unlink/relink).
+There must be exactly one implementation per side, and every caller must use it.
+
+Backend — the only allowed home for marker and prose-link logic:
+
+- `src/augmentedquill/services/scenes/scene_markers.py`
+  - marker grammar, `parse_scene_spans`, `find_scene_marker_span`, `scene_block_bounds`,
+    `scene_marker_token`, `scene_marker_token_ranges`, `inject_markers`, `remove_markers`,
+    `transfer_scene_markers`, `validate_*` helpers.
+- `src/augmentedquill/services/scenes/scene_service.py`
+  - `link_prose`, `unlink_prose`, `relink_scope_prose`, `update_prose_content`,
+    `append_text_to_scope`, `link_range_to_scene`, `scene_prose_is_linked`,
+    `scope_link_for_content_path`, `reorder_scene_prose`, `create_scene`, `delete_scene`.
+
+Rules:
+
+- Do NOT build `<!--scene:...-->` strings, write local marker regexes, or manually
+  insert/remove markers anywhere else — call the helpers above.
+- Do NOT write prose files after hand-editing markers. Prose persistence for a scene must
+  go through `append_text_to_scope` + `link_range_to_scene` (single range) or
+  `link_prose`/`relink_scope_prose` (multi-range), so offset remapping and marker
+  exclusivity validation always run.
+- New prose-writing entry points (chat tools, REST routes, generation flows) must reuse the
+  same finalize helpers. If one of them needs new behaviour, add it to the shared service
+  function — never fork the logic.
+- Frontend: all marker parsing, token construction and coordinate conversion must go through
+  `src/frontend/features/editor/internalTags.ts` (`INLINE_*_REGEX`, `sceneMarkerToken`,
+  `getSceneMarkerSpans`, `getSceneMarkerTokenRanges`, `stripInlineInternalMarkers`,
+  `toVisibleOffset`/`toOriginalOffset`) and `features/scenes/proseLinkCoordinates.ts`.
+  Do not add local marker regexes in components/stores.
+
+Allowed exceptions (still keep them frozen and minimal):
+
+- Version migration scripts in `src/augmentedquill/updates/` (they encode historical formats).
+- Test assertions/fixtures that assert the on-disk marker format.
+
+Coordinate spaces (get this wrong and scenes silently unlink — check it in every review):
+
+- **Raw space**: offsets in file content _including_ marker tokens. Used by
+  `link_prose`, `update_prose_content`, `SceneLinkProseRequest`, and any store value that
+  carries `chapter.content` (which is marker-inclusive).
+- **Visible space**: offsets in marker-stripped content, used by the CodeMirror document
+  and by `relink_scope_prose` assignments (it strips scene _and_ annotation markers
+  before re-injecting). Convert with `toVisibleOffset`/`toOriginalOffset`
+  (`internalTags.ts`) — never by subtracting guesses.
+- Measuring prose for boundary splitting must strip **all** internal markers
+  (`strip_internal_markers`), not just scene markers: leftover annotation tokens shift
+  every computed offset.
+
+Hard-won invariants (each one already caused real data loss — keep them covered):
+
+- Emptied scene spans stay ADJACENT pairs (`start1 end1 start2 end2`), never nested.
+- An emptied (zero-width) span must never be dropped: it is the only thing keeping the
+  scene linked. `relink_scope_prose` preserves them, `link_range_to_scene` re-links them
+  instead of reporting success, and `transfer_scene_markers` maps a markers-only
+  document onto new prose instead of dropping every marker.
+- The editor's marker baseline (`lastSavedFullContentRef`) must always track
+  `chapter.content`; the debounced save re-injects markers from it.
+- `prose_link` is a dict even for brand-new scenes (`scope_type == "unlinked"`). Use the
+  predicates only — backend `scene_prose_is_linked()`, frontend `isLinkedProseLink()`
+  from `features/scenes/proseLinkCoordinates.ts`. Never `if scene.prose_link`.
+- The scene editor must open in diff mode whenever the baseline prose differs from the
+  current prose (pending AI diff), not only for AI-triggered opens. Its baseline slice
+  comes from the scene's markers inside the baseline content
+  (`getSceneProseFromContent`) — never from stored `prose_link` offsets, which go stale —
+  and must be marker-free (the editor document is marker-free).
+- The same rule applies to _all_ scene fields: `sceneFieldsDiffer()` (summary, beats,
+  characters, sourcebook tags, temporal state, linked prose) decides the diff mode, so a
+  `manage_scenes(action='update')` beat change is visible no matter how the dialog was
+  opened. Only an unchanged scene keeps the diff view off.
+- Beat diff rows are aligned by text, not by array position
+  (`features/scenes/sceneBeatDiff.ts` → `diffSceneBeats`): position-based comparison
+  flagged every beat after an insertion and could not show deletions. Added beats are
+  tinted with the paper-based insert tokens (`highlightColors.diffInsertBg/Border`,
+  layered over `contentSurface`), removed baseline beats render as read-only delete rows.
+  Do not reintroduce theme classes (`bg-brand-50` / `bg-brand-gray-800/40`) for beat
+  highlights — they are invisible against the dark dialog chrome.
+- Save endpoints fail closed: `write_chapter_content_in_project` and
+  `write_story_content_in_project` run `validate_marker_integrity` on the incoming
+  payload, so a corrupting client is rejected instead of persisting broken markers.
+
+Required tests for any marker/linking change:
+
+- Backend: `tests/unit/services/test_scene_markers.py`, `test_scene_service.py`,
+  `test_annotation_service.py`, `test_project_content_marker_preservation.py`, and
+  API-level `tests/unit/api/v1/test_scenes_api.py`.
+- Frontend: `features/editor/internalTags.test.ts`, `features/editor/Editor.sync.test.tsx`
+  (marker-baseline suite), `features/scenes/proseLinkCoordinates.test.ts`, and
+  `features/scenes/SceneCard.test.tsx` (linked/unlinked indicator).
+- Regression tests must fail on the un-fixed code; verify that before declaring done.
 
 ## 7. Style And Conventions
 

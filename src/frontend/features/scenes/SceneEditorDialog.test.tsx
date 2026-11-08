@@ -29,6 +29,7 @@ import type { EditorView } from '@codemirror/view';
 import { describe, it, expect, vi, afterEach, beforeEach, beforeAll } from 'vitest';
 import i18n from '../app/i18n';
 import { SceneEditorDialog } from './SceneEditorDialog';
+import type { SceneFieldGenerateRequest } from './SceneEditorDialog';
 import { getLinkedProseFromTextSource } from './proseLinkCoordinates';
 import { useScenes } from '../../stores/storyStore';
 import type {
@@ -46,6 +47,13 @@ const { sourcebookEntriesState } = vi.hoisted(() => ({
 
 const { baselineScenesState } = vi.hoisted(() => ({
   baselineScenesState: [] as Scene[],
+}));
+
+// Baseline prose content of the scope that holds the scenes.  When left
+// undefined the mocked store mimics "content not loaded"; tests that exercise
+// the real diff baseline set an actual string.
+const { baselineDraftState } = vi.hoisted(() => ({
+  baselineDraftState: { content: undefined as string | undefined },
 }));
 
 const { chapterState, bookState, projectTypeState } = vi.hoisted(() => ({
@@ -73,7 +81,13 @@ vi.mock('../../stores/storyStore', () => ({
     ) =>
       selector({
         story: { sourcebook: sourcebookEntriesState },
-        baselineState: { scenes: baselineScenesState },
+        baselineState: {
+          scenes: baselineScenesState,
+          chapters: chapterState,
+          ...(baselineDraftState.content === undefined
+            ? {}
+            : { draft: { content: baselineDraftState.content } }),
+        },
       })
   ),
 }));
@@ -99,6 +113,10 @@ const wrap = (ui: React.ReactElement): ReturnType<typeof render> =>
 
 const readLinkedProseEditorText = (): string =>
   screen.getByRole('textbox', { name: /Linked Prose/i }).textContent ?? '';
+
+// The Edit Scene dialog only enables prose generation when the scene has at
+// least one beat, so linked scenes used in write-scene tests carry a beat.
+const WRITE_BEATS = [{ id: 'beat-write', text: 'Write-scene beat' }];
 
 function makeScene(overrides: Record<string, unknown> = {}): Scene {
   const legacy = overrides as {
@@ -143,6 +161,7 @@ afterEach(() => {
   chapterState.splice(0, chapterState.length);
   bookState.splice(0, bookState.length);
   projectTypeState.value = 'novel';
+  baselineDraftState.content = undefined;
 });
 
 // ---------------------------------------------------------------------------
@@ -198,6 +217,261 @@ describe('SceneEditorDialog rendering', () => {
     const beatTextarea = screen.getByDisplayValue('New beat');
     const beatRow = beatTextarea.closest('div[data-diff="changed"]');
     expect(beatRow).toBeTruthy();
+  });
+
+  it('marks a beat added by manage_scenes as changed when opened by a trigger', async () => {
+    baselineScenesState.push(
+      makeScene({
+        id: 'scene-1',
+        summary: 'Planned scene',
+        beats: [{ id: 'beat-1', text: 'Existing beat' }],
+      })
+    );
+
+    wrap(
+      <SceneEditorDialog
+        scene={makeScene({
+          id: 'scene-1',
+          summary: 'Planned scene',
+          beats: [
+            { id: 'beat-1', text: 'Existing beat' },
+            { id: 'beat-2', text: 'Beat added by the chat' },
+          ],
+        })}
+        isOpen={true}
+        openedViaTrigger={true}
+        sceneChangeHint={{ changedFields: ['beats'] }}
+        onClose={NOOP_CLOSE}
+        onSave={NOOP_SAVE}
+        onDelete={NOOP_DELETE}
+      />
+    );
+
+    await act(async () => {});
+
+    const newBeat = screen.getByDisplayValue('Beat added by the chat');
+    expect(newBeat.closest('div[data-diff="changed"]')).toBeTruthy();
+  });
+
+  it('marks a beat added by manage_scenes as changed when opened normally', async () => {
+    // The chat added a beat via manage_scenes(action='update'). Opening the
+    // scene editor normally must still show that change in the diff view —
+    // previously diffs only appeared for AI-triggered opens.
+    baselineScenesState.push(
+      makeScene({
+        id: 'scene-1',
+        summary: 'Planned scene',
+        beats: [{ id: 'beat-1', text: 'Existing beat' }],
+      })
+    );
+
+    wrap(
+      <SceneEditorDialog
+        scene={makeScene({
+          id: 'scene-1',
+          summary: 'Planned scene',
+          beats: [
+            { id: 'beat-1', text: 'Existing beat' },
+            { id: 'beat-2', text: 'Beat added by the chat' },
+          ],
+        })}
+        isOpen={true}
+        openedViaTrigger={false}
+        defaultShowDiff={false}
+        onClose={NOOP_CLOSE}
+        onSave={NOOP_SAVE}
+        onDelete={NOOP_DELETE}
+      />
+    );
+
+    await act(async () => {});
+
+    const diffButton = screen.getByRole('button', { name: /Toggle diff view/i });
+    expect(diffButton.getAttribute('aria-pressed')).toBe('true');
+    const newBeat = screen.getByDisplayValue('Beat added by the chat');
+    expect(newBeat.closest('div[data-diff="changed"]')).toBeTruthy();
+  });
+
+  it('marks a beat rewritten by manage_scenes as changed when opened normally', async () => {
+    baselineScenesState.push(
+      makeScene({
+        id: 'scene-1',
+        summary: 'Planned scene',
+        beats: [{ id: 'beat-1', text: 'Original beat text' }],
+      })
+    );
+
+    wrap(
+      <SceneEditorDialog
+        scene={makeScene({
+          id: 'scene-1',
+          summary: 'Planned scene',
+          beats: [{ id: 'beat-1', text: 'Rewritten beat text' }],
+        })}
+        isOpen={true}
+        openedViaTrigger={false}
+        defaultShowDiff={false}
+        onClose={NOOP_CLOSE}
+        onSave={NOOP_SAVE}
+        onDelete={NOOP_DELETE}
+      />
+    );
+
+    await act(async () => {});
+
+    const changedBeat = screen.getByDisplayValue('Rewritten beat text');
+    expect(changedBeat.closest('div[data-diff="changed"]')).toBeTruthy();
+  });
+
+  it('tints a beat added by the chat with the insert diff colours', async () => {
+    // The previous theme-class highlight (bg-brand-gray-800/40 on dark chrome)
+    // was invisible against the dialog, so added beats looked untouched.  The
+    // row must carry the editor's translucent insert tint on the paper surface.
+    baselineScenesState.push(
+      makeScene({
+        id: 'scene-1',
+        summary: 'Planned scene',
+        beats: [{ id: 'beat-1', text: 'Existing beat' }],
+      })
+    );
+
+    wrap(
+      <SceneEditorDialog
+        scene={makeScene({
+          id: 'scene-1',
+          summary: 'Planned scene',
+          beats: [
+            { id: 'beat-1', text: 'Existing beat' },
+            { id: 'beat-2', text: 'Beat added by the chat' },
+          ],
+        })}
+        isOpen={true}
+        openedViaTrigger={false}
+        defaultShowDiff={false}
+        onClose={NOOP_CLOSE}
+        onSave={NOOP_SAVE}
+        onDelete={NOOP_DELETE}
+      />
+    );
+
+    await act(async () => {});
+
+    const addedRow = document.body.querySelector('[data-diff-kind="added"]');
+    expect(addedRow).toBeTruthy();
+    const addedTextarea = screen.getByDisplayValue('Beat added by the chat');
+    expect(addedRow?.contains(addedTextarea)).toBe(true);
+    // Insert tint (rgba green) blended over the paper plus a 3px insert border.
+    expect(addedTextarea.style.backgroundImage).toContain('34, 197, 94');
+    expect(addedTextarea.style.borderLeft).toContain('3px solid rgba(');
+    // Unchanged beats must stay untinted.
+    expect(screen.getByDisplayValue('Existing beat').style.backgroundImage).toBe('');
+  });
+
+  it('shows a beat removed by the chat as a struck-through delete row', async () => {
+    baselineScenesState.push(
+      makeScene({
+        id: 'scene-1',
+        summary: 'Planned scene',
+        beats: [
+          { id: 'beat-1', text: 'Kept beat' },
+          { id: 'beat-2', text: 'Dropped beat' },
+        ],
+      })
+    );
+
+    wrap(
+      <SceneEditorDialog
+        scene={makeScene({
+          id: 'scene-1',
+          summary: 'Planned scene',
+          beats: [{ id: 'beat-1', text: 'Kept beat' }],
+        })}
+        isOpen={true}
+        openedViaTrigger={false}
+        defaultShowDiff={false}
+        onClose={NOOP_CLOSE}
+        onSave={NOOP_SAVE}
+        onDelete={NOOP_DELETE}
+      />
+    );
+
+    await act(async () => {});
+
+    const removedRow = document.body.querySelector('[data-diff-kind="removed"]');
+    expect(removedRow).toBeTruthy();
+    expect(removedRow?.textContent).toContain('Dropped beat');
+    // Removed beats are read-only: they are not in the editable beat list.
+    expect(removedRow?.querySelector('textarea')).toBeNull();
+    expect(screen.queryByDisplayValue('Dropped beat')).toBeNull();
+    expect(screen.getByDisplayValue('Kept beat').style.backgroundImage).toBe('');
+  });
+
+  it('does not mark beats that follow an inserted beat as changed', async () => {
+    // Positional comparison used to flag every beat after an insertion.
+    baselineScenesState.push(
+      makeScene({
+        id: 'scene-1',
+        summary: 'Planned scene',
+        beats: [
+          { id: 'beat-1', text: 'First beat' },
+          { id: 'beat-2', text: 'Second beat' },
+        ],
+      })
+    );
+
+    wrap(
+      <SceneEditorDialog
+        scene={makeScene({
+          id: 'scene-1',
+          summary: 'Planned scene',
+          beats: [
+            { id: 'beat-1', text: 'First beat' },
+            { id: 'beat-new', text: 'Inserted beat' },
+            { id: 'beat-2', text: 'Second beat' },
+          ],
+        })}
+        isOpen={true}
+        openedViaTrigger={false}
+        defaultShowDiff={false}
+        onClose={NOOP_CLOSE}
+        onSave={NOOP_SAVE}
+        onDelete={NOOP_DELETE}
+      />
+    );
+
+    await act(async () => {});
+
+    expect(document.body.querySelectorAll('[data-diff-kind="added"]')).toHaveLength(1);
+    expect(screen.getByDisplayValue('Inserted beat')).toBeTruthy();
+    expect(screen.getByDisplayValue('Second beat')).toBeTruthy();
+    expect(
+      screen.getByDisplayValue('Second beat').closest('[data-diff-kind]')
+    ).toBeNull();
+  });
+
+  it('does not open the diff view when no scene field changed', async () => {
+    const beats = [{ id: 'beat-1', text: 'Unchanged beat' }];
+    baselineScenesState.push(
+      makeScene({ id: 'scene-1', summary: 'Planned scene', beats })
+    );
+
+    wrap(
+      <SceneEditorDialog
+        scene={makeScene({ id: 'scene-1', summary: 'Planned scene', beats })}
+        isOpen={true}
+        openedViaTrigger={false}
+        defaultShowDiff={false}
+        onClose={NOOP_CLOSE}
+        onSave={NOOP_SAVE}
+        onDelete={NOOP_DELETE}
+      />
+    );
+
+    await act(async () => {});
+
+    const diffButton = screen.getByRole('button', { name: /Toggle diff view/i });
+    expect(diffButton.getAttribute('aria-pressed')).toBe('false');
+    expect(document.body.querySelector('[data-diff="changed"]')).toBeNull();
   });
 
   it('highlights removed causes when opened from a scene mutation', () => {
@@ -320,7 +594,9 @@ describe('SceneEditorDialog rendering', () => {
     expect(screen.queryByTestId('scene-time-diff-new')).toBeNull();
   });
 
-  it('keeps diff view disabled on normal open even when a baseline scene exists', () => {
+  it('enables the diff view on normal open when the baseline differs', () => {
+    // A pending change must be visible regardless of how the dialog was opened;
+    // only an unchanged scene keeps the diff view off.
     baselineScenesState.push(
       makeScene({
         id: 'scene-baseline',
@@ -333,6 +609,32 @@ describe('SceneEditorDialog rendering', () => {
         scene={makeScene({
           id: 'scene-baseline',
           summary: 'Current summary',
+        })}
+        isOpen={true}
+        openedViaTrigger={false}
+        onClose={NOOP_CLOSE}
+        onSave={NOOP_SAVE}
+        onDelete={NOOP_DELETE}
+      />
+    );
+
+    const diffButton = screen.getByRole('button', { name: /Toggle diff view/i });
+    expect(diffButton.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('keeps the diff view disabled on normal open when nothing changed', () => {
+    baselineScenesState.push(
+      makeScene({
+        id: 'scene-baseline',
+        summary: 'Same summary',
+      })
+    );
+
+    wrap(
+      <SceneEditorDialog
+        scene={makeScene({
+          id: 'scene-baseline',
+          summary: 'Same summary',
         })}
         isOpen={true}
         openedViaTrigger={false}
@@ -421,6 +723,261 @@ describe('SceneEditorDialog rendering', () => {
     // The diff button should be pressed
     const diffButton = screen.getByRole('button', { name: /Toggle diff view/i });
     expect(diffButton.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('shows new prose as inserted when the baseline scene was still unlinked', async () => {
+    // The AI wrote prose for a scene that only existed in the planning
+    // (`unlinked`) scope at baseline time.  The old fallback compared against
+    // the text captured when the dialog opened, which already contained the
+    // new prose and therefore produced no diff at all.
+    baselineScenesState.push(
+      makeScene({
+        id: 'scene-1',
+        summary: 'Planned scene',
+        prose_link: {
+          scope_type: 'unlinked',
+          chapter_id: null,
+          book_id: null,
+          start_offset: 0,
+          end_offset: 0,
+        },
+      })
+    );
+
+    wrap(
+      <SceneEditorDialog
+        scene={makeScene({
+          id: 'scene-1',
+          summary: 'Planned scene',
+          prose_link: {
+            scope_type: 'chapter',
+            chapter_id: '1',
+            book_id: null,
+            start_offset: 0,
+            end_offset: 12,
+          },
+        })}
+        isOpen={true}
+        openedViaTrigger={true}
+        onClose={NOOP_CLOSE}
+        onSave={NOOP_SAVE}
+        onDelete={NOOP_DELETE}
+        getLinkedProseText={() => 'New AI prose'}
+      />
+    );
+
+    await act(async () => {});
+
+    const linkedProseEditor = screen.getByRole('textbox', {
+      name: /Linked Prose/i,
+    });
+    const html = linkedProseEditor.innerHTML;
+    expect(html.includes('cm-diff-inserted') || html.includes('cm-diff-block')).toBe(
+      true
+    );
+  });
+
+  it('refreshes linked prose when the scene prose is written outside the dialog', async () => {
+    const proseLink = {
+      scope_type: 'story' as const,
+      chapter_id: null,
+      book_id: null,
+      start_offset: 0,
+      end_offset: 12,
+    };
+    let externalText = 'initial prose';
+    const getLinkedProseText = vi.fn(() => externalText);
+    const scene = makeScene({ id: 'scene-1', prose_link: proseLink });
+
+    const { rerender } = wrap(
+      <SceneEditorDialog
+        scene={scene}
+        isOpen={true}
+        onClose={NOOP_CLOSE}
+        onSave={NOOP_SAVE}
+        onDelete={NOOP_DELETE}
+        getLinkedProseText={getLinkedProseText}
+      />
+    );
+
+    expect(readLinkedProseEditorText()).toContain('initial prose');
+
+    // Chat wrote this scene while the dialog stayed open: new prose + link.
+    externalText = 'prose written by the chat assistant';
+    rerender(
+      <I18nextProvider i18n={i18n}>
+        <SceneEditorDialog
+          scene={makeScene({
+            id: 'scene-1',
+            prose_link: {
+              scope_type: 'story',
+              chapter_id: null,
+              book_id: null,
+              start_offset: 0,
+              end_offset: 34,
+            },
+          })}
+          isOpen={true}
+          onClose={NOOP_CLOSE}
+          onSave={NOOP_SAVE}
+          onDelete={NOOP_DELETE}
+          getLinkedProseText={getLinkedProseText}
+        />
+      </I18nextProvider>
+    );
+
+    await act(async () => {});
+
+    expect(readLinkedProseEditorText()).toContain(
+      'prose written by the chat assistant'
+    );
+  });
+
+  it('marks chat-written scene prose as new when the baseline had no prose', async () => {
+    // Real chat flow: the user had deleted all prose (baseline content is
+    // markers-only) and the chat tool then wrote scene 1.  The scene editor
+    // must open in diff mode and mark the whole prose as freshly generated —
+    // exactly like the page editor does.
+    const markersOnly =
+      '<!--scene:1:start--><!--scene:1:end-->' +
+      '<!--scene:2:start--><!--scene:2:end-->';
+    baselineDraftState.content = markersOnly;
+    baselineScenesState.push(
+      makeScene({
+        id: 'scene-1',
+        prose_link: {
+          scope_type: 'story',
+          chapter_id: null,
+          book_id: null,
+          start_offset: 20,
+          end_offset: 20,
+        },
+      })
+    );
+    const prose = 'Freshly written scene one prose.';
+
+    wrap(
+      <SceneEditorDialog
+        scene={makeScene({
+          id: 'scene-1',
+          prose_link: {
+            scope_type: 'story',
+            chapter_id: null,
+            book_id: null,
+            start_offset: 20,
+            end_offset: 20 + prose.length,
+          },
+        })}
+        isOpen={true}
+        openedViaTrigger={false}
+        defaultShowDiff={false}
+        onClose={NOOP_CLOSE}
+        onSave={NOOP_SAVE}
+        onDelete={NOOP_DELETE}
+        getLinkedProseText={() => prose}
+      />
+    );
+
+    await act(async () => {});
+
+    const editor = screen.getByRole('textbox', { name: /Linked Prose/i });
+    expect(editor.textContent).toContain(prose);
+    expect(editor.innerHTML).toContain('cm-diff-inserted');
+  });
+
+  it('never leaks marker tokens into the linked-prose diff baseline', async () => {
+    // The baseline scene keeps the offsets of a much longer document (the
+    // user's delete-all shrank it).  Slicing the baseline content with those
+    // stale offsets used to return marker tokens, which turned the diff into a
+    // bogus whole-block rewrite instead of "everything is new".
+    baselineDraftState.content =
+      '<!--scene:1:start--><!--scene:1:end--><!--scene:2:start--><!--scene:2:end-->';
+    baselineScenesState.push(
+      makeScene({
+        id: 'scene-1',
+        prose_link: {
+          scope_type: 'story',
+          chapter_id: null,
+          book_id: null,
+          start_offset: 20,
+          end_offset: 3320,
+        },
+      })
+    );
+    const prose = 'Brand new prose for the scene.';
+
+    wrap(
+      <SceneEditorDialog
+        scene={makeScene({
+          id: 'scene-1',
+          prose_link: {
+            scope_type: 'story',
+            chapter_id: null,
+            book_id: null,
+            start_offset: 20,
+            end_offset: 20 + prose.length,
+          },
+        })}
+        isOpen={true}
+        openedViaTrigger={false}
+        defaultShowDiff={false}
+        onClose={NOOP_CLOSE}
+        onSave={NOOP_SAVE}
+        onDelete={NOOP_DELETE}
+        getLinkedProseText={() => prose}
+      />
+    );
+
+    await act(async () => {});
+
+    const editor = screen.getByRole('textbox', { name: /Linked Prose/i });
+    expect(editor.textContent).not.toContain('<!--scene');
+    expect(editor.innerHTML).toContain('cm-diff-inserted');
+  });
+
+  it('shows no diff when the baseline prose already matches (no pending AI change)', async () => {
+    const prose = 'Existing linked prose.';
+    baselineDraftState.content = `<!--scene:1:start-->${prose}<!--scene:1:end-->`;
+    baselineScenesState.push(
+      makeScene({
+        id: 'scene-1',
+        prose_link: {
+          scope_type: 'story',
+          chapter_id: null,
+          book_id: null,
+          start_offset: 20,
+          end_offset: 20 + prose.length,
+        },
+      })
+    );
+
+    wrap(
+      <SceneEditorDialog
+        scene={makeScene({
+          id: 'scene-1',
+          prose_link: {
+            scope_type: 'story',
+            chapter_id: null,
+            book_id: null,
+            start_offset: 20,
+            end_offset: 20 + prose.length,
+          },
+        })}
+        isOpen={true}
+        openedViaTrigger={false}
+        defaultShowDiff={false}
+        onClose={NOOP_CLOSE}
+        onSave={NOOP_SAVE}
+        onDelete={NOOP_DELETE}
+        getLinkedProseText={() => prose}
+      />
+    );
+
+    await act(async () => {});
+
+    const editor = screen.getByRole('textbox', { name: /Linked Prose/i });
+    expect(editor.innerHTML).not.toContain('cm-diff-inserted');
+    expect(editor.innerHTML).not.toContain('cm-diff-deleted');
   });
 
   it('renders a wholesale summary rewrite with Diff/Old/New tabs', () => {
@@ -873,6 +1430,59 @@ describe('SceneEditorDialog save flow', () => {
     expect(onSaveProseContent).not.toHaveBeenCalled();
   });
 
+  it('persists freshly written prose that the store does not know about yet', async () => {
+    // Regression: "Write Scene" showed the generated prose in the dialog, but
+    // the store refresh after the write failed, so the store still resolved an
+    // empty slice for this scene.  `proseDirty` stayed false (the prose came
+    // from the write, not from typing), so Save persisted metadata only and the
+    // prose vanished from the page and from the reopened dialog.
+    const generated = 'The second scene opens on the line.';
+    const onSaveProseContent = vi.fn(async () => undefined);
+    const onSave = vi.fn(async () => undefined);
+    const proseLink: SceneProseLink = {
+      scope_type: 'story',
+      start_offset: 15,
+      end_offset: 15 + generated.length,
+      content_hash: 'abc',
+      chapter_id: null,
+      book_id: null,
+      is_stale: false,
+    };
+    // Store slice is still empty — the authoritative refresh has not landed.
+    const getLinkedProseText = vi.fn(() => '');
+    const onWriteScene = vi.fn(
+      async (onProse?: (text: string) => void): Promise<string> => {
+        onProse?.(generated);
+        return generated;
+      }
+    );
+
+    wrap(
+      <SceneEditorDialog
+        scene={makeScene({ prose_link: proseLink, beats: WRITE_BEATS })}
+        isOpen
+        onClose={NOOP_CLOSE}
+        onSave={onSave}
+        onDelete={NOOP_DELETE}
+        getLinkedProseText={getLinkedProseText}
+        onSaveProseContent={onSaveProseContent}
+        onWriteScene={onWriteScene}
+      />
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Prose from Beats/i }));
+    });
+
+    const saveBtn = screen.getByRole('button', { name: /Save/i });
+    await act(async () => {
+      fireEvent.click(saveBtn);
+    });
+
+    expect(onSaveProseContent).toHaveBeenCalledWith(generated);
+    expect(onSave).toHaveBeenCalledOnce();
+  });
+
   it('calls onSaveProseContent BEFORE onSave when prose text was edited', async () => {
     const callOrder: string[] = [];
     const linkedProseEditorRef = React.createRef<EditorView | null>();
@@ -1007,7 +1617,7 @@ describe('SceneEditorDialog save flow', () => {
 
       wrap(
         <SceneEditorDialog
-          scene={makeScene({ prose_link: proseLink })}
+          scene={makeScene({ prose_link: proseLink, beats: WRITE_BEATS })}
           isOpen
           onClose={NOOP_CLOSE}
           onSave={NOOP_SAVE}
@@ -1019,7 +1629,9 @@ describe('SceneEditorDialog save flow', () => {
 
       expect(readLinkedProseEditorText()).toContain('initial prose');
 
-      fireEvent.click(screen.getByRole('button', { name: /Write Scene/i }));
+      fireEvent.click(
+        screen.getByRole('button', { name: /Recreate Prose from Beats/i })
+      );
 
       await act(async () => {
         vi.advanceTimersByTime(25);
@@ -1053,7 +1665,7 @@ describe('SceneEditorDialog save flow', () => {
 
       wrap(
         <SceneEditorDialog
-          scene={makeScene({ prose_link: proseLink })}
+          scene={makeScene({ prose_link: proseLink, beats: WRITE_BEATS })}
           isOpen
           onClose={NOOP_CLOSE}
           onSave={NOOP_SAVE}
@@ -1065,7 +1677,9 @@ describe('SceneEditorDialog save flow', () => {
 
       expect(readLinkedProseEditorText()).toContain('initial prose');
 
-      fireEvent.click(screen.getByRole('button', { name: /Write Scene/i }));
+      fireEvent.click(
+        screen.getByRole('button', { name: /Recreate Prose from Beats/i })
+      );
 
       await act(async () => {
         await Promise.resolve();
@@ -1104,7 +1718,7 @@ describe('SceneEditorDialog save flow', () => {
 
       wrap(
         <SceneEditorDialog
-          scene={makeScene({ prose_link: proseLink })}
+          scene={makeScene({ prose_link: proseLink, beats: WRITE_BEATS })}
           isOpen
           onClose={NOOP_CLOSE}
           onSave={NOOP_SAVE}
@@ -1114,7 +1728,9 @@ describe('SceneEditorDialog save flow', () => {
         />
       );
 
-      fireEvent.click(screen.getByRole('button', { name: /Write Scene/i }));
+      fireEvent.click(
+        screen.getByRole('button', { name: /Recreate Prose from Beats/i })
+      );
 
       await act(async () => {
         await Promise.resolve();
@@ -1127,6 +1743,203 @@ describe('SceneEditorDialog save flow', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('shows the streamed thinking process during write-scene', async () => {
+    // Regression: thinking models can reason for minutes before the first prose
+    // token.  Without surfacing that reasoning the dialog looked frozen, which
+    // is what "not streaming in and shown as it is written" reported.
+    const proseLink: SceneProseLink = {
+      scope_type: 'story',
+      start_offset: 0,
+      end_offset: 5,
+      content_hash: 'abc',
+      chapter_id: null,
+      book_id: null,
+      is_stale: false,
+    };
+
+    const getLinkedProseText = vi.fn(() => 'initial prose');
+    const onWriteScene = vi.fn(
+      async (
+        onProse?: (text: string) => void,
+        onThinking?: (text: string) => void
+      ): Promise<string> => {
+        onThinking?.('Considering the beat order');
+        onProse?.('Draft prose');
+        return 'Draft prose';
+      }
+    );
+
+    wrap(
+      <SceneEditorDialog
+        scene={makeScene({ prose_link: proseLink, beats: WRITE_BEATS })}
+        isOpen
+        onClose={NOOP_CLOSE}
+        onSave={NOOP_SAVE}
+        onDelete={NOOP_DELETE}
+        getLinkedProseText={getLinkedProseText}
+        onWriteScene={onWriteScene}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Recreate Prose from Beats/i }));
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(screen.getByTestId('scene-writing-thinking')).toBeTruthy();
+    expect(screen.getByText('Considering the beat order')).toBeTruthy();
+  });
+
+  it('highlights written prose as new even when the baseline content is not loaded', async () => {
+    // Regression: with no baseline content in memory the resolved baseline was
+    // `undefined`, so CodeMirror had nothing to diff against and the freshly
+    // written prose appeared unhighlighted although diff mode was active.
+    const proseLink: SceneProseLink = {
+      scope_type: 'story',
+      start_offset: 0,
+      end_offset: 11,
+      content_hash: 'abc',
+      chapter_id: null,
+      book_id: null,
+      is_stale: false,
+    };
+    baselineScenesState.push(makeScene({ id: 'scene-1', prose_link: proseLink }));
+
+    let linkedProse = 'Old story prose';
+    const getLinkedProseText = vi.fn(() => linkedProse);
+    const onWriteScene = vi.fn(
+      async (onProse?: (text: string) => void): Promise<string> => {
+        linkedProse = 'Brand new generated prose';
+        onProse?.(linkedProse);
+        return linkedProse;
+      }
+    );
+
+    wrap(
+      <SceneEditorDialog
+        scene={makeScene({
+          id: 'scene-1',
+          prose_link: proseLink,
+          beats: WRITE_BEATS,
+        })}
+        isOpen
+        onClose={NOOP_CLOSE}
+        onSave={NOOP_SAVE}
+        onDelete={NOOP_DELETE}
+        getLinkedProseText={getLinkedProseText}
+        onWriteScene={onWriteScene}
+      />
+    );
+
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole('button', { name: /Recreate Prose from Beats/i })
+      );
+      await Promise.resolve();
+    });
+
+    const editor = screen.getByRole('textbox', { name: /Linked Prose/i });
+    expect(editor.textContent).toContain('Brand new generated prose');
+    expect(editor.querySelector('.cm-diff-inserted')).toBeTruthy();
+  });
+
+  it('stops write-scene generation and restores the stored prose', async () => {
+    const proseLink: SceneProseLink = {
+      scope_type: 'story',
+      start_offset: 0,
+      end_offset: 5,
+      content_hash: 'abc',
+      chapter_id: null,
+      book_id: null,
+      is_stale: false,
+    };
+
+    let capturedSignal: AbortSignal | undefined;
+    const getLinkedProseText = vi.fn(() => 'Old stored prose');
+    const onWriteScene = vi.fn(
+      (
+        onProse?: (text: string) => void,
+        _onThinking?: (text: string) => void,
+        signal?: AbortSignal
+      ): Promise<string> => {
+        capturedSignal = signal;
+        onProse?.('Partially streamed prose');
+        return new Promise<string>(
+          (_resolve: (value: string) => void, reject: (reason?: unknown) => void) => {
+            signal?.addEventListener('abort', () =>
+              reject(new DOMException('Aborted', 'AbortError'))
+            );
+          }
+        );
+      }
+    );
+
+    wrap(
+      <SceneEditorDialog
+        scene={makeScene({ prose_link: proseLink, beats: WRITE_BEATS })}
+        isOpen
+        onClose={NOOP_CLOSE}
+        onSave={NOOP_SAVE}
+        onDelete={NOOP_DELETE}
+        getLinkedProseText={getLinkedProseText}
+        onWriteScene={onWriteScene}
+      />
+    );
+
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole('button', { name: /Recreate Prose from Beats/i })
+      );
+      await Promise.resolve();
+    });
+    expect(readLinkedProseEditorText()).toContain('Partially streamed prose');
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Stop generation/i }));
+      await Promise.resolve();
+    });
+
+    expect(capturedSignal?.aborted).toBe(true);
+    expect(readLinkedProseEditorText()).toContain('Old stored prose');
+    expect(screen.queryByRole('button', { name: /Stop generation/i })).toBeNull();
+    // The write button is available again.
+    expect(
+      screen.getByRole('button', { name: /Recreate Prose from Beats/i })
+    ).toBeTruthy();
+  });
+
+  it('shows streamed prose for an unlinked scene while writing', async () => {
+    // A brand-new scene only gets its prose_link after the backend links the
+    // generated text.  The streamed prose must still be visible right away.
+    const onWriteScene = vi.fn(
+      async (onProse?: (text: string) => void): Promise<string> => {
+        onProse?.('Freshly written prose');
+        return 'Freshly written prose';
+      }
+    );
+
+    wrap(
+      <SceneEditorDialog
+        scene={makeScene({ prose_link: null, beats: WRITE_BEATS })}
+        isOpen
+        onClose={NOOP_CLOSE}
+        onSave={NOOP_SAVE}
+        onDelete={NOOP_DELETE}
+        onWriteScene={onWriteScene}
+      />
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Create Prose from Beats/i }));
+      await Promise.resolve();
+    });
+
+    expect(screen.getByTestId('scene-writing-prose-preview').textContent).toContain(
+      'Freshly written prose'
+    );
   });
 
   it('enables diff view after write-scene without rendering a separate prose preview block', async () => {
@@ -1145,7 +1958,7 @@ describe('SceneEditorDialog save flow', () => {
 
     wrap(
       <SceneEditorDialog
-        scene={makeScene({ prose_link: proseLink })}
+        scene={makeScene({ prose_link: proseLink, beats: WRITE_BEATS })}
         isOpen
         onClose={NOOP_CLOSE}
         onSave={NOOP_SAVE}
@@ -1155,7 +1968,7 @@ describe('SceneEditorDialog save flow', () => {
       />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /Write Scene/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Recreate Prose from Beats/i }));
 
     await act(async () => {
       await Promise.resolve();
@@ -1181,7 +1994,7 @@ describe('SceneEditorDialog save flow', () => {
     const onWriteScene = vi.fn(async () => 'updated prose from write scene');
     wrap(
       <SceneEditorDialog
-        scene={makeScene({ prose_link: proseLink })}
+        scene={makeScene({ prose_link: proseLink, beats: WRITE_BEATS })}
         isOpen
         onClose={NOOP_CLOSE}
         onSave={NOOP_SAVE}
@@ -1191,7 +2004,7 @@ describe('SceneEditorDialog save flow', () => {
       />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /Write Scene/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Recreate Prose from Beats/i }));
 
     await act(async () => {
       await Promise.resolve();
@@ -1222,6 +2035,7 @@ describe('SceneEditorDialog save flow', () => {
       id: 'scene-1',
       prose_link: proseLink,
       summary: 'before',
+      beats: WRITE_BEATS,
     });
     const { rerender } = wrap(
       <SceneEditorDialog
@@ -1236,7 +2050,7 @@ describe('SceneEditorDialog save flow', () => {
       />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /Write Scene/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Recreate Prose from Beats/i }));
     await act(async () => {
       await Promise.resolve();
     });
@@ -1290,7 +2104,7 @@ describe('SceneEditorDialog save flow', () => {
 
       wrap(
         <SceneEditorDialog
-          scene={makeScene({ prose_link: proseLink })}
+          scene={makeScene({ prose_link: proseLink, beats: WRITE_BEATS })}
           isOpen
           onClose={NOOP_CLOSE}
           onSave={NOOP_SAVE}
@@ -1300,7 +2114,9 @@ describe('SceneEditorDialog save flow', () => {
         />
       );
 
-      fireEvent.click(screen.getByRole('button', { name: /Write Scene/i }));
+      fireEvent.click(
+        screen.getByRole('button', { name: /Recreate Prose from Beats/i })
+      );
 
       await act(async () => {
         vi.advanceTimersByTime(80);
@@ -1330,6 +2146,7 @@ describe('SceneEditorDialog save flow', () => {
       id: 'scene-1',
       prose_link: proseLink,
       summary: 'before',
+      beats: WRITE_BEATS,
     });
     const { unmount } = wrap(
       <SceneEditorDialog
@@ -1344,7 +2161,7 @@ describe('SceneEditorDialog save flow', () => {
       />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /Write Scene/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Recreate Prose from Beats/i }));
     await act(async () => {
       await Promise.resolve();
     });
@@ -1413,6 +2230,7 @@ describe('SceneEditorDialog save flow', () => {
           book_id: null,
           is_stale: false,
         } as SceneProseLink,
+        beats: WRITE_BEATS,
       });
       const scenes = [scene];
 
@@ -1475,7 +2293,9 @@ describe('SceneEditorDialog save flow', () => {
         </I18nextProvider>
       );
 
-      fireEvent.click(screen.getByRole('button', { name: /Write Scene/i }));
+      fireEvent.click(
+        screen.getByRole('button', { name: /Recreate Prose from Beats/i })
+      );
 
       await act(async () => {
         vi.advanceTimersByTime(5000);
@@ -2077,9 +2897,169 @@ describe('SceneEditorDialog beat management', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Delete cause (causes / causes)
+// Derived field regeneration
 // ---------------------------------------------------------------------------
 
+describe('SceneEditorDialog derived field regeneration', () => {
+  it('disables the summary-from-beats button when there are no beats', () => {
+    wrap(
+      <SceneEditorDialog
+        scene={makeScene({ summary: 'Has summary', beats: [] })}
+        isOpen
+        onClose={NOOP_CLOSE}
+        onSave={NOOP_SAVE}
+        onDelete={NOOP_DELETE}
+        onGenerateSceneField={vi.fn()}
+      />
+    );
+
+    const button = screen.getByRole('button', {
+      name: /Recreate Summary from Beats/i,
+    }) as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+  });
+
+  it('streams a regenerated summary from the beats and applies the result', async () => {
+    const onGenerateSceneField = vi.fn(async (request: SceneFieldGenerateRequest) => {
+      expect(request.target).toBe('summary');
+      expect(request.source).toBe('beats');
+      request.onThinking?.('Weighing the beats');
+      request.onChunk?.('Streamed summary');
+      return { target: 'summary' as const, text: 'Final summary', beats: [] };
+    });
+
+    wrap(
+      <SceneEditorDialog
+        scene={makeScene({
+          summary: 'Old summary',
+          beats: [{ id: 'b1', text: 'Beat one' }],
+        })}
+        isOpen
+        onClose={NOOP_CLOSE}
+        onSave={NOOP_SAVE}
+        onDelete={NOOP_DELETE}
+        onGenerateSceneField={onGenerateSceneField}
+      />
+    );
+
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole('button', { name: /Recreate Summary from Beats/i })
+      );
+    });
+
+    expect(onGenerateSceneField).toHaveBeenCalledTimes(1);
+    expect(
+      screen.getByRole('textbox', { name: /Scene summary/i }).textContent
+    ).toContain('Final summary');
+    // The reasoning stream stays visible so long generations never look frozen.
+    expect(screen.getByText('Weighing the beats')).toBeTruthy();
+  });
+
+  it('creates beats from the summary and replaces the beat list', async () => {
+    const onGenerateSceneField = vi.fn(async (request: SceneFieldGenerateRequest) => {
+      expect(request.target).toBe('beats');
+      expect(request.source).toBe('summary');
+      request.onChunk?.('Beat A\nBeat B');
+      return {
+        target: 'beats' as const,
+        text: 'Beat A\nBeat B',
+        beats: [
+          { id: 'n1', text: 'Beat A' },
+          { id: 'n2', text: 'Beat B' },
+        ],
+      };
+    });
+
+    wrap(
+      <SceneEditorDialog
+        scene={makeScene({ summary: 'Scene summary text', beats: [] })}
+        isOpen
+        onClose={NOOP_CLOSE}
+        onSave={NOOP_SAVE}
+        onDelete={NOOP_DELETE}
+        onGenerateSceneField={onGenerateSceneField}
+      />
+    );
+
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole('button', { name: /Create Beats from Summary/i })
+      );
+    });
+
+    expect(onGenerateSceneField).toHaveBeenCalledTimes(1);
+    const beatInputs = screen.getAllByPlaceholderText(
+      /Beat text/i
+    ) as HTMLTextAreaElement[];
+    expect(beatInputs.map((el: HTMLTextAreaElement): string => el.value)).toEqual([
+      'Beat A',
+      'Beat B',
+    ]);
+  });
+
+  it('creates beats from the prose and sends the linked prose as source', async () => {
+    const proseLink: SceneProseLink = {
+      scope_type: 'story',
+      start_offset: 0,
+      end_offset: 5,
+      content_hash: 'abc',
+      chapter_id: null,
+      book_id: null,
+      is_stale: false,
+    };
+    const onGenerateSceneField = vi.fn(async (request: SceneFieldGenerateRequest) => {
+      expect(request.target).toBe('beats');
+      expect(request.source).toBe('prose');
+      expect(request.prose).toBe('Existing prose text');
+      return {
+        target: 'beats' as const,
+        text: 'New beat',
+        beats: [{ id: 'n1', text: 'New beat' }],
+      };
+    });
+
+    wrap(
+      <SceneEditorDialog
+        scene={makeScene({ prose_link: proseLink })}
+        isOpen
+        onClose={NOOP_CLOSE}
+        onSave={NOOP_SAVE}
+        onDelete={NOOP_DELETE}
+        getLinkedProseText={() => 'Existing prose text'}
+        onGenerateSceneField={onGenerateSceneField}
+      />
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Create Beats from Prose/i }));
+    });
+
+    expect(onGenerateSceneField).toHaveBeenCalledTimes(1);
+  });
+
+  it('disables the prose-from-beats button when there are no beats', () => {
+    wrap(
+      <SceneEditorDialog
+        scene={makeScene({ beats: [] })}
+        isOpen
+        onClose={NOOP_CLOSE}
+        onSave={NOOP_SAVE}
+        onDelete={NOOP_DELETE}
+        onWriteScene={vi.fn(async (): Promise<string> => 'prose')}
+      />
+    );
+
+    const button = screen.getByRole('button', {
+      name: /Create Prose from Beats/i,
+    }) as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Delete cause (causes / causes)
+// ---------------------------------------------------------------------------
 describe('SceneEditorDialog delete cause', () => {
   const mockedUseScenes = vi.mocked(useScenes);
 
@@ -2570,8 +3550,10 @@ describe('SceneEditorDialog diff accept / reject', () => {
 // ─── Spec: diff only for automatic changes ──────────────────────────────────
 
 describe('Spec: SceneEditorDialog diff rules', () => {
-  it('shows NO data-diff when opened normally (not via AI trigger)', async () => {
-    // SPEC: User opens scene editor normally → NO diff.
+  it('shows data-diff when opened normally with a pending change', async () => {
+    // SPEC: any pending change (chat tool or otherwise) is shown as a diff no
+    // matter how the dialog was opened.  Restricting diffs to AI-triggered
+    // opens hid `manage_scenes` beat edits completely.
     baselineScenesState.push(
       makeScene({
         id: 'scene-1',
@@ -2594,8 +3576,7 @@ describe('Spec: SceneEditorDialog diff rules', () => {
     );
 
     await waitFor(() => {
-      // Even though baseline and current differ, normal open means no diff.
-      expect(document.body.querySelector('[data-diff="changed"]')).toBeNull();
+      expect(document.body.querySelector('[data-diff="changed"]')).not.toBeNull();
     });
   });
 
@@ -2794,5 +3775,60 @@ describe('SceneEditorDialog diff accept', () => {
     });
     expect(linkedProseEditor.innerHTML).not.toContain('cm-diff-inserted');
     expect(linkedProseEditor.innerHTML).not.toContain('cm-diff-deleted');
+  });
+
+  it('accepts the beats diff from a removed beat row', async () => {
+    // Removed beat rows have no textarea, so the section resolution must not
+    // rely on finding one — hovering the row and accepting must clear the
+    // beats diff instead of silently doing nothing.
+    baselineScenesState.push(
+      makeScene({
+        id: 'scene-1',
+        beats: [
+          { id: 'beat-1', text: 'Kept beat' },
+          { id: 'beat-2', text: 'Dropped beat' },
+        ],
+      })
+    );
+
+    wrap(
+      <SceneEditorDialog
+        scene={makeScene({
+          id: 'scene-1',
+          beats: [{ id: 'beat-1', text: 'Kept beat' }],
+        })}
+        isOpen
+        openedViaTrigger={false}
+        onClose={NOOP_CLOSE}
+        onSave={NOOP_SAVE}
+        onDelete={NOOP_DELETE}
+      />
+    );
+
+    const removedRow = await waitFor(() => {
+      const row = document.body.querySelector<HTMLElement>(
+        '[data-diff-kind="removed"]'
+      );
+      expect(row).toBeTruthy();
+      return row as HTMLElement;
+    });
+
+    const dialog = document.querySelector(
+      '[role="dialog"][aria-label="Edit Scene"]'
+    ) as HTMLElement;
+    const scroller = dialog.querySelector('.overflow-y-auto') as HTMLElement;
+    const rect = removedRow.getBoundingClientRect();
+    const cx = Math.round(rect.left + rect.width / 2);
+    const cy = Math.round(rect.top + rect.height / 2);
+    pointStore.set(`${cx},${cy}`, removedRow);
+    fireEvent.mouseMove(scroller, { clientX: cx, clientY: cy });
+
+    const acceptBtn = await screen.findByLabelText('Accept change');
+    fireEvent.click(acceptBtn);
+
+    await waitFor(() => {
+      expect(document.body.querySelector('[data-diff-kind="removed"]')).toBeNull();
+    });
+    expect(screen.getByDisplayValue('Kept beat')).toBeTruthy();
   });
 });

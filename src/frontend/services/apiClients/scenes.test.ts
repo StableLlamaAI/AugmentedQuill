@@ -14,18 +14,22 @@ import { createScenesApi } from './scenes';
 import { fetchJson, postJson, putJson, patchJson, deleteJson } from './shared';
 import { registerSharedApiMockCleanup } from './testSharedMocks';
 
-vi.mock('./shared', () => ({
-  projectEndpoint: vi.fn((projectName: string, path: string) => {
-    const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-    if (!projectName) return normalizedPath;
-    return `/projects/${encodeURIComponent(projectName)}${normalizedPath}`;
-  }),
-  fetchJson: vi.fn(),
-  postJson: vi.fn(),
-  putJson: vi.fn(),
-  patchJson: vi.fn(),
-  deleteJson: vi.fn(),
-}));
+vi.mock('./shared', async (importOriginal: () => Promise<Record<string, unknown>>) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    projectEndpoint: vi.fn((projectName: string, path: string) => {
+      const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+      if (!projectName) return normalizedPath;
+      return `/projects/${encodeURIComponent(projectName)}${normalizedPath}`;
+    }),
+    fetchJson: vi.fn(),
+    postJson: vi.fn(),
+    putJson: vi.fn(),
+    patchJson: vi.fn(),
+    deleteJson: vi.fn(),
+  };
+});
 registerSharedApiMockCleanup();
 
 const PROJECT = 'my-story';
@@ -164,7 +168,10 @@ describe('createScenesApi streamWriteScene', () => {
 
   it('posts to the stream endpoint and forwards prose chunks live', async () => {
     const onProse = vi.fn();
+    const onThinking = vi.fn();
+    const controller = new AbortController();
     const sse =
+      'data: {"type":"thinking","accumulated":"Planning"}\n\n' +
       'data: {"type":"prose_chunk","accumulated":"The"}\n\n' +
       'data: {"type":"prose_chunk","accumulated":"The night"}\n\n' +
       'data: {"type":"result","scene":' +
@@ -178,7 +185,9 @@ describe('createScenesApi streamWriteScene', () => {
       const result = await api.streamWriteScene(
         1,
         { scope_type: 'story', detect_boundaries: true },
-        onProse
+        onProse,
+        onThinking,
+        controller.signal
       );
 
       expect(fetchMock).toHaveBeenCalledWith(
@@ -186,8 +195,11 @@ describe('createScenesApi streamWriteScene', () => {
         expect.objectContaining({
           method: 'POST',
           body: JSON.stringify({ scope_type: 'story', detect_boundaries: true }),
+          signal: controller.signal,
         })
       );
+      expect(onThinking).toHaveBeenCalledWith('Planning');
+      expect(onThinking).toHaveBeenCalledTimes(1);
       expect(onProse).toHaveBeenNthCalledWith(1, 'The');
       expect(onProse).toHaveBeenLastCalledWith('The night');
       expect(result.generated_text).toBe('The night is dark');
@@ -218,6 +230,67 @@ describe('createScenesApi streamWriteScene', () => {
       await expect(api.streamWriteScene(1, { scope_type: 'story' })).rejects.toThrow(
         'without a result'
       );
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
+describe('createScenesApi streamGenerateField', () => {
+  const sseResponse = (sse: string): Response =>
+    new Response(new TextEncoder().encode(sse).buffer, {
+      status: 200,
+      headers: { 'Content-Type': 'text/event-stream' },
+    });
+
+  it('posts to the generate stream endpoint and parses the result', async () => {
+    const onChunk = vi.fn();
+    const onThinking = vi.fn();
+    const sse =
+      'data: {"type":"thinking","accumulated":"Weigh beats"}\n\n' +
+      'data: {"type":"chunk","accumulated":"Beat A"}\n\n' +
+      'data: {"type":"result","target":"beats","text":"Beat A\\nBeat B",' +
+      '"beats":[{"id":"1","text":"Beat A"},{"id":"2","text":"Beat B"}]}\n\n' +
+      'data: [DONE]\n\n';
+
+    const fetchMock = vi.fn().mockResolvedValue(sseResponse(sse));
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      const payload = {
+        target: 'beats' as const,
+        source: 'summary' as const,
+        summary: 'S',
+      };
+      const result = await api.streamGenerateField(1, payload, onChunk, onThinking);
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        `/api/v1${BASE}/1/generate/stream`,
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify(payload),
+        })
+      );
+      expect(onThinking).toHaveBeenCalledWith('Weigh beats');
+      expect(onChunk).toHaveBeenCalledWith('Beat A');
+      expect(result.target).toBe('beats');
+      expect(result.beats.map((b: { text: string }): string => b.text)).toEqual([
+        'Beat A',
+        'Beat B',
+      ]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('rejects when the field stream reports an error event', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(sseResponse('data: {"type":"error","error":"nope"}\n\n'));
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      await expect(
+        api.streamGenerateField(1, { target: 'beats', source: 'summary' })
+      ).rejects.toThrow('nope');
     } finally {
       vi.unstubAllGlobals();
     }

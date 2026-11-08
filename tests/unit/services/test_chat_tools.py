@@ -670,6 +670,39 @@ class ChatToolsTest(TestCase):
             chapter_file.read_text(encoding="utf-8"), "Batch updated content"
         )
 
+    def test_failed_tool_call_is_not_counted_as_an_operation(self):
+        """Rejected calls changed nothing, so batch metadata must ignore them."""
+        self._bootstrap_project()
+
+        data = self._post_tool_calls(
+            [
+                (
+                    "manage_scenes",
+                    {"action": "create", "create_data": {"summary": "Kept"}},
+                ),
+                # Missing scene_id: rejected before anything is written.
+                (
+                    "manage_scenes",
+                    {"action": "update", "update_data": {"summary": "Rejected"}},
+                ),
+            ]
+        )
+
+        appended = data.get("appended_messages") or []
+        payloads = [json.loads(message["content"]) for message in appended]
+        self.assertTrue(
+            any(
+                isinstance(payload, dict) and payload.get("error")
+                for payload in payloads
+            ),
+            payloads,
+        )
+
+        batch = (data.get("mutations") or {}).get("tool_batch") or {}
+        self.assertEqual(batch.get("tool_names"), ["manage_scenes"])
+        self.assertEqual(batch.get("operation_count"), 1)
+        self.assertEqual(batch.get("label"), "AI tool: manage_scenes")
+
     def test_call_editing_assistant_propagates_prose_mutations_and_ui_refreshes(self):
         self._bootstrap_project()
         chapter_file = self.projects_root / "demo" / "chapters" / "0001.txt"
@@ -791,6 +824,367 @@ class ChatToolsTest(TestCase):
             payload["recommended_updates"][0].get("story_summary"),
             "Sharper story summary",
         )
+
+    # ------------------------------------------------------------------
+    # Scene-scoped prose editing
+    # ------------------------------------------------------------------
+
+    def _prepare_two_scenes_with_prose(self) -> tuple[int, int, Path]:
+        """Create two linked scenes with prose and return their IDs + chapter file."""
+        self._bootstrap_project()
+        self._allow_prose_writing()
+        scene_one = self._create_scene("Scene one")
+        scene_two = self._create_scene("Scene two")
+        self._write_scene_prose(scene_one, "Alpha text belongs to scene one.")
+        self._write_scene_prose(scene_two, "Beta text belongs to scene two.")
+        chapter_file = self.projects_root / "demo" / "chapters" / "0001.txt"
+        return scene_one, scene_two, chapter_file
+
+    def _tool_result(self, data: dict) -> dict:
+        appended = data.get("appended_messages") or []
+        self.assertEqual(len(appended), 1, appended)
+        return json.loads(appended[0].get("content") or "{}")
+
+    def test_replace_text_in_scene_edits_only_the_target_scene(self):
+        scene_one, scene_two, chapter_file = self._prepare_two_scenes_with_prose()
+
+        data = self._post_single_tool_for_role(
+            "EDITING",
+            "replace_text_in_scene",
+            {
+                "scene_id": scene_one,
+                "old_text": "Alpha text",
+                "new_text": "Gamma text",
+            },
+        )
+        result = self._tool_result(data)
+
+        self.assertNotIn("error", result, result)
+        self.assertTrue(result.get("written"))
+        self.assertEqual(result.get("scene_id"), scene_one)
+        self.assertTrue((data.get("mutations") or {}).get("story_changed"))
+
+        content = chapter_file.read_text(encoding="utf-8")
+        self.assertIn(
+            f"<!--scene:{scene_one}:start-->Gamma text belongs to scene one."
+            f"<!--scene:{scene_one}:end-->",
+            content,
+        )
+        self.assertIn(
+            f"<!--scene:{scene_two}:start-->Beta text belongs to scene two."
+            f"<!--scene:{scene_two}:end-->",
+            content,
+        )
+
+    def test_write_scene_prose_replaces_only_the_scene_span(self):
+        scene_one, scene_two, chapter_file = self._prepare_two_scenes_with_prose()
+        prefix = chapter_file.read_text(encoding="utf-8").split(
+            f"<!--scene:{scene_one}:start-->", 1
+        )[0]
+
+        data = self._post_single_tool_for_role(
+            "EDITING",
+            "write_scene_prose",
+            {"scene_id": scene_one, "text": "A completely rewritten scene one."},
+        )
+        result = self._tool_result(data)
+
+        self.assertNotIn("error", result, result)
+        self.assertTrue(result.get("written"))
+
+        content = chapter_file.read_text(encoding="utf-8")
+        self.assertTrue(content.startswith(prefix))
+        self.assertIn(
+            f"<!--scene:{scene_one}:start-->A completely rewritten scene one."
+            f"<!--scene:{scene_one}:end-->",
+            content,
+        )
+        self.assertIn(
+            f"<!--scene:{scene_two}:start-->Beta text belongs to scene two."
+            f"<!--scene:{scene_two}:end-->",
+            content,
+        )
+
+    def test_write_scene_prose_rejects_scenes_with_annotation_markers(self):
+        scene_one, _scene_two, chapter_file = self._prepare_two_scenes_with_prose()
+        content = chapter_file.read_text(encoding="utf-8")
+        chapter_file.write_text(
+            content.replace(
+                "Alpha text belongs to scene one.",
+                "<!--annotation:ann-1:start-->Alpha"
+                "<!--annotation:ann-1:end--> text belongs to scene one.",
+            ),
+            encoding="utf-8",
+        )
+        annotated = chapter_file.read_text(encoding="utf-8")
+
+        data = self._post_single_tool_for_role(
+            "EDITING",
+            "write_scene_prose",
+            {"scene_id": scene_one, "text": "Rewritten without annotations."},
+        )
+        result = self._tool_result(data)
+
+        self.assertIn("annotation markers", result.get("error", ""))
+        self.assertEqual(chapter_file.read_text(encoding="utf-8"), annotated)
+        self.assertFalse((data.get("mutations") or {}).get("story_changed"))
+
+        # A targeted replacement outside the annotation still works.
+        targeted = self._post_single_tool_for_role(
+            "EDITING",
+            "replace_text_in_scene",
+            {
+                "scene_id": scene_one,
+                "old_text": "text belongs to scene one.",
+                "new_text": "text still belongs to scene one.",
+            },
+        )
+        targeted_result = self._tool_result(targeted)
+        self.assertNotIn("error", targeted_result, targeted_result)
+        self.assertIn(
+            "<!--annotation:ann-1:start-->Alpha<!--annotation:ann-1:end--> "
+            "text still belongs to scene one.",
+            chapter_file.read_text(encoding="utf-8"),
+        )
+
+    def test_scene_scoped_editing_assistant_hides_and_blocks_whole_chapter_tools(self):
+        scene_one, _scene_two, chapter_file = self._prepare_two_scenes_with_prose()
+        before = chapter_file.read_text(encoding="utf-8")
+
+        first_llm = {
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "nested_1",
+                    "type": "function",
+                    "function": {
+                        "name": "write_chapter_content",
+                        "arguments": json.dumps(
+                            {"chap_id": 1, "content": "Whole chapter replaced"}
+                        ),
+                    },
+                }
+            ],
+        }
+        second_llm = {"content": "Done.", "tool_calls": []}
+
+        with (
+            patch(
+                "augmentedquill.services.llm.llm.resolve_openai_credentials",
+                return_value=("http://localhost:11434/v1", None, "dummy", 30, "dummy"),
+            ),
+            patch(
+                "augmentedquill.services.llm.llm.unified_chat_complete",
+                new_callable=AsyncMock,
+            ) as mock_chat,
+        ):
+            mock_chat.side_effect = [first_llm, second_llm]
+            data = self._post_single_tool(
+                "call_editing_assistant",
+                {
+                    "task": "Refine the prose of this scene.",
+                    "scene_id": scene_one,
+                    "chapter_id": 1,
+                },
+            )
+
+        self.assertEqual(chapter_file.read_text(encoding="utf-8"), before)
+        self.assertFalse((data.get("mutations") or {}).get("story_changed"))
+
+        # The scoped session must not even see whole-unit prose writers.
+        offered_tools = {
+            tool.get("function", {}).get("name")
+            for tool in mock_chat.call_args_list[0].kwargs["tools"]
+        }
+        self.assertNotIn("write_chapter_content", offered_tools)
+        self.assertNotIn("replace_text_in_chapter", offered_tools)
+        self.assertIn("replace_text_in_scene", offered_tools)
+        self.assertIn("write_scene_prose", offered_tools)
+
+        payload = self._tool_result(data)
+        self.assertEqual(payload.get("response"), "Done.")
+
+    def test_scene_scoped_editing_assistant_edits_only_the_scene_prose(self):
+        scene_one, scene_two, chapter_file = self._prepare_two_scenes_with_prose()
+
+        first_llm = {
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "nested_1",
+                    "type": "function",
+                    "function": {
+                        "name": "replace_text_in_scene",
+                        "arguments": json.dumps(
+                            {
+                                "scene_id": scene_one,
+                                "old_text": "Alpha text",
+                                "new_text": "Refined alpha text",
+                            }
+                        ),
+                    },
+                }
+            ],
+        }
+        second_llm = {"content": "Done.", "tool_calls": []}
+
+        with (
+            patch(
+                "augmentedquill.services.llm.llm.resolve_openai_credentials",
+                return_value=("http://localhost:11434/v1", None, "dummy", 30, "dummy"),
+            ),
+            patch(
+                "augmentedquill.services.llm.llm.unified_chat_complete",
+                new_callable=AsyncMock,
+            ) as mock_chat,
+        ):
+            mock_chat.side_effect = [first_llm, second_llm]
+            data = self._post_single_tool(
+                "call_editing_assistant",
+                {"task": "Refine scene one.", "scene_id": scene_one},
+            )
+
+        self.assertTrue((data.get("mutations") or {}).get("story_changed"))
+        content = chapter_file.read_text(encoding="utf-8")
+        self.assertIn(
+            f"<!--scene:{scene_one}:start-->Refined alpha text belongs to scene one."
+            f"<!--scene:{scene_one}:end-->",
+            content,
+        )
+        self.assertIn(
+            f"<!--scene:{scene_two}:start-->Beta text belongs to scene two."
+            f"<!--scene:{scene_two}:end-->",
+            content,
+        )
+
+        # The scoped editor must receive the neighbouring prose so it does not
+        # rewrite the scene as a standalone passage that repeats other scenes.
+        editing_prompt = mock_chat.call_args_list[0].kwargs["messages"][1]["content"]
+        self.assertIn("Text immediately BEFORE this scene", editing_prompt)
+        self.assertIn("Text immediately AFTER this scene", editing_prompt)
+        self.assertIn("Beta text belongs to scene two.", editing_prompt)
+        self.assertIn("never repeat", editing_prompt.lower())
+        self.assertNotIn("<!--scene:", editing_prompt)
+
+    def test_get_scene_prose_includes_neighbour_context_without_markers(self):
+        _scene_one, scene_two, _chapter_file = self._prepare_two_scenes_with_prose()
+
+        data = self._post_single_tool_for_role(
+            "EDITING", "get_scene_prose", {"scene_id": scene_two}
+        )
+        result = self._tool_result(data)
+
+        self.assertNotIn("error", result, result)
+        self.assertEqual(result.get("prose"), "Beta text belongs to scene two.")
+        self.assertIn("Alpha text belongs to scene one.", result.get("text_before"))
+        self.assertEqual(result.get("text_after"), "(none)")
+        self.assertNotIn("<!--", json.dumps(result))
+
+    def test_scene_scoped_editing_assistant_rejects_scene_metadata_writes(self):
+        scene_one, _scene_two, _chapter_file = self._prepare_two_scenes_with_prose()
+
+        first_llm = {
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "nested_1",
+                    "type": "function",
+                    "function": {
+                        "name": "manage_scenes",
+                        "arguments": json.dumps(
+                            {
+                                "action": "update",
+                                "scene_id": scene_one,
+                                "update_data": {"summary": "Hijacked summary"},
+                            }
+                        ),
+                    },
+                }
+            ],
+        }
+        second_llm = {"content": "Done.", "tool_calls": []}
+
+        with (
+            patch(
+                "augmentedquill.services.llm.llm.resolve_openai_credentials",
+                return_value=("http://localhost:11434/v1", None, "dummy", 30, "dummy"),
+            ),
+            patch(
+                "augmentedquill.services.llm.llm.unified_chat_complete",
+                new_callable=AsyncMock,
+            ) as mock_chat,
+        ):
+            mock_chat.side_effect = [first_llm, second_llm]
+            data = self._post_single_tool(
+                "call_editing_assistant",
+                {"task": "Refine scene one.", "scene_id": scene_one},
+            )
+
+        self.assertFalse((data.get("mutations") or {}).get("story_changed"))
+        scene = self._get_scene(scene_one)
+        self.assertNotEqual(scene.get("summary"), "Hijacked summary")
+
+    def test_scene_scoped_editing_assistant_rejects_edits_to_another_scene(self):
+        scene_one, scene_two, chapter_file = self._prepare_two_scenes_with_prose()
+        before = chapter_file.read_text(encoding="utf-8")
+
+        first_llm = {
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "nested_1",
+                    "type": "function",
+                    "function": {
+                        "name": "replace_text_in_scene",
+                        "arguments": json.dumps(
+                            {
+                                "scene_id": scene_two,
+                                "old_text": "Beta text",
+                                "new_text": "Leaked edit",
+                            }
+                        ),
+                    },
+                }
+            ],
+        }
+        second_llm = {"content": "Done.", "tool_calls": []}
+
+        with (
+            patch(
+                "augmentedquill.services.llm.llm.resolve_openai_credentials",
+                return_value=("http://localhost:11434/v1", None, "dummy", 30, "dummy"),
+            ),
+            patch(
+                "augmentedquill.services.llm.llm.unified_chat_complete",
+                new_callable=AsyncMock,
+            ) as mock_chat,
+        ):
+            mock_chat.side_effect = [first_llm, second_llm]
+            data = self._post_single_tool(
+                "call_editing_assistant",
+                {"task": "Refine scene one.", "scene_id": scene_one},
+            )
+
+        self.assertEqual(chapter_file.read_text(encoding="utf-8"), before)
+        self.assertFalse((data.get("mutations") or {}).get("story_changed"))
+
+    def test_call_editing_assistant_rejects_scene_without_prose(self):
+        self._bootstrap_project()
+        scene_id = self._create_scene("Planning only scene")
+
+        with patch(
+            "augmentedquill.services.llm.llm.unified_chat_complete",
+            new_callable=AsyncMock,
+        ) as mock_chat:
+            data = self._post_single_tool(
+                "call_editing_assistant",
+                {"task": "Refine the scene.", "scene_id": scene_id},
+            )
+            mock_chat.assert_not_called()
+
+        payload = self._tool_result(data)
+        self.assertIn("error", payload)
+        self.assertFalse((data.get("mutations") or {}).get("story_changed"))
 
     def test_image_mutation_tools_emit_story_changed_and_support_undo_redo(self):
         self._bootstrap_project()
@@ -1192,6 +1586,334 @@ class ChatToolsTest(TestCase):
 
         mutations = data.get("mutations") or {}
         self.assertTrue(mutations.get("story_changed"))
+
+    # ------------------------------------------------------------------
+    # Scene-linked prose writing
+    # ------------------------------------------------------------------
+
+    def _create_scene(self, summary: str) -> int:
+        data = self._post_single_tool(
+            "manage_scenes",
+            {"action": "create", "create_data": {"summary": summary}},
+        )
+        appended = data.get("appended_messages") or []
+        self.assertEqual(len(appended), 1)
+        scene = json.loads(appended[0].get("content") or "{}")
+        self.assertNotIn("error", scene, scene)
+        return int(scene["id"])
+
+    def _allow_prose_writing(self) -> None:
+        """Satisfy the conflict-first writing gate."""
+        self._post_single_tool(
+            "update_story_metadata",
+            {
+                "conflicts": [
+                    {"description": "Test conflict", "resolution": "Test resolution"}
+                ]
+            },
+        )
+
+    def _get_scene(self, scene_id: int) -> dict:
+        data = self._post_single_tool(
+            "manage_scenes",
+            {"action": "get", "scene_id": scene_id},
+        )
+        appended = data.get("appended_messages") or []
+        self.assertEqual(len(appended), 1)
+        return json.loads(appended[0].get("content") or "{}")
+
+    def _write_scene_prose(self, scene_id: int, generated_text: str, **extra):
+        args = {
+            "instruction": f"Write scene {scene_id}",
+            "context": f"Scene {scene_id} context",
+            "write_mode": "append",
+            "chap_id": 1,
+            "scene_id": scene_id,
+            **extra,
+        }
+        with (
+            patch(
+                "augmentedquill.services.llm.llm.resolve_openai_credentials",
+                return_value=("http://localhost:11434/v1", None, "dummy", 30, "dummy"),
+            ),
+            patch(
+                "augmentedquill.services.llm.llm.unified_chat_stream",
+                new=_fake_llm_stream(generated_text),
+            ),
+        ):
+            data = self._post_single_tool("call_writing_llm", args)
+        appended = data.get("appended_messages") or []
+        self.assertEqual(len(appended), 1)
+        return json.loads(appended[0].get("content") or "{}")
+
+    def test_call_writing_llm_append_with_scene_id_links_prose(self):
+        """Writing scene prose must insert scene markers and link the scene."""
+        self._bootstrap_project()
+        self._allow_prose_writing()
+        scene_id = self._create_scene("Scene one")
+        chapter_file = self.projects_root / "demo" / "chapters" / "0001.txt"
+        original_content = chapter_file.read_text(encoding="utf-8")
+
+        result = self._write_scene_prose(scene_id, "Scene one prose.")
+
+        self.assertNotIn("error", result, result)
+        self.assertTrue(result.get("written"))
+        self.assertTrue(result.get("scene_linked"))
+        self.assertEqual(result.get("scene_id"), scene_id)
+
+        new_content = chapter_file.read_text(encoding="utf-8")
+        self.assertTrue(new_content.startswith(original_content))
+        self.assertIn(
+            f"<!--scene:{scene_id}:start-->Scene one prose."
+            f"<!--scene:{scene_id}:end-->",
+            new_content,
+        )
+
+        scene = self._get_scene(scene_id)
+        self.assertEqual(scene["prose_link"]["scope_type"], "chapter")
+        self.assertEqual(str(scene["prose_link"]["chapter_id"]), "1")
+
+    def test_call_writing_llm_append_with_scene_id_extends_linked_scene(self):
+        """A second scene write must extend the existing scene span, not duplicate it."""
+        self._bootstrap_project()
+        self._allow_prose_writing()
+        scene_id = self._create_scene("Scene one")
+
+        self._write_scene_prose(scene_id, "First part.")
+        second = self._write_scene_prose(scene_id, "Second part.")
+
+        self.assertNotIn("error", second, second)
+        self.assertTrue(second.get("scene_linked"))
+
+        content = (self.projects_root / "demo" / "chapters" / "0001.txt").read_text(
+            encoding="utf-8"
+        )
+        self.assertEqual(content.count(f"<!--scene:{scene_id}:start-->"), 1)
+        self.assertIn(
+            f"<!--scene:{scene_id}:start-->First part. Second part."
+            f"<!--scene:{scene_id}:end-->",
+            content,
+        )
+
+    def test_call_writing_llm_two_scenes_in_one_batch_link_both(self):
+        """The reported flow: write scene 1 then scene 2 in one turn."""
+        self._bootstrap_project()
+        self._allow_prose_writing()
+        scene_one = self._create_scene("Scene one")
+        scene_two = self._create_scene("Scene two")
+
+        generated = ["Scene one prose.", "Scene two prose."]
+
+        async def _sequenced_stream(**kwargs):
+            yield {"content": generated.pop(0)}
+
+        with (
+            patch(
+                "augmentedquill.services.llm.llm.resolve_openai_credentials",
+                return_value=("http://localhost:11434/v1", None, "dummy", 30, "dummy"),
+            ),
+            patch(
+                "augmentedquill.services.llm.llm.unified_chat_stream",
+                new=_sequenced_stream,
+            ),
+        ):
+            data = self._post_tool_calls(
+                [
+                    (
+                        "call_writing_llm",
+                        {
+                            "instruction": "Write scene one",
+                            "context": "Scene one context",
+                            "write_mode": "append",
+                            "chap_id": 1,
+                            "scene_id": scene_one,
+                        },
+                    ),
+                    (
+                        "call_writing_llm",
+                        {
+                            "instruction": "Write scene two",
+                            "context": "Scene two context",
+                            "write_mode": "append",
+                            "chap_id": 1,
+                            "scene_id": scene_two,
+                        },
+                    ),
+                ]
+            )
+
+        appended = data.get("appended_messages") or []
+        self.assertEqual(len(appended), 2)
+        for index, scene_id in enumerate((scene_one, scene_two)):
+            result = json.loads(appended[index].get("content") or "{}")
+            self.assertNotIn("error", result, result)
+            self.assertTrue(result.get("scene_linked"))
+            self.assertEqual(result.get("scene_id"), scene_id)
+
+        content = (self.projects_root / "demo" / "chapters" / "0001.txt").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn(
+            f"<!--scene:{scene_one}:start-->Scene one prose."
+            f"<!--scene:{scene_one}:end-->",
+            content,
+        )
+        self.assertIn(
+            f"<!--scene:{scene_two}:start-->Scene two prose."
+            f"<!--scene:{scene_two}:end-->",
+            content,
+        )
+
+        for scene_id in (scene_one, scene_two):
+            scene = self._get_scene(scene_id)
+            self.assertEqual(scene["prose_link"]["scope_type"], "chapter")
+
+    def test_call_writing_llm_append_without_scene_id_is_rejected_in_scene_chapter(
+        self,
+    ):
+        """Appending prose without scene_id must NOT silently skip linking.
+
+        Regression: the chat model called ``write_mode="append"`` without
+        ``scene_id``; the prose was appended after every scene marker, the tool
+        reported plain success, and the scene editor showed no prose for the
+        scene the user asked for.  Writing into a scene-managed chapter now
+        fails with an actionable error instead of producing unlinked prose.
+        """
+        self._bootstrap_project()
+        self._allow_prose_writing()
+        scene_id = self._create_scene("Scene one")
+        self._write_scene_prose(scene_id, "Scene one prose.")
+
+        chapter_file = self.projects_root / "demo" / "chapters" / "0001.txt"
+        content_before = chapter_file.read_text(encoding="utf-8")
+
+        with (
+            patch(
+                "augmentedquill.services.llm.llm.resolve_openai_credentials",
+                return_value=("http://localhost:11434/v1", None, "dummy", 30, "dummy"),
+            ),
+            patch(
+                "augmentedquill.services.llm.llm.unified_chat_stream",
+                new=_fake_llm_stream("Unlinked prose."),
+            ),
+        ):
+            data = self._post_single_tool(
+                "call_writing_llm",
+                {
+                    "instruction": "Continue the story",
+                    "context": "Current text",
+                    "write_mode": "append",
+                    "chap_id": 1,
+                },
+            )
+
+        appended = data.get("appended_messages") or []
+        self.assertEqual(len(appended), 1)
+        result = json.loads(appended[0].get("content") or "{}")
+        self.assertIn("error", result, result)
+        self.assertIn("scene_id", result["error"])
+        self.assertIn(str(scene_id), result["error"])
+        # Nothing may be written when the call is ambiguous.
+        self.assertEqual(chapter_file.read_text(encoding="utf-8"), content_before)
+
+    def test_call_writing_llm_append_without_scene_id_allowed_without_scenes(self):
+        """Chapters without scenes keep the plain append behaviour."""
+        self._bootstrap_project()
+        self._allow_prose_writing()
+
+        chapter_file = self.projects_root / "demo" / "chapters" / "0001.txt"
+        with (
+            patch(
+                "augmentedquill.services.llm.llm.resolve_openai_credentials",
+                return_value=("http://localhost:11434/v1", None, "dummy", 30, "dummy"),
+            ),
+            patch(
+                "augmentedquill.services.llm.llm.unified_chat_stream",
+                new=_fake_llm_stream("More prose."),
+            ),
+        ):
+            data = self._post_single_tool(
+                "call_writing_llm",
+                {
+                    "instruction": "Continue the story",
+                    "context": "Current text",
+                    "write_mode": "append",
+                    "chap_id": 1,
+                },
+            )
+
+        appended = data.get("appended_messages") or []
+        result = json.loads(appended[0].get("content") or "{}")
+        self.assertNotIn("error", result, result)
+        self.assertTrue(result.get("written"))
+        self.assertIn("More prose.", chapter_file.read_text(encoding="utf-8"))
+
+    def test_call_writing_llm_retry_with_scene_id_after_rejection_links_scene(self):
+        """After the rejection the model retries with scene_id and links properly."""
+        self._bootstrap_project()
+        self._allow_prose_writing()
+        scene_id = self._create_scene("Scene one")
+
+        chapter_file = self.projects_root / "demo" / "chapters" / "0001.txt"
+        content_before = chapter_file.read_text(encoding="utf-8")
+
+        with (
+            patch(
+                "augmentedquill.services.llm.llm.resolve_openai_credentials",
+                return_value=("http://localhost:11434/v1", None, "dummy", 30, "dummy"),
+            ),
+            patch(
+                "augmentedquill.services.llm.llm.unified_chat_stream",
+                new=_fake_llm_stream("Ignored prose."),
+            ),
+        ):
+            rejected = self._post_single_tool(
+                "call_writing_llm",
+                {
+                    "instruction": "Write scene one",
+                    "context": "Scene context",
+                    "write_mode": "append",
+                    "chap_id": 1,
+                },
+            )
+        rejected_result = json.loads(
+            (rejected.get("appended_messages") or [{}])[0].get("content") or "{}"
+        )
+        self.assertIn("error", rejected_result)
+        self.assertEqual(chapter_file.read_text(encoding="utf-8"), content_before)
+
+        # Retry exactly as the model would after reading the error.
+        retried = self._write_scene_prose(scene_id, "Scene one prose.")
+        self.assertNotIn("error", retried, retried)
+        self.assertTrue(retried.get("scene_linked"))
+
+        content_after = chapter_file.read_text(encoding="utf-8")
+        self.assertIn(
+            f"<!--scene:{scene_id}:start-->Scene one prose."
+            f"<!--scene:{scene_id}:end-->",
+            content_after,
+        )
+        scene = self._get_scene(scene_id)
+        self.assertEqual(scene["prose_link"]["scope_type"], "chapter")
+        self.assertEqual(str(scene["prose_link"]["chapter_id"]), "1")
+        self.assertNotIn("Ignored prose.", content_after)
+
+    def test_call_writing_llm_replace_all_with_scene_id_is_rejected(self):
+        self._bootstrap_project()
+        self._allow_prose_writing()
+        scene_id = self._create_scene("Scene one")
+
+        result = self._write_scene_prose(
+            scene_id, "Whole chapter.", write_mode="replace_all"
+        )
+
+        self.assertIn("error", result)
+        self.assertIn("scene_id", result["error"])
+
+        content = (self.projects_root / "demo" / "chapters" / "0001.txt").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("Alpha chapter content.", content)
 
     def test_update_story_metadata_append_patch_is_cumulative_within_one_batch(self):
         self._bootstrap_project()
@@ -2300,6 +3022,108 @@ class ChatToolsTest(TestCase):
             if entry.get("chapter_number") == 1
         ]
         self.assertEqual(chapter_one_order[:2], [2, 1])
+
+    def test_manage_scenes_update_is_atomic_when_the_placement_fails(self):
+        """A rejected placement must not leave the content write behind."""
+        self._bootstrap_project()
+        self._set_project_type("novel")
+        self._post_single_tool(
+            "manage_scenes",
+            {"action": "create", "create_data": {"summary": "First"}},
+        )
+        self._post_single_tool(
+            "manage_scenes",
+            {"action": "create", "create_data": {"summary": "Second"}},
+        )
+        self._post_single_tool(
+            "manage_scenes",
+            {
+                "action": "update",
+                "scene_id": 1,
+                "update_data": {"chapter_number": 1},
+            },
+        )
+
+        # -1 passes schema validation but is an invalid move position, so the
+        # placement step fails after the content fields were already written.
+        result = self._post_single_tool(
+            "manage_scenes",
+            {
+                "action": "update",
+                "scene_id": 1,
+                "update_data": {
+                    "summary": "Should not survive",
+                    "beats": [{"text": "Should not survive either"}],
+                    "chapter_position": -1,
+                },
+            },
+        )
+
+        appended = result.get("appended_messages") or []
+        self.assertEqual(len(appended), 1)
+        payload = json.loads(appended[0]["content"])
+        self.assertEqual(payload.get("error"), "Invalid scene move")
+        self.assertFalse((result.get("mutations") or {}).get("story_changed"))
+
+        reloaded = json.loads(
+            (
+                self._post_single_tool(
+                    "manage_scenes", {"action": "get", "scene_id": 1}
+                ).get("appended_messages")
+                or []
+            )[0]["content"]
+        )
+        self.assertEqual(reloaded.get("summary"), "First")
+        self.assertEqual(reloaded.get("beats"), [])
+
+    def test_manage_scenes_update_does_not_move_the_scene_when_content_is_rejected(
+        self,
+    ):
+        """A rejected content payload must not leave the placement behind."""
+        self._bootstrap_project()
+        self._set_project_type("novel")
+        self._post_single_tool(
+            "manage_scenes",
+            {"action": "create", "create_data": {"summary": "First"}},
+        )
+        self._post_single_tool(
+            "manage_scenes",
+            {"action": "create", "create_data": {"summary": "Second"}},
+        )
+
+        # causes=[1] on scene 1 is rejected by the scene service.  The call must
+        # fail before the placement is applied, not after.
+        result = self._post_single_tool(
+            "manage_scenes",
+            {
+                "action": "update",
+                "scene_id": 1,
+                "update_data": {
+                    "chapter_number": 1,
+                    "chapter_position": 0,
+                    "causes": [1],
+                },
+            },
+        )
+
+        appended = result.get("appended_messages") or []
+        self.assertEqual(len(appended), 1)
+        payload = json.loads(appended[0]["content"])
+        self.assertEqual(payload.get("error"), "Invalid scene ordering")
+        self.assertFalse((result.get("mutations") or {}).get("story_changed"))
+
+        reloaded = json.loads(
+            (
+                self._post_single_tool(
+                    "manage_scenes", {"action": "get", "scene_id": 1}
+                ).get("appended_messages")
+                or []
+            )[0]["content"]
+        )
+        self.assertEqual(
+            (reloaded.get("prose_link") or {}).get("scope_type"),
+            "unlinked",
+        )
 
     def test_manage_scenes_update_rejects_placement_fields_in_short_story(self):
         self._bootstrap_project()

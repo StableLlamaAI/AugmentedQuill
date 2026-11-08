@@ -15,6 +15,7 @@ markers inside content files and are computed at read time.
 from __future__ import annotations
 
 import os
+import re
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -34,6 +35,8 @@ from augmentedquill.models.scene import (
 )
 from augmentedquill.services.scenes.scene_markers import (
     SceneSpan,
+    collect_marker_violations,
+    find_scene_marker_span,
     inject_annotation_markers,
     inject_markers,
     parse_annotation_spans,
@@ -42,9 +45,12 @@ from augmentedquill.services.scenes.scene_markers import (
     remove_annotation_markers,
     remove_markers,
     scene_block_bounds,
+    scene_marker_token,
     snap_offset_outside_markers,
     snap_range_outside_markers,
+    strip_internal_markers,
     validate_internal_marker_tokens,
+    validate_marker_integrity,
     validate_scene_marker_tokens,
 )
 from augmentedquill.updates.migrate_story_v3 import migrate_project_v3
@@ -466,6 +472,27 @@ def _scene_content_path(
     return None
 
 
+def scope_link_for_content_path(
+    project_dir: Path,
+    content_path: Path,
+) -> dict[str, Any] | None:
+    """Return the prose scope link whose file is *content_path*.
+
+    Callers that already resolved a chapter/draft file (for example the chat
+    prose-writing tools) use this to translate the path back into the
+    ``(scope_type, chapter_id, book_id)`` tuple expected by the marker and link
+    APIs, without duplicating scope-resolution rules.
+    """
+    target = content_path.resolve()
+    for link, path in _scope_candidates(project_dir):
+        if path.resolve() != target:
+            continue
+        scope_type = str(link.get("scope_type") or "").strip().lower()
+        if scope_type in {"story", "chapter"}:
+            return dict(link)
+    return None
+
+
 def _same_prose_scope(a: dict[str, Any], b: dict[str, Any]) -> bool:
     """Return True when two prose-link dicts point at the same scope."""
     return (
@@ -476,7 +503,35 @@ def _same_prose_scope(a: dict[str, Any], b: dict[str, Any]) -> bool:
 
 
 def _write_text_atomic(path: Path, content: str) -> None:
-    """Write text atomically so a failed save never leaves partial content."""
+    """Write text atomically so a failed save never leaves partial content.
+
+    This is the single choke point for every scene-scope prose write.  Marker
+    and offset invariants are checked *before* the bytes hit disk, so a write
+    can never persist content whose prose and scene spans disagree (the
+    off-by-N class of corruption).
+
+    Repair paths (e.g. reorder cleaning a previously corrupted file) may
+    rewrite content that was already corrupt, but a write must never
+    *introduce* corruption: every violation in the new content must already
+    exist on disk.
+    """
+    new_violations = collect_marker_violations(content)
+    if new_violations:
+        existing_violations: frozenset[str] = frozenset()
+        try:
+            if path.exists():
+                existing_violations = collect_marker_violations(
+                    path.read_text(encoding="utf-8")
+                )
+        except OSError:
+            existing_violations = frozenset()
+        introduced = sorted(new_violations - existing_violations)
+        if introduced:
+            raise ValueError(
+                "Refusing to write prose that introduces marker corruption: "
+                + ", ".join(introduced)
+            )
+
     path.parent.mkdir(parents=True, exist_ok=True)
     temp_path: Path | None = None
     replaced = False
@@ -499,6 +554,37 @@ def _read_validated_marker_content(path: Path) -> str:
     validate_scene_marker_tokens(content)
     validate_internal_marker_tokens(content)
     return content
+
+
+def _normalize_scope_assignments(
+    assignments: list[tuple[SceneId, int, int]],
+) -> list[tuple[SceneId, int, int]]:
+    """Return scene-span assignments that are safe for :func:`inject_markers`.
+
+    The scene layer is exclusive, so spans may not overlap.  One collision is
+    legitimate and must not unlink anything: a *zero-width* span (an emptied
+    scene) that sits inside, or exactly at the start of, another span.  Those
+    are pushed to the end of the span they collide with instead of being
+    dropped.  Real overlaps between non-empty spans are passed through
+    unchanged so ``inject_markers`` still rejects them.
+    """
+    ordered = sorted(assignments, key=lambda item: (item[1], item[2]))
+    normalized: list[tuple[SceneId, int, int]] = []
+    cursor = 0
+    for scene_id, raw_start, raw_end in ordered:
+        start = max(0, raw_start)
+        end = max(start, raw_end)
+        if start < cursor:
+            if start != end:
+                # Non-empty overlap: leave it to inject_markers to reject.
+                normalized.append((scene_id, start, end))
+                cursor = max(cursor, end)
+                continue
+            # Keep the emptied scene linked, just relocatably adjacent.
+            start = end = cursor
+        normalized.append((scene_id, start, end))
+        cursor = max(cursor, end)
+    return normalized
 
 
 def _coerce_scene_id(raw_id: object) -> SceneId | None:
@@ -605,14 +691,27 @@ def _strip_link_computed_fields(link: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _scene_creation_order(project_dir: Path) -> dict[SceneId, int]:
+    """Return scene ids ranked by their creation order in ``story.json``.
+
+    Scenes without prose need a stable narrative position; the insertion order
+    of the persisted scenes mapping is that creation order (new scenes are
+    appended by ``create_scene``).
+    """
+    story = load_story_config(project_dir / "story.json") or {}
+    return {scene_id: index for index, scene_id in enumerate(_load_scenes_dict(story))}
+
+
 def _attach_prose_positions(
     scenes: list[dict[str, Any]],
     project_dir: Path,
 ) -> list[dict[str, Any]]:
     locations = _marker_locations_by_scene(project_dir)
+    creation_order = _scene_creation_order(project_dir)
     for scene in scenes:
         link = locations.get(scene["id"])
         scene["prose_link"] = link.copy() if isinstance(link, dict) else None
+        scene["order_index"] = creation_order.get(scene["id"])
 
     return scenes
 
@@ -752,7 +851,10 @@ def create_scene(project_dir: Path, payload: SceneCreateRequest) -> dict[str, An
     unlinked_content = _read_validated_marker_content(unlinked_path)
     if unlinked_content and not unlinked_content.endswith("\n"):
         unlinked_content += "\n"
-    unlinked_content += f"<!--scene:{scene_id}:start--><!--scene:{scene_id}:end-->\n"
+    insertion_point = len(unlinked_content)
+    unlinked_content = inject_markers(
+        unlinked_content, [(scene_id, insertion_point, insertion_point)]
+    )
     _write_text_atomic(unlinked_path, unlinked_content)
 
     story["scenes"] = _drop_prose_links_for_persistence(scenes_dict)
@@ -930,6 +1032,200 @@ def link_prose(
     return result
 
 
+def scene_prose_is_linked(scene: dict[str, Any] | None) -> bool:
+    """Return whether a scene payload currently points at real project prose.
+
+    Scenes created for planning still carry a runtime ``prose_link`` dict with
+    ``scope_type == "unlinked"`` (zero-width markers in the unlinked scope), so
+    a plain truthiness check is not enough.
+    """
+    if not isinstance(scene, dict):
+        return False
+    link = scene.get("prose_link")
+    if not isinstance(link, dict):
+        return False
+    scope_type = str(link.get("scope_type") or "").strip().lower()
+    return scope_type in {"story", "chapter"}
+
+
+def _missing_leading_break(before_visible: str) -> str:
+    """Return the break needed so *text* starts on a new paragraph."""
+    tail = before_visible.rstrip(" \t")
+    if not tail or tail.endswith("\n\n"):
+        return ""
+    if tail.endswith("\n"):
+        return "\n"
+    return "\n\n"
+
+
+def _missing_trailing_break(after_visible: str) -> str:
+    """Return the break needed so following prose starts on a new paragraph."""
+    head = after_visible.lstrip(" \t")
+    if not head or head.startswith("\n\n"):
+        return ""
+    if head.startswith("\n"):
+        return "\n"
+    return "\n\n"
+
+
+def pad_generated_scene_prose(content: str, scene_id: SceneId, text: str) -> str:
+    """Separate generated scene prose from neighbouring prose with blank lines.
+
+    Generation entry points write prose into a scene's marker span.  When that
+    span is empty (a fresh scene) the neighbouring scene's prose ends/starts
+    right at the markers, so the generated text would visually continue the
+    previous paragraph or run into the next one.  This adds the missing blank
+    line(s) inside the scene span — never outside it.
+
+    Existing prose is never padded: a scene that already owns prose keeps its
+    exact boundaries when it is rewritten.  Existing paragraph breaks are
+    preserved (only the missing one is added).
+    """
+    span = find_scene_marker_span(content, scene_id)
+    if span is None or content[span.start : span.end].strip():
+        return text
+    before = strip_internal_markers(content[: span.start])
+    after = strip_internal_markers(content[span.end :])
+    leading = "" if text.startswith("\n") else _missing_leading_break(before)
+    trailing = "" if text.endswith("\n") else _missing_trailing_break(after)
+    return f"{leading}{text}{trailing}"
+
+
+def insert_text_into_scope(
+    project_dir: Path,
+    scope_link: dict[str, Any],
+    generated_text: str,
+    insertion_offset: int | None = None,
+) -> tuple[Path, str, int, int]:
+    """Insert *generated_text* into a prose scope at *insertion_offset*.
+
+    ``insertion_offset=None`` appends to the end of the scope.  An explicit
+    offset inserts the block at that position (used to keep a scene in its
+    narrative slot when it gains prose).  Missing paragraph breaks are added
+    around the block; the returned ``start_offset``/``end_offset`` describe the
+    inserted text only (separators stay outside the linked range).
+    """
+    content_path = _scene_content_path(project_dir, scope_link)
+    if content_path is None:
+        raise ValueError(
+            f"Cannot resolve content path for scope {scope_link.get('scope_type')}"
+        )
+    if not content_path.exists():
+        content_path.parent.mkdir(parents=True, exist_ok=True)
+        content_path.write_text("", encoding="utf-8")
+
+    existing_text = content_path.read_text(encoding="utf-8")
+    if insertion_offset is None:
+        offset = len(existing_text)
+    else:
+        offset = max(0, min(int(insertion_offset), len(existing_text)))
+
+    before_visible = strip_internal_markers(existing_text[:offset])
+    after_visible = strip_internal_markers(existing_text[offset:])
+    prefix = (
+        ""
+        if generated_text.startswith("\n")
+        else _missing_leading_break(before_visible)
+    )
+    suffix = (
+        "" if generated_text.endswith("\n") else _missing_trailing_break(after_visible)
+    )
+    payload = f"{prefix}{generated_text}{suffix}"
+    new_content = f"{existing_text[:offset]}{payload}{existing_text[offset:]}"
+    start_offset = offset + len(prefix)
+    end_offset = start_offset + len(generated_text)
+    _write_text_atomic(content_path, new_content)
+    _invalidate_marker_cache(project_dir)
+    return content_path, new_content, start_offset, end_offset
+
+
+def append_text_to_scope(
+    project_dir: Path,
+    scope_link: dict[str, Any],
+    generated_text: str,
+) -> tuple[Path, str, int, int]:
+    """Append *generated_text* to a prose scope file.
+
+    Returns ``(content_path, new_content, start_offset, end_offset)`` where the
+    offsets describe the appended text inside *new_content*.  Shared by every
+    scene-prose generation path (chat tool, scene editor, main generation
+    button) so append semantics never diverge.
+    """
+    return insert_text_into_scope(project_dir, scope_link, generated_text)
+
+
+def link_range_to_scene(
+    project_dir: Path,
+    scene_id: SceneId,
+    scope_link: dict[str, Any],
+    content: str,
+    start_offset: int,
+    end_offset: int,
+) -> dict[str, Any]:
+    """Link ``[start_offset, end_offset)`` of *content* to *scene_id*.
+
+    Deliberately conservative: it never shrinks an existing scene span and
+    never steals text that belongs to another scene, so a wrong range can not
+    silently unlink other scenes.
+
+    Returns a small status dict with ``scene_linked`` and an optional
+    ``warning``.
+    """
+    existing = find_scene_marker_span(content, scene_id)
+    if existing is not None:
+        has_prose = existing.end > existing.start
+        covers_range = existing.start <= start_offset and existing.end >= end_offset
+        if has_prose and covers_range:
+            return {"scene_linked": True}
+        if has_prose:
+            # The scene already owns different prose; do not claim success and
+            # do not silently relocate the existing link.
+            return {
+                "scene_linked": False,
+                "warning": (
+                    f"Prose was written but not linked to scene {scene_id}: the "
+                    "scene already has prose at a different position. Use "
+                    "manage_scenes or the scene editor to link the new text "
+                    "explicitly."
+                ),
+            }
+        # The scene exists as a zero-width (emptied) span - fall through and
+        # bind the freshly written range to it.  Returning success here (the
+        # old behaviour) left the prose outside the markers while reporting the
+        # scene as linked.
+
+    overlapping = sorted(
+        span.scene_id
+        for span in parse_scene_spans(content)
+        if span.scene_id != scene_id
+        and span.start < end_offset
+        and span.end > start_offset
+    )
+    if overlapping:
+        overlap_text = ", ".join(str(sid) for sid in overlapping)
+        return {
+            "scene_linked": False,
+            "warning": (
+                f"Prose was written but not linked to scene {scene_id}: the "
+                f"target range overlaps prose owned by scene(s) {overlap_text}. "
+                "Link the scene explicitly if that is intended."
+            ),
+        }
+
+    link_prose(
+        project_dir,
+        scene_id,
+        SceneLinkProseRequest(
+            scope_type=scope_link.get("scope_type") or "chapter",
+            chapter_id=scope_link.get("chapter_id"),
+            book_id=scope_link.get("book_id"),
+            start_offset=start_offset,
+            end_offset=end_offset,
+        ),
+    )
+    return {"scene_linked": True}
+
+
 def relink_scope_prose(
     project_dir: Path,
     scope_type: str,
@@ -1034,10 +1330,13 @@ def relink_scope_prose(
             continue
         remapped_start = _to_fully_stripped(span.start)
         remapped_end = _to_fully_stripped(span.end)
-        if remapped_start >= remapped_end:
+        if remapped_start > remapped_end:
             continue
+        # Empty (zero-width) preserved spans are kept too: dropping them would
+        # silently unlink every scene the user had emptied but not deleted.
         all_assignments.append((scene_id, remapped_start, remapped_end))
 
+    all_assignments = _normalize_scope_assignments(all_assignments)
     linked = inject_markers(stripped, all_assignments)
 
     # Re-inject annotation markers.  Positions are computed from the
@@ -1262,11 +1561,55 @@ def update_prose_content(
         return None
 
     new_content = content[: span.start] + payload.text + content[span.end :]
+    # Fail closed: a text replacement must never make two scene spans overlap
+    # (e.g. inserting prose into a scene whose markers are nested inside
+    # another scene's markers would make both scenes claim the same prose).
+    validate_marker_integrity(new_content)
     _write_text_atomic(content_path, new_content)
 
     scene = _normalise_scene({"id": scene_id, **scene_data})
     _attach_prose_positions([scene], project_dir)
     return scene
+
+
+_SCENE_AFTER_BLOCK_BREAK_RE = re.compile(r"[ \t]*\n[ \t\n]*")
+_SCENE_BEFORE_BLOCK_BREAK_RE = re.compile(r"[ \t]*\n[ \t\n]*\Z")
+
+
+def _expand_scope_left_over_whitespace(content: str, position: int) -> int:
+    """Move *position* left over any adjacent whitespace."""
+    while position > 0 and content[position - 1] in " \t\n\r":
+        position -= 1
+    return position
+
+
+def _expand_scope_right_over_whitespace(content: str, position: int) -> int:
+    """Move *position* right over any adjacent whitespace."""
+    while position < len(content) and content[position] in " \t\n\r":
+        position += 1
+    return position
+
+
+def _scene_move_unit(
+    content: str, block_start: int, block_end: int
+) -> tuple[int, int, str]:
+    """Return ``(move_start, move_end, separator)`` for moving a scene block.
+
+    A scene block is moved together with ONE adjacent paragraph separator so
+    the moved prose never runs into its new neighbour and no blank lines are
+    lost (bare block moves concatenated paragraphs: ``...block3block2...``).
+
+    Prefer the separator after the block; the last block uses the separator
+    before it.  Blocks with no adjacent separator (adjacent empty spans) fall
+    back to a blank line.
+    """
+    trailing = _SCENE_AFTER_BLOCK_BREAK_RE.match(content, block_end)
+    if trailing and trailing.end() > trailing.start():
+        return block_start, trailing.end(), trailing.group(0)
+    leading = _SCENE_BEFORE_BLOCK_BREAK_RE.search(content, 0, block_start)
+    if leading and leading.end() > leading.start():
+        return leading.start(), block_end, leading.group(0)
+    return block_start, block_end, "\n\n"
 
 
 def reorder_scene_prose(
@@ -1333,19 +1676,25 @@ def reorder_scene_prose(
         # Save original content properties BEFORE annotation split so that
         # scope_start/scope_end returned to the frontend are valid in the
         # editor's pre-reorder document (the frontend has not yet seen the
-        # annotation-split markers).
+        # annotation-split markers).  The scope is expanded over the whitespace
+        # around the blocks so its boundaries never land inside a marker token
+        # inserted at a block edge by the annotation split.
         old_content_len = len(content)
-        orig_scope_start = min(src_block_start, tgt_block_start)
-        orig_scope_end = max(src_block_end, tgt_block_end)
+        orig_move_start, orig_move_end, _ = _scene_move_unit(
+            content, src_block_start, src_block_end
+        )
+        orig_scope_start = _expand_scope_left_over_whitespace(
+            content, min(orig_move_start, tgt_block_start)
+        )
+        orig_scope_end = _expand_scope_right_over_whitespace(
+            content, max(orig_move_end, tgt_block_end)
+        )
 
         # Split any annotations that straddle the src_block boundary before moving.
         content, story_ann_meta = split_straddling_annotations(
             content, src_block_start, src_block_end, story_ann_meta
         )
         story["annotations"] = story_ann_meta
-
-        # How many bytes were inserted by the annotation split.
-        offset_shift = len(content) - old_content_len
 
         # Re-derive block bounds after any annotation marker insertions.
         src_block_bounds_fresh = scene_block_bounds(content, src_id)
@@ -1359,10 +1708,16 @@ def reorder_scene_prose(
 
         src_block = content[src_block_start:src_block_end]
 
+        # Move the block together with ONE paragraph separator; without it the
+        # moved prose runs into its new neighbour and blank lines are lost.
+        move_start, move_end, separator = _scene_move_unit(
+            content, src_block_start, src_block_end
+        )
+
         # Remove source block first, then insert at target boundary in the
         # source-free content. This ensures true placement semantics (adjacent
         # before/after target) even when source and target have blocks between.
-        without_src = content[:src_block_start] + content[src_block_end:]
+        without_src = content[:move_start] + content[move_end:]
 
         # Strip any residual source-scene markers from without_src.  Corrupted
         # files from previous failed reorder attempts may contain duplicate
@@ -1387,9 +1742,14 @@ def reorder_scene_prose(
         insert_pos = (
             tgt_block_start_after if request.place_before else tgt_block_end_after
         )
+        moved_unit = (
+            f"{src_block}{separator}"
+            if request.place_before
+            else f"{separator}{src_block}"
+        )
 
         new_content = (
-            clean_without[:insert_pos] + src_block + clean_without[insert_pos:]
+            clean_without[:insert_pos] + moved_unit + clean_without[insert_pos:]
         )
 
         # Use original (pre-split) offsets so the frontend can apply the change
@@ -1397,7 +1757,13 @@ def reorder_scene_prose(
         # annotation-split bytes to produce a correct final document.
         scope_start = orig_scope_start
         scope_end = orig_scope_end
-        rebuilt_text = new_content[orig_scope_start : orig_scope_end + offset_shift]
+        # Everything after the edited region is untouched, so the rebuilt text
+        # is the new content between the scope start and the (unchanged)
+        # suffix.  Deriving it from the suffix length keeps annotation-split
+        # marker insertions accounted for without ad-hoc offset arithmetic.
+        suffix_len = old_content_len - orig_scope_end
+        rebuilt_end = len(new_content) - suffix_len
+        rebuilt_text = new_content[orig_scope_start:rebuilt_end]
         _write_text_atomic(src_path, new_content)
 
         new_spans = {s.scene_id: s for s in parse_scene_spans(new_content)}
@@ -1450,16 +1816,16 @@ def reorder_scene_prose(
     src_block_start, src_block_end = src_block
     tgt_block_start, tgt_block_end = tgt_block
     new_src_content = src_content[:src_block_start] + src_content[src_block_end:]
-    _write_text_atomic(src_path, new_src_content)
-
     insert_pos = tgt_block_start if request.place_before else tgt_block_end
-    new_tgt_content = (
-        tgt_content[:insert_pos]
-        + f"<!--scene:{src_id}:start-->"
+    moved_block = (
+        scene_marker_token(src_id, "start")
         + src_prose
-        + f"<!--scene:{src_id}:end-->"
-        + tgt_content[insert_pos:]
+        + scene_marker_token(src_id, "end")
     )
+    new_tgt_content = tgt_content[:insert_pos] + moved_block + tgt_content[insert_pos:]
+    validate_marker_integrity(new_src_content)
+    validate_marker_integrity(new_tgt_content)
+    _write_text_atomic(src_path, new_src_content)
     _write_text_atomic(tgt_path, new_tgt_content)
 
     scenes_dict[src_id] = {
@@ -1564,10 +1930,12 @@ def reorder_scope_scenes(
     block_end_by_id: dict[SceneId, int] = {}
 
     for span in spans:
-        start_marker = f"<!--scene:{span.scene_id}:start-->"
-        end_marker = f"<!--scene:{span.scene_id}:end-->"
-        block_start_by_id[span.scene_id] = span.start - len(start_marker)
-        block_end_by_id[span.scene_id] = span.end + len(end_marker)
+        bounds = scene_block_bounds(content, span.scene_id)
+        if bounds is None:
+            raise ValueError(
+                f"Unable to derive marker block bounds for scene {span.scene_id}"
+            )
+        block_start_by_id[span.scene_id], block_end_by_id[span.scene_id] = bounds
 
     first_scene_id = linked_in_scope[0]
     last_scene_id = linked_in_scope[-1]
